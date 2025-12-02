@@ -426,7 +426,7 @@ export const CANVAS_SEARCH_TAB = "search";
 
 export const DEFAULT_SIDEBAR = {
   name: "default",
-  defaultTab: LIBRARY_SIDEBAR_TAB,
+  defaultTab: CANVAS_SEARCH_TAB,
 } as const;
 
 export const LIBRARY_DISABLED_TYPES = new Set([
