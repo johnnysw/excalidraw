@@ -4,7 +4,7 @@ import {
   CANVAS_SEARCH_TAB,
   DEFAULT_SIDEBAR,
   composeEventHandlers,
-  // LIBRARY_SIDEBAR_TAB, // 原实现：素材库 Tab 常量
+  LIBRARY_SIDEBAR_TAB, // 原实现：素材库 Tab 常量
 } from "@excalidraw/common";
 
 import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
@@ -21,8 +21,8 @@ import { withInternalFallback } from "./hoc/withInternalFallback";
 import { searchIcon } from "./icons";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
-// import { LibraryMenu } from "./LibraryMenu"; // 原实现：素材库侧边栏内容
-// import { LibraryIcon } from "./icons";       // 原实现：素材库标签图标
+import { LibraryMenu } from "./LibraryMenu"; // 原实现：素材库侧边栏内容
+import { LibraryIcon } from "./icons";       // 原实现：素材库标签图标
 
 const DefaultSidebarTrigger = withInternalFallback(
   "DefaultSidebarTrigger",
@@ -103,19 +103,15 @@ export const DefaultSidebar = Object.assign(
                 <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB}>
                   {searchIcon}
                 </Sidebar.TabTrigger>
-                {/* 原实现：素材库标签
                 <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB}>
                   {LibraryIcon}
                 </Sidebar.TabTrigger>
-                */}
                 <DefaultSidebarTabTriggersTunnel.Out />
               </Sidebar.TabTriggers>
             </Sidebar.Header>
-            {/* 原实现：素材库内容
             <Sidebar.Tab tab={LIBRARY_SIDEBAR_TAB}>
               <LibraryMenu />
             </Sidebar.Tab>
-            */}
             <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
               <SearchMenu />
             </Sidebar.Tab>
