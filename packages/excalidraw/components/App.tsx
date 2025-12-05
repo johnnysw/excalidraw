@@ -10385,9 +10385,20 @@ class App extends React.Component<AppProps, AppState> {
             scenePointer.x,
             scenePointer.y,
           );
-          hitElements.forEach((hitElement) =>
-            this.elementsPendingErasure.add(hitElement.id),
-          );
+          // 过滤掉不可擦除的自定义元素
+          const nonErasableTypes = new Set([
+            "question",
+            "richTextNode",
+            "questionTagBadge",
+          ]);
+          hitElements
+            .filter((el) => {
+              const customType = (el as any).customData?.type;
+              return !customType || !nonErasableTypes.has(customType);
+            })
+            .forEach((hitElement) =>
+              this.elementsPendingErasure.add(hitElement.id),
+            );
         }
         this.eraseElements();
         return;

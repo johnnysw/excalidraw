@@ -100,9 +100,23 @@ export class EraserTrail extends AnimatedTrail {
       eraserPath[eraserPath.length - 2],
     );
 
-    const candidateElements = this.app.visibleElements.filter(
-      (el) => !el.locked,
-    );
+    // 过滤掉锁定的元素和自定义不可擦除的元素
+    const nonErasableTypes = new Set([
+      "question",
+      "richTextNode",
+      "questionTagBadge",
+    ]);
+    const candidateElements = this.app.visibleElements.filter((el) => {
+      if (el.locked) {
+        return false;
+      }
+      // 检查 customData.type，阻止擦除特定类型的自定义元素
+      const customType = (el as any).customData?.type;
+      if (customType && nonErasableTypes.has(customType)) {
+        return false;
+      }
+      return true;
+    });
 
     const candidateElementsMap = arrayToMap(candidateElements);
 
