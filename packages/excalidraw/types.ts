@@ -154,7 +154,8 @@ export type ToolType =
   | "frame"
   | "magicframe"
   | "embeddable"
-  | "laser";
+  | "laser"
+  | "richText";
 
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
@@ -960,3 +961,86 @@ export type Offsets = Partial<{
   bottom: number;
   left: number;
 }>;
+
+// ============================================================================
+// RichTextNode 数据模型定义
+// ============================================================================
+//
+// RichTextNode 是一种复合节点，由多个基础 Excalidraw 元素（rectangle/text/image）
+// 组成，通过统一的 groupId 和 customData 绑定在一起。
+//
+// 约定：
+// 1. 每个 RichTextNode 有一个唯一的 nodeId（格式：`richtext-xxxxxxxx`）
+// 2. 所有组成元素的 groupIds 都包含同一个 groupId
+// 3. 所有组成元素的 customData 都包含 RichTextNodeCustomData
+// 4. 背景矩形（role='background'）的 customData 中额外存储 html/fontSize/maxWidth
+// 5. 编辑时通过 nodeId 定位所有相关元素，删除后重新生成
+//
+// 元素组成：
+// - 背景矩形（role='background'）：卡片外框，存储节点配置
+// - 文本元素（role='text'）：逐段绘制的文本
+// - 高亮矩形（role='text-bg'）：对应有 bgColor 的文本片段
+// - 下划线矩形（role='underline'）：对应有 underline 的文本片段
+// - 删除线矩形（role='strike'）：对应有 strike 的文本片段
+// - 图片元素（role='image'）：富文本中的图片
+// ============================================================================
+
+/**
+ * RichTextNode 元素的 customData 结构
+ * 所有属于同一 RichTextNode 的元素都应包含此结构
+ */
+export type RichTextNodeCustomData = {
+  /**
+   * 固定值，用于识别 RichTextNode 元素
+   */
+  type: "rich-text-node";
+
+  /**
+   * 节点唯一标识，格式：`richtext-xxxxxxxx`
+   * 同一节点的所有元素共享相同的 nodeId
+   */
+  nodeId: string;
+
+  /**
+   * 元素在节点中的角色
+   * - background: 背景矩形（卡片外框）
+   * - text: 文本元素
+   * - text-bg: 高亮背景矩形
+   * - underline: 下划线矩形
+   * - strike: 删除线矩形
+   * - image: 图片元素
+   */
+  role: "background" | "text" | "text-bg" | "underline" | "strike" | "image";
+};
+
+/**
+ * RichTextNode 背景矩形的扩展 customData
+ * 仅 role='background' 的元素包含这些额外字段
+ */
+export type RichTextNodeBackgroundCustomData = RichTextNodeCustomData & {
+  role: "background";
+
+  /**
+   * 节点的原始 HTML 内容
+   * 用于编辑时恢复到编辑器，以及重新加载场景时重建节点
+   */
+  html: string;
+
+  /**
+   * 节点的统一字号（像素）
+   * 所有文本元素的 fontSize 都以此为准
+   */
+  fontSize: number;
+
+  /**
+   * 节点的最大宽度（像素）
+   * 用于文本自动换行计算
+   */
+  maxWidth: number;
+
+  /**
+   * 节点的内边距（像素）
+   * 默认值：16
+   */
+  padding?: number;
+};

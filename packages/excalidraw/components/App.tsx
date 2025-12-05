@@ -7156,7 +7156,9 @@ class App extends React.Component<AppProps, AppState> {
       this.state.activeTool.type === "selection" ||
       this.state.activeTool.type === "lasso" ||
       this.state.activeTool.type === "text" ||
-      this.state.activeTool.type === "image";
+      this.state.activeTool.type === "image" ||
+      // 允许在触摸场景下使用 richText 工具点击画布
+      this.state.activeTool.type === "richText";
 
     if (!allowOnPointerDown) {
       return;
@@ -7294,6 +7296,9 @@ class App extends React.Component<AppProps, AppState> {
       );
     } else if (this.state.activeTool.type === "custom") {
       setCursorForShape(this.interactiveCanvas, this.state);
+    } else if (this.state.activeTool.type === "richText") {
+      // richText 工具的实际行为由宿主应用通过 props.onPointerDown 控制
+      // 这里不创建任何基础元素，仅保留 pointerDownState 供后续回调使用
     } else if (
       this.state.activeTool.type === TOOL_TYPE.frame ||
       this.state.activeTool.type === TOOL_TYPE.magicframe

@@ -301,6 +301,7 @@
     "line": "Line",
     "freedraw": "Draw",
     "text": "Text",
+    "richText": "Rich Text",
     "library": "Library",
     "lock": "Keep selected tool active after drawing",
     "penMode": "Pen mode - prevent touch",

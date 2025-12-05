@@ -9,6 +9,7 @@ import {
   LineIcon,
   FreedrawIcon,
   TextIcon,
+  RichTextIcon,
   ImageIcon,
   EraserIcon,
 } from "./icons";
@@ -84,6 +85,13 @@ export const SHAPES = [
     value: "eraser",
     key: KEYS.E,
     numericKey: KEYS["0"],
+    fillable: false,
+  },
+  {
+    icon: RichTextIcon,
+    value: "richText",
+    key: KEYS.Y,
+    numericKey: null,
     fillable: false,
   },
 ] as const;

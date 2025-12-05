@@ -27,6 +27,7 @@ import {
   EllipseIcon,
   LineIcon,
   TextIcon,
+  RichTextIcon,
   ImageIcon,
   frameToolIcon,
   EmbedIcon,
@@ -415,6 +416,17 @@ export const MobileToolBar = ({
               {t("toolBar.text")}
             </DropdownMenu.Item>
           )}
+
+          {/* Rich Text Tool */}
+          <DropdownMenu.Item
+            onSelect={() => app.setActiveTool({ type: "richText" })}
+            icon={RichTextIcon}
+            shortcut={KEYS.Y.toLocaleUpperCase()}
+            data-testid="toolbar-richText"
+            selected={activeTool.type === "richText"}
+          >
+            {t("toolBar.richText")}
+          </DropdownMenu.Item>
 
           {!showImageToolOutside && (
             <DropdownMenu.Item
