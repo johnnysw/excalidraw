@@ -68,14 +68,35 @@ const Presentation = () => {
         }
     }, [appState.presentationMode]);
 
+    // Get custom slide order from appState
+    const customSlideOrder = (appState as any).slideOrder as string[] | undefined;
+
     useEffect(() => {
         const allFrames = elements.filter((el) => el.type === "frame" && !el.isDeleted) as ExcalidrawFrameLikeElement[];
-        allFrames.sort((a, b) => {
-            if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
-            return a.x - b.x;
-        });
-        setFrames(allFrames);
-    }, [elements]);
+
+        if (customSlideOrder && customSlideOrder.length > 0) {
+            // Use custom order from PresentationMenu
+            const orderedFrames = customSlideOrder
+                .map(id => allFrames.find(f => f.id === id))
+                .filter((f): f is ExcalidrawFrameLikeElement => f != null);
+
+            // Add any new frames that weren't in the custom order (at the end)
+            const remainingFrames = allFrames.filter(f => !customSlideOrder.includes(f.id));
+            remainingFrames.sort((a, b) => {
+                if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
+                return a.x - b.x;
+            });
+
+            setFrames([...orderedFrames, ...remainingFrames]);
+        } else {
+            // Default: sort by Y position
+            allFrames.sort((a, b) => {
+                if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
+                return a.x - b.x;
+            });
+            setFrames(allFrames);
+        }
+    }, [elements, customSlideOrder]);
 
     // Zoom to fit frame with full viewport coverage when index changes
     useEffect(() => {

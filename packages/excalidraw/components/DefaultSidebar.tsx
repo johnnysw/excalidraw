@@ -4,7 +4,8 @@ import {
   CANVAS_SEARCH_TAB,
   DEFAULT_SIDEBAR,
   composeEventHandlers,
-  LIBRARY_SIDEBAR_TAB, // 原实现：素材库 Tab 常量
+  LIBRARY_SIDEBAR_TAB,
+  PRESENTATION_SIDEBAR_TAB,
 } from "@excalidraw/common";
 
 import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
@@ -21,8 +22,9 @@ import { withInternalFallback } from "./hoc/withInternalFallback";
 import { searchIcon } from "./icons";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
-import { LibraryMenu } from "./LibraryMenu"; // 原实现：素材库侧边栏内容
-import { LibraryIcon } from "./icons";       // 原实现：素材库标签图标
+import { LibraryMenu } from "./LibraryMenu";
+import { LibraryIcon, PresentationTabIcon } from "./icons";
+import { PresentationMenu } from "./PresentationMenu";
 
 const DefaultSidebarTrigger = withInternalFallback(
   "DefaultSidebarTrigger",
@@ -92,9 +94,9 @@ export const DefaultSidebar = Object.assign(
             isForceDocked || onDock === false || (!onDock && docked != null)
               ? undefined
               : // compose to allow the host app to listen on default behavior
-                composeEventHandlers(onDock, (docked) => {
-                  setAppState({ defaultSidebarDockedPreference: docked });
-                })
+              composeEventHandlers(onDock, (docked) => {
+                setAppState({ defaultSidebarDockedPreference: docked });
+              })
           }
         >
           <Sidebar.Tabs>
@@ -106,6 +108,9 @@ export const DefaultSidebar = Object.assign(
                 <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB}>
                   {LibraryIcon}
                 </Sidebar.TabTrigger>
+                <Sidebar.TabTrigger tab={PRESENTATION_SIDEBAR_TAB}>
+                  {PresentationTabIcon}
+                </Sidebar.TabTrigger>
                 <DefaultSidebarTabTriggersTunnel.Out />
               </Sidebar.TabTriggers>
             </Sidebar.Header>
@@ -114,6 +119,9 @@ export const DefaultSidebar = Object.assign(
             </Sidebar.Tab>
             <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
               <SearchMenu />
+            </Sidebar.Tab>
+            <Sidebar.Tab tab={PRESENTATION_SIDEBAR_TAB}>
+              <PresentationMenu />
             </Sidebar.Tab>
             {children}
           </Sidebar.Tabs>
