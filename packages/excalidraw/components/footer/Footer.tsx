@@ -10,16 +10,20 @@ import Stack from "../Stack";
 import type { ActionManager } from "../../actions/manager";
 import type { UIAppState } from "../../types";
 
+import { PlayIcon } from "../icons";
+
 const Footer = ({
   appState,
   actionManager,
   showExitZenModeBtn,
   renderWelcomeScreen,
+  onPresent,
 }: {
   appState: UIAppState;
   actionManager: ActionManager;
   showExitZenModeBtn: boolean;
   renderWelcomeScreen: boolean;
+  onPresent: () => void;
 }) => {
   const { FooterCenterTunnel, WelcomeScreenHelpHintTunnel } = useTunnels();
 
@@ -59,7 +63,30 @@ const Footer = ({
           "transition-right": appState.zenModeEnabled,
         })}
       >
-        <div style={{ position: "relative" }}>
+        <div style={{ position: "relative", display: "flex", gap: "8px" }}>
+          {!appState.viewModeEnabled && (
+            <button
+              className="App-menu__left-btn"
+              onClick={onPresent}
+              title="演示模式"
+              style={{
+                background: "var(--color-surface-low)",
+                border: "1px solid var(--button-gray-1)",
+                borderRadius: "var(--border-radius-lg)",
+                cursor: "pointer",
+                padding: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "36px",
+                height: "36px",
+              }}
+            >
+              <div style={{ width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {PlayIcon}
+              </div>
+            </button>
+          )}
           {renderWelcomeScreen && <WelcomeScreenHelpHintTunnel.Out />}
           <HelpButton
             onClick={() => actionManager.executeAction(actionShortcuts)}

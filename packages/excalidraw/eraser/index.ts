@@ -106,8 +106,17 @@ export class EraserTrail extends AnimatedTrail {
       "richTextNode",
       "questionTagBadge",
     ]);
+    // Frame 类型也不可被擦除
+    const nonErasableElementTypes = new Set([
+      "frame",
+      "magicframe",
+    ]);
     const candidateElements = this.app.visibleElements.filter((el) => {
       if (el.locked) {
+        return false;
+      }
+      // 检查元素类型，阻止擦除 Frame 类型
+      if (nonErasableElementTypes.has(el.type)) {
         return false;
       }
       // 检查 customData.type，阻止擦除特定类型的自定义元素

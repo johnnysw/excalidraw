@@ -347,12 +347,12 @@ function CommandPaletteInner({
             predicate: action.predicate
               ? action.predicate
               : (elements, appState, appProps, app) => {
-                  const selectedElements = getSelectedElements(
-                    elements,
-                    appState,
-                  );
-                  return selectedElements.length > 0;
-                },
+                const selectedElements = getSelectedElements(
+                  elements,
+                  appState,
+                );
+                return selectedElements.length > 0;
+              },
           }),
         ),
       );
@@ -518,10 +518,10 @@ function CommandPaletteInner({
 
           if (
             appProps.UIOptions.tools?.[
-              value as Extract<
-                typeof value,
-                keyof AppProps["UIOptions"]["tools"]
-              >
+            value as Extract<
+              typeof value,
+              keyof AppProps["UIOptions"]["tools"]
+            >
             ] === false
           ) {
             return acc;
@@ -534,7 +534,7 @@ function CommandPaletteInner({
           const command: CommandPaletteItem = {
             label: t(`toolBar.${value}`),
             category: DEFAULT_CATEGORIES.tools,
-            shortcut,
+            shortcut: shortcut || undefined,
             icon,
             keywords: ["toolbar"],
             viewMode: false,
@@ -617,9 +617,8 @@ function CommandPaletteInner({
           ...command,
           icon: command.icon || boltIcon,
           order: command.order ?? getCategoryOrder(command.category),
-          haystack: `${deburr(command.label.toLocaleLowerCase())} ${
-            command.keywords?.join(" ") || ""
-          }`,
+          haystack: `${deburr(command.label.toLocaleLowerCase())} ${command.keywords?.join(" ") || ""
+            }`,
         };
       });
 
@@ -685,11 +684,11 @@ function CommandPaletteInner({
 
       return typeof command.predicate === "function"
         ? command.predicate(
-            app.scene.getNonDeletedElements(),
-            uiAppState as AppState,
-            appProps,
-            app,
-          )
+          app.scene.getNonDeletedElements(),
+          uiAppState as AppState,
+          appProps,
+          app,
+        )
         : command.predicate === undefined || command.predicate;
     },
   );
@@ -838,14 +837,14 @@ function CommandPaletteInner({
     let matchingCommands =
       commandSearch?.length > 1
         ? [
-            ...allCommands
-              .filter(isCommandAvailable)
-              .sort((a, b) => a.order - b.order),
-            ...libraryCommands,
-          ]
-        : allCommands
+          ...allCommands
             .filter(isCommandAvailable)
-            .sort((a, b) => a.order - b.order);
+            .sort((a, b) => a.order - b.order),
+          ...libraryCommands,
+        ]
+        : allCommands
+          .filter(isCommandAvailable)
+          .sort((a, b) => a.order - b.order);
 
     const showLastUsed =
       !commandSearch && lastUsed && isCommandAvailable(lastUsed);
@@ -855,8 +854,8 @@ function CommandPaletteInner({
         getNextCommandsByCategory(
           showLastUsed
             ? matchingCommands.filter(
-                (command) => command.label !== lastUsed?.label,
-              )
+              (command) => command.label !== lastUsed?.label,
+            )
             : matchingCommands,
         ),
       );
@@ -1007,7 +1006,7 @@ const CommandItem = ({
   appState: UIAppState;
   size?: "small" | "large";
 }) => {
-  const noop = () => {};
+  const noop = () => { };
 
   return (
     <div

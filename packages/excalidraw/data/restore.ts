@@ -109,6 +109,7 @@ export const AllowedExcalidrawActiveTools: Record<
   hand: true,
   laser: false,
   magicframe: false,
+  richText: true,
 };
 
 export type RestoredDataState = {
@@ -172,12 +173,12 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
       mode === "inside"
         ? p
         : projectFixedPointOntoDiagonal(
-            element,
-            p,
-            boundElement,
-            startOrEnd,
-            elementsMap,
-          ) || p;
+          element,
+          p,
+          boundElement,
+          startOrEnd,
+          elementsMap,
+        ) || p;
     const { fixedPoint } = calculateFixedPointForNonElbowArrowBinding(
       element,
       boundElement,
@@ -244,14 +245,14 @@ const restoreElementWithProperties = <
     roundness: element.roundness
       ? element.roundness
       : element.strokeSharpness === "round"
-      ? {
+        ? {
           // for old elements that would now use adaptive radius algo,
           // use legacy algo instead
           type: isUsingAdaptiveRadius(element.type)
             ? ROUNDNESS.LEGACY
             : ROUNDNESS.PROPORTIONAL_RADIUS,
         }
-      : null,
+        : null,
     boundElements: element.boundElementIds
       ? element.boundElementIds.map((id) => ({ type: "arrow", id }))
       : element.boundElements ?? [],
@@ -317,10 +318,10 @@ export const restoreElement = (
         element.lineHeight ||
         (element.height
           ? // detect line-height from current element height and font-size
-            detectLineHeight(element)
+          detectLineHeight(element)
           : // no element height likely means programmatic use, so default
-            // to a fixed line height
-            getLineHeight(element.fontFamily));
+          // to a fixed line height
+          getLineHeight(element.fontFamily));
       element = restoreElementWithProperties(element, {
         fontSize,
         fontFamily,
@@ -384,10 +385,10 @@ export const restoreElement = (
         y,
         ...(isLineElement(element)
           ? {
-              polygon: isValidPolygon(element.points)
-                ? element.polygon ?? false
-                : false,
-            }
+            polygon: isValidPolygon(element.points)
+              ? element.polygon ?? false
+              : false,
+          }
           : {}),
         ...getSizeFromPoints(points),
       });
@@ -426,15 +427,15 @@ export const restoreElement = (
       // TODO: Separate arrow from linear element
       const restoredElement = isElbowArrow(element)
         ? restoreElementWithProperties(element as ExcalidrawElbowArrowElement, {
-            ...base,
-            elbowed: true,
-            fixedSegments:
-              element.fixedSegments?.length && base.points.length >= 4
-                ? element.fixedSegments
-                : null,
-            startIsSpecial: element.startIsSpecial,
-            endIsSpecial: element.endIsSpecial,
-          })
+          ...base,
+          elbowed: true,
+          fixedSegments:
+            element.fixedSegments?.length && base.points.length >= 4
+              ? element.fixedSegments
+              : null,
+          startIsSpecial: element.startIsSpecial,
+          endIsSpecial: element.endIsSpecial,
+        })
         : restoreElementWithProperties(element as ExcalidrawArrowElement, base);
 
       return {
@@ -578,10 +579,10 @@ export const restoreElements = (
   localElements: readonly ExcalidrawElement[] | null | undefined,
   opts?:
     | {
-        refreshDimensions?: boolean;
-        repairBindings?: boolean;
-        deleteInvisibleElements?: boolean;
-      }
+      refreshDimensions?: boolean;
+      repairBindings?: boolean;
+      deleteInvisibleElements?: boolean;
+    }
     | undefined,
 ): OrderedExcalidrawElement[] => {
   // used to detect duplicate top-level element ids
@@ -768,11 +769,11 @@ const LegacyAppStateMigrations: {
     return [
       "defaultSidebarDockedPreference",
       appState.isSidebarDocked ??
-        coalesceAppStateValue(
-          "defaultSidebarDockedPreference",
-          appState,
-          defaultAppState,
-        ),
+      coalesceAppStateValue(
+        "defaultSidebarDockedPreference",
+        appState,
+        defaultAppState,
+      ),
     ];
   },
 };
@@ -813,8 +814,8 @@ export const restoreAppState = (
       suppliedValue !== undefined
         ? suppliedValue
         : localValue !== undefined
-        ? localValue
-        : defaultValue;
+          ? localValue
+          : defaultValue;
   }
 
   return {

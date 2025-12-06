@@ -47,7 +47,7 @@ import MainMenu from "./main-menu/MainMenu";
 import { ActiveConfirmDialog } from "./ActiveConfirmDialog";
 import { useEditorInterface, useStylesPanelMode } from "./App";
 import { OverwriteConfirmDialog } from "./OverwriteConfirm/OverwriteConfirm";
-import { sidebarRightIcon } from "./icons";
+import { sidebarRightIcon, PlayIcon } from "./icons";
 import { DefaultSidebar } from "./DefaultSidebar";
 import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
@@ -163,21 +163,21 @@ const LayerUI = ({
 
   const spacing = isCompactStylesPanel
     ? {
-        menuTopGap: 4,
-        toolbarColGap: 4,
-        toolbarRowGap: 1,
-        toolbarInnerRowGap: 0.5,
-        islandPadding: 1,
-        collabMarginLeft: 8,
-      }
+      menuTopGap: 4,
+      toolbarColGap: 4,
+      toolbarRowGap: 1,
+      toolbarInnerRowGap: 0.5,
+      islandPadding: 1,
+      collabMarginLeft: 8,
+    }
     : {
-        menuTopGap: 6,
-        toolbarColGap: 4,
-        toolbarRowGap: 1,
-        toolbarInnerRowGap: 1,
-        islandPadding: 1,
-        collabMarginLeft: 8,
-      };
+      menuTopGap: 6,
+      toolbarColGap: 4,
+      toolbarRowGap: 1,
+      toolbarInnerRowGap: 1,
+      islandPadding: 1,
+      collabMarginLeft: 8,
+    };
 
   const TunnelsJotaiProvider = tunnels.tunnelsJotai.Provider;
 
@@ -301,6 +301,7 @@ const LayerUI = ({
             className={clsx("App-menu_top__left")}
           >
             {renderCanvasActions()}
+
             <div
               className={clsx("selected-shape-actions-container", {
                 "selected-shape-actions-container--compact":
@@ -445,8 +446,7 @@ const LayerUI = ({
           trackEvent(
             "sidebar",
             `toggleDock (${docked ? "dock" : "undock"})`,
-            `(${
-              editorInterface.formFactor === "phone" ? "mobile" : "desktop"
+            `(${editorInterface.formFactor === "phone" ? "mobile" : "desktop"
             })`,
           );
         }}
@@ -456,7 +456,7 @@ const LayerUI = ({
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
 
-  const layerUIJSX = (
+  const layerUIJSX = appState.presentationMode ? null : (
     <>
       {/* ------------------------- tunneled UI ---------------------------- */}
       {/* make sure we render host app components first so that we can detect
@@ -475,8 +475,7 @@ const LayerUI = ({
             trackEvent(
               "sidebar",
               `${DEFAULT_SIDEBAR.name} (open)`,
-              `button (${
-                editorInterface.formFactor === "phone" ? "mobile" : "desktop"
+              `button (${editorInterface.formFactor === "phone" ? "mobile" : "desktop"
               })`,
             );
           }
@@ -515,8 +514,8 @@ const LayerUI = ({
                       ? "strokeColor"
                       : "backgroundColor"
                     : colorPickerType === "elementBackground"
-                    ? "backgroundColor"
-                    : "strokeColor"]: color,
+                      ? "backgroundColor"
+                      : "strokeColor"]: color,
                 });
                 ShapeCache.delete(element);
               }
@@ -596,8 +595,8 @@ const LayerUI = ({
             className="layer-ui__wrapper"
             style={
               appState.openSidebar &&
-              isSidebarDocked &&
-              editorInterface.canFitSidebar
+                isSidebarDocked &&
+                editorInterface.canFitSidebar
                 ? { width: `calc(100% - var(--right-sidebar-width))` }
                 : {}
             }
@@ -609,6 +608,14 @@ const LayerUI = ({
               actionManager={actionManager}
               showExitZenModeBtn={showExitZenModeBtn}
               renderWelcomeScreen={renderWelcomeScreen}
+              onPresent={() => {
+                if (app.excalidrawContainerRef.current) {
+                  app.excalidrawContainerRef.current
+                    .requestFullscreen()
+                    .catch((e) => console.error(e));
+                }
+                setAppState({ presentationMode: true });
+              }}
             />
             {appState.scrolledOutside && (
               <button

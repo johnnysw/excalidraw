@@ -110,9 +110,9 @@ export type DataURL = string & { _brand: "DataURL" };
 
 export type BinaryFileData = {
   mimeType:
-    | ValueOf<typeof IMAGE_MIME_TYPES>
-    // future user or unknown file type
-    | typeof MIME_TYPES.binary;
+  | ValueOf<typeof IMAGE_MIME_TYPES>
+  // future user or unknown file type
+  | typeof MIME_TYPES.binary;
   id: FileId;
   dataURL: DataURL;
   /**
@@ -161,13 +161,13 @@ export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
 export type ActiveTool =
   | {
-      type: ToolType;
-      customType: null;
-    }
+    type: ToolType;
+    customType: null;
+  }
   | {
-      type: "custom";
-      customType: string;
-    };
+    type: "custom";
+    customType: string;
+  };
 
 export type SidebarName = string;
 export type SidebarTabName = string;
@@ -360,23 +360,23 @@ export interface AppState {
   zoom: Zoom;
   openMenu: "canvas" | null;
   openPopup:
-    | "canvasBackground"
-    | "elementBackground"
-    | "elementStroke"
-    | "fontFamily"
-    | "compactTextProperties"
-    | "compactStrokeStyles"
-    | "compactOtherProperties"
-    | "compactArrowProperties"
-    | null;
+  | "canvasBackground"
+  | "elementBackground"
+  | "elementStroke"
+  | "fontFamily"
+  | "compactTextProperties"
+  | "compactStrokeStyles"
+  | "compactOtherProperties"
+  | "compactArrowProperties"
+  | null;
   openSidebar: { name: SidebarName; tab?: SidebarTabName } | null;
   openDialog:
-    | null
-    | { name: "imageExport" | "help" | "jsonExport" }
-    | { name: "ttd"; tab: "text-to-diagram" | "mermaid" }
-    | { name: "commandPalette" }
-    | { name: "settings" }
-    | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] };
+  | null
+  | { name: "imageExport" | "help" | "jsonExport" }
+  | { name: "ttd"; tab: "text-to-diagram" | "mermaid" }
+  | { name: "commandPalette" }
+  | { name: "settings" }
+  | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] };
   /**
    * Reflects user preference for whether the default sidebar should be docked.
    *
@@ -394,7 +394,9 @@ export interface AppState {
   shouldCacheIgnoreZoom: boolean;
   toast: { message: string; closable?: boolean; duration?: number } | null;
   zenModeEnabled: boolean;
+  presentationMode: boolean;
   theme: Theme;
+
   /** grid cell px size */
   gridSize: number;
   gridStep: number;
@@ -420,14 +422,14 @@ export interface AppState {
   };
   currentChartType: ChartType;
   pasteDialog:
-    | {
-        shown: false;
-        data: null;
-      }
-    | {
-        shown: true;
-        data: Spreadsheet;
-      };
+  | {
+    shown: false;
+    data: null;
+  }
+  | {
+    shown: true;
+    data: Spreadsheet;
+  };
   showHyperlinkPopup: false | "info" | "editor";
   selectedLinearElement: LinearElementEditor | null;
   snapLines: readonly SnapLine[];
@@ -523,8 +525,8 @@ export type LibraryItems_anyVersion = LibraryItems | LibraryItems_v1;
 
 export type LibraryItemsSource =
   | ((
-      currentLibraryItems: LibraryItems,
-    ) => MaybePromise<LibraryItems_anyVersion | Blob>)
+    currentLibraryItems: LibraryItems,
+  ) => MaybePromise<LibraryItems_anyVersion | Blob>)
   | MaybePromise<LibraryItems_anyVersion | Blob>;
 // -----------------------------------------------------------------------------
 
@@ -548,8 +550,8 @@ export interface ExcalidrawProps {
   ) => void;
   onIncrement?: (event: DurableIncrement | EphemeralIncrement) => void;
   initialData?:
-    | (() => MaybePromise<ExcalidrawInitialDataState | null>)
-    | MaybePromise<ExcalidrawInitialDataState | null>;
+  | (() => MaybePromise<ExcalidrawInitialDataState | null>)
+  | MaybePromise<ExcalidrawInitialDataState | null>;
   excalidrawAPI?: (api: ExcalidrawImperativeAPI) => void;
   isCollaborating?: boolean;
   onPointerUpdate?: (payload: {
@@ -623,11 +625,11 @@ export interface ExcalidrawProps {
   onUserFollow?: (payload: OnUserFollowedPayload) => void;
   children?: React.ReactNode;
   validateEmbeddable?:
-    | boolean
-    | string[]
-    | RegExp
-    | RegExp[]
-    | ((link: string) => boolean | undefined);
+  | boolean
+  | string[]
+  | RegExp
+  | RegExp[]
+  | ((link: string) => boolean | undefined);
   renderEmbeddable?: (
     element: NonDeleted<ExcalidrawEmbeddableElement>,
     appState: AppState,
@@ -716,6 +718,7 @@ export type AppClassProperties = {
   canvas: HTMLCanvasElement;
   focusContainer(): void;
   library: Library;
+  excalidrawContainerRef: React.RefObject<HTMLDivElement | null>;
   imageCache: Map<
     FileId,
     {
