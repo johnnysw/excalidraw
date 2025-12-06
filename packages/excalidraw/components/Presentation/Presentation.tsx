@@ -2,9 +2,22 @@ import React, { useEffect, useState, useRef } from "react";
 import "./Presentation.scss";
 import { useApp, useExcalidrawAppState, useExcalidrawElements, useExcalidrawSetAppState } from "../App";
 import { ArrowRightIcon, CloseIcon, pencilIcon, EraserIcon, ClearCanvasIcon, HighlighterIcon, ExitPresentationIcon } from "../icons";
-import { KEYS } from "@excalidraw/common";
-import { ExcalidrawFrameLikeElement } from "@excalidraw/element/types";
-import { zoomToFitBounds } from "../../actions/actionCanvas";
+import { KEYS, randomId } from "@excalidraw/common";
+import { ExcalidrawFrameLikeElement, ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
+import { newFreeDrawElement, syncInvalidIndices } from "@excalidraw/element";
+import type { LocalPoint } from "@excalidraw/math";
+
+const PRESENTER_CHANNEL_NAME = 'presenter-drawing';
+
+interface PresenterStroke {
+    id: string;
+    tool: 'pen' | 'highlighter';
+    color: string;
+    strokeWidth: number;
+    opacity: number;
+    points: Array<{ x: number; y: number }>;
+    frameId: string;
+}
 
 
 // Common presentation colors for pen
@@ -52,7 +65,7 @@ const Presentation = () => {
     const [currentPenColor, setCurrentPenColor] = useState("#1e1e1e");
     const [currentHighlighterColor, setCurrentHighlighterColor] = useState("#ffd43b");
     const [currentPenWidth, setCurrentPenWidth] = useState(1);
-    const [currentHighlighterWidth, setCurrentHighlighterWidth] = useState(4);
+    const [currentHighlighterWidth, setCurrentHighlighterWidth] = useState(1);
     const [currentHighlighterOpacity, setCurrentHighlighterOpacity] = useState(50);
 
     // Store original settings to restore on exit
@@ -61,6 +74,15 @@ const Presentation = () => {
     // Track element IDs that existed before presentation mode started
     const originalElementIdsRef = useRef<Set<string>>(new Set());
     const presentationActiveRef = useRef(false);
+
+    // BroadcastChannel ref for receiving drawing data from presenter view
+    const presenterChannelRef = useRef<BroadcastChannel | null>(null);
+
+    // Refs for navigation state (to avoid stale closures)
+    const currentIndexRef = useRef(currentIndex);
+    const framesLengthRef = useRef(frames.length);
+    currentIndexRef.current = currentIndex;
+    framesLengthRef.current = frames.length;
 
     // Save original element IDs when presentation mode starts
     useEffect(() => {
@@ -347,6 +369,181 @@ const Presentation = () => {
         app.setActiveTool({ type: "selection" });
     };
 
+    // 监听来自演讲者视图的工具指令（放在工具函数定义之后，避免提升问题）
+    useEffect(() => {
+        const handleTool = (event: Event) => {
+            const detail = (event as CustomEvent).detail || {};
+            const tool = detail?.tool as "pen" | "highlighter" | "eraser" | "clear" | undefined;
+            if (!tool) return;
+
+            if (tool === "pen") {
+                setShowHighlighterColors(false);
+                setShowPenColors(false);
+                applyPenSettings(currentPenColor, currentPenWidth);
+            } else if (tool === "highlighter") {
+                setShowHighlighterColors(false);
+                setShowPenColors(false);
+                applyHighlighterSettings(currentHighlighterColor, currentHighlighterWidth, currentHighlighterOpacity);
+            } else if (tool === "eraser") {
+                setShowHighlighterColors(false);
+                setShowPenColors(false);
+                setActivePresentationTool("eraser");
+                app.setActiveTool({ type: "eraser" });
+            } else if (tool === "clear") {
+                clearAllPresentationDrawings();
+                setActivePresentationTool("none");
+                app.setActiveTool({ type: "selection" });
+            }
+        };
+
+        document.addEventListener("excalidraw:presentationTool", handleTool as any);
+        return () => {
+            document.removeEventListener("excalidraw:presentationTool", handleTool as any);
+        };
+    }, [
+        applyHighlighterSettings,
+        applyPenSettings,
+        clearAllPresentationDrawings,
+        app,
+        currentPenColor,
+        currentPenWidth,
+        currentHighlighterColor,
+        currentHighlighterWidth,
+        currentHighlighterOpacity,
+    ]);
+
+    // 监听来自演讲者视图的笔迹数据 - 使用 ref 避免重复创建 channel
+    useEffect(() => {
+        if (!appState.presentationMode) {
+            // 关闭 channel
+            if (presenterChannelRef.current) {
+                presenterChannelRef.current.close();
+                presenterChannelRef.current = null;
+            }
+            return;
+        }
+
+        // 如果 channel 已存在，不重复创建
+        if (presenterChannelRef.current) {
+            return;
+        }
+
+        const channel = new BroadcastChannel(PRESENTER_CHANNEL_NAME);
+        presenterChannelRef.current = channel;
+
+        channel.onmessage = (event: MessageEvent) => {
+            const { type, stroke, frameId, tool, color, strokeWidth, opacity, direction } = event.data || {};
+
+            // 处理参数同步消息
+            if (type === 'param-sync') {
+                if (tool === 'pen') {
+                    setActivePresentationTool('pen');
+                    setCurrentPenColor(color);
+                    setCurrentPenWidth(strokeWidth);
+                    applyPenSettings(color, strokeWidth);
+                } else if (tool === 'highlighter') {
+                    setActivePresentationTool('highlighter');
+                    setCurrentHighlighterColor(color);
+                    setCurrentHighlighterWidth(strokeWidth);
+                    setCurrentHighlighterOpacity(opacity);
+                    applyHighlighterSettings(color, strokeWidth, opacity);
+                }
+                return;
+            }
+
+            // 处理工具选择消息
+            if (type === 'tool-select') {
+                if (tool === 'eraser') {
+                    setActivePresentationTool('eraser');
+                } else if (tool === 'none') {
+                    setActivePresentationTool('none');
+                }
+                return;
+            }
+
+            if (type === 'stroke-complete' && stroke) {
+                // 从演讲者视图接收笔迹，创建 freedraw 元素
+                const presenterStroke = stroke as PresenterStroke;
+                const points = presenterStroke.points;
+                if (!points || points.length < 2) return;
+
+                // 计算笔迹的边界
+                let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+                for (const p of points) {
+                    minX = Math.min(minX, p.x);
+                    minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x);
+                    maxY = Math.max(maxY, p.y);
+                }
+
+                // 将点转换为相对于元素原点的坐标
+                const relativePoints: [number, number][] = points.map(p => [
+                    p.x - minX,
+                    p.y - minY,
+                ]);
+
+                // 创建 freedraw 元素
+                // 启用 simulatePressure 使笔迹效果与主窗口直接绘画一致
+                const freedrawElement = newFreeDrawElement({
+                    type: "freedraw",
+                    x: minX,
+                    y: minY,
+                    strokeColor: presenterStroke.color,
+                    strokeWidth: presenterStroke.strokeWidth,
+                    opacity: presenterStroke.opacity,
+                    points: relativePoints as unknown as LocalPoint[],
+                    simulatePressure: true,
+                    pressures: [],
+                });
+
+                // 将元素添加到场景
+                const currentElements = app.scene.getNonDeletedElements();
+                const mergedElements = [...currentElements, freedrawElement];
+                // 修复新元素缺少的 fractional index，避免 InvalidFractionalIndexError
+                syncInvalidIndices(mergedElements);
+                app.scene.replaceAllElements(mergedElements);
+            } else if (type === 'erase-stroke') {
+                // 删除指定的笔迹
+                const currentElements = app.scene.getNonDeletedElements();
+                // 查找演示期间添加的 freedraw 元素
+                const freedrawElements = currentElements.filter((el) => el.type === 'freedraw' && !originalElementIdsRef.current.has(el.id));
+                if (freedrawElements.length > 0) {
+                    // 删除最后一个 freedraw 元素
+                    const elementToRemove = freedrawElements[freedrawElements.length - 1];
+                    const elementsToKeep = currentElements.filter((el) => el.id !== elementToRemove.id);
+                    app.scene.replaceAllElements(elementsToKeep);
+                }
+            } else if (type === 'clear' && frameId) {
+                // 清除所有演示笔迹
+                const originalIds = originalElementIdsRef.current;
+                const currentElements = app.scene.getNonDeletedElements();
+                const elementsToKeep = currentElements.filter(
+                    (el) => originalIds.has(el.id) || el.type !== "freedraw"
+                );
+                if (elementsToKeep.length !== currentElements.length) {
+                    app.scene.replaceAllElements(elementsToKeep);
+                }
+            } else if (type === 'navigate') {
+                // 处理翻页命令 (使用 refs 获取最新值)
+                const idx = currentIndexRef.current;
+                const len = framesLengthRef.current;
+                if (direction === 'prev' && idx > 0) {
+                    setCurrentIndex(idx - 1);
+                } else if (direction === 'next' && idx < len - 1) {
+                    setCurrentIndex(idx + 1);
+                }
+            }
+        };
+
+        return () => {
+            // 清理函数：只在组件卸载时关闭
+            if (presenterChannelRef.current) {
+                presenterChannelRef.current.close();
+                presenterChannelRef.current = null;
+            }
+        };
+    }, [appState.presentationMode, app]);
+
     if (!appState.presentationMode) return null;
 
     // Get current frame for overlay calculation
@@ -496,7 +693,7 @@ const Presentation = () => {
 
                 {/* Clear all drawings button */}
                 <div
-                    className="Presentation-controls__tool Presentation-controls__tool--danger"
+                    className="Presentation-controls__tool"
                     onClick={handleClearAllDrawings}
                     title="清除所有笔迹"
                 >

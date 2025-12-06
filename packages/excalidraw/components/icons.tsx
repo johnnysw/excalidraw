@@ -470,17 +470,8 @@ export const HighlighterIcon = createIcon(
 
 // custom: clear canvas (screen + eraser)
 export const ClearCanvasIcon = createIcon(
-  <g strokeWidth="1.5">
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    {/* Screen */}
-    <rect x="2" y="3" width="20" height="15" rx="2" />
-    {/* Eraser */}
-    <g transform="translate(9, 9) scale(0.6)">
-      <path d="M19 20h-10.5l-4.21 -4.3a1 1 0 0 1 0 -1.41l10 -10a1 1 0 0 1 1.41 0l5 5a1 1 0 0 1 0 1.41l-9.2 9.3" />
-      <path d="M18 13.3l-6.3 -6.3" />
-    </g>
-  </g>,
-  tablerIconProps,
+  <path fill="currentColor" d="M4 4a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6c0-.343.078-.686.234-1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v4.235c.213.106.413.248.59.425l.41.41V6a2 2 0 0 0-2-2zm11.116 7.366a1.25 1.25 0 0 1 1.767 0l1.75 1.75a1.25 1.25 0 0 1 0 1.768l-2.575 2.575l-3.518-3.517zm-3.174 3.174l-.576.576a1.25 1.25 0 0 0 0 1.768l1.75 1.749a1.25 1.25 0 0 0 1.767 0l.577-.576z" />,
+  { width: 20, height: 20 },
 );
 
 // Presentation tab icon (slides/presentation mode)
