@@ -18,6 +18,10 @@ export const PresentationMenu: React.FC = () => {
     const app = useApp();
     const elements = useExcalidrawElements();
     const setAppState = useExcalidrawSetAppState();
+    const slideNotes = useMemo(() => {
+        const notes = (app.state as any).slideNotes;
+        return notes && typeof notes === "object" ? notes as Record<string, string> : {};
+    }, [app.state]);
 
     const [slides, setSlides] = useState<SlideItem[]>([]);
     const [slideOrder, setSlideOrder] = useState<string[]>(() => {
@@ -197,6 +201,17 @@ export const PresentationMenu: React.FC = () => {
         setDragOverId(null);
     }, []);
 
+    const handleEditNote = useCallback((slideId: string) => {
+        const event = new CustomEvent("excalidraw:editSlideNote", {
+            detail: {
+                frameId: slideId,
+                note: slideNotes?.[slideId] || "",
+            },
+            bubbles: true,
+        });
+        document.dispatchEvent(event);
+    }, [slideNotes]);
+
     // Start presentation
     const startPresentation = useCallback(() => {
         if (orderedSlides.length === 0) return;
@@ -279,7 +294,23 @@ export const PresentationMenu: React.FC = () => {
                                 <div className="PresentationMenu__slide-placeholder" />
                             )}
                         </div>
-                        <div className="PresentationMenu__slide-name">{slide.name}</div>
+                        <div className="PresentationMenu__slide-footer">
+                            <div className="PresentationMenu__slide-name">{slide.name}</div>
+                            <button
+                                className="PresentationMenu__note-btn"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditNote(slide.id);
+                                }}
+                                title={slideNotes?.[slide.id] ? "查看/编辑注释" : "添加注释"}
+                            >
+                                <span
+                                    className={slideNotes?.[slide.id] ? "has-note-dot" : "no-note-dot"}
+                                    aria-hidden
+                                />
+                                注释
+                            </button>
+                        </div>
                     </div>
                 ))}
             </div>

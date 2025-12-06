@@ -395,6 +395,10 @@ export interface AppState {
   toast: { message: string; closable?: boolean; duration?: number } | null;
   zenModeEnabled: boolean;
   presentationMode: boolean;
+  /** custom slide order (frame ids) used by presentation mode */
+  slideOrder?: string[];
+  /** presenter notes per frame */
+  slideNotes?: Record<string, string>;
   theme: Theme;
 
   /** grid cell px size */

@@ -129,6 +129,8 @@ export const getDefaultAppState = (): Omit<
     activeLockedId: null,
     bindMode: "orbit",
     presentationMode: false,
+    slideOrder: [],
+    slideNotes: {},
   };
 };
 
@@ -256,6 +258,8 @@ const APP_STATE_STORAGE_CONF = (<
     activeLockedId: { browser: false, export: false, server: false },
     bindMode: { browser: true, export: false, server: false },
     presentationMode: { browser: false, export: false, server: false },
+    slideOrder: { browser: true, export: true, server: true },
+    slideNotes: { browser: true, export: true, server: true },
   });
 
 const _clearAppStateForStorage = <

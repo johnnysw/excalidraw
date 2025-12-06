@@ -60,6 +60,7 @@ const Presentation = () => {
 
     // Track element IDs that existed before presentation mode started
     const originalElementIdsRef = useRef<Set<string>>(new Set());
+    const presentationActiveRef = useRef(false);
 
     // Save original element IDs when presentation mode starts
     useEffect(() => {
@@ -67,6 +68,24 @@ const Presentation = () => {
             originalElementIdsRef.current = new Set(elements.map(el => el.id));
         }
     }, [appState.presentationMode]);
+
+    useEffect(() => {
+        if (appState.presentationMode && !presentationActiveRef.current) {
+            presentationActiveRef.current = true;
+            document.dispatchEvent(
+                new CustomEvent("excalidraw:presentationStart", {
+                    detail: { total: frames.length },
+                }),
+            );
+        } else if (!appState.presentationMode && presentationActiveRef.current) {
+            presentationActiveRef.current = false;
+            document.dispatchEvent(
+                new CustomEvent("excalidraw:presentationStop", {
+                    detail: { total: frames.length },
+                }),
+            );
+        }
+    }, [appState.presentationMode, frames.length]);
 
     // Get custom slide order from appState
     const customSlideOrder = (appState as any).slideOrder as string[] | undefined;
@@ -123,6 +142,26 @@ const Presentation = () => {
             }));
         }
     }, [currentIndex, frames, appState.presentationMode, appState.width, appState.height]);
+
+    useEffect(() => {
+        if (!appState.presentationMode) {
+            return;
+        }
+        const currentFrame = frames[currentIndex];
+        const nextFrame = frames[currentIndex + 1];
+        document.dispatchEvent(
+            new CustomEvent("excalidraw:presentationSlideChange", {
+                detail: {
+                    frameId: currentFrame?.id ?? null,
+                    frameName: currentFrame?.name,
+                    index: currentIndex,
+                    total: frames.length,
+                    nextFrameId: nextFrame?.id ?? null,
+                    nextFrameName: nextFrame?.name,
+                },
+            }),
+        );
+    }, [currentIndex, frames, appState.presentationMode]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {

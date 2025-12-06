@@ -608,13 +608,46 @@ const LayerUI = ({
               actionManager={actionManager}
               showExitZenModeBtn={showExitZenModeBtn}
               renderWelcomeScreen={renderWelcomeScreen}
-              onPresent={() => {
+              onPresent={(mode) => {
+                let presenterWindow: Window | null = null;
+                if (mode === "presenter") {
+                  // 在用户点击手势中打开窗口，避免被浏览器拦截
+                  presenterWindow = window.open(
+                    "",
+                    "presenter-view",
+                    "width=520,height=740",
+                  );
+                  // 尽量保持焦点在当前窗口
+                  if (presenterWindow) {
+                    try {
+                      presenterWindow.blur();
+                      window.focus();
+                    } catch {
+                      // 某些浏览器可能不允许，忽略
+                    }
+                  }
+                }
+
                 if (app.excalidrawContainerRef.current) {
-                  app.excalidrawContainerRef.current
-                    .requestFullscreen()
-                    .catch((e) => console.error(e));
+                  try {
+                    const maybePromise =
+                      app.excalidrawContainerRef.current.requestFullscreen();
+                    // 某些浏览器会返回 Promise
+                    if (maybePromise && typeof (maybePromise as any).catch === "function") {
+                      (maybePromise as Promise<void>).catch(() => {
+                        // 忽略全屏权限错误，保持演示流程
+                      });
+                    }
+                  } catch (err) {
+                    // 忽略权限失败，继续后续逻辑
+                  }
                 }
                 setAppState({ presentationMode: true });
+                const event = new CustomEvent("excalidraw:startPresentation", {
+                  detail: { mode, presenterWindow },
+                  bubbles: true,
+                });
+                document.dispatchEvent(event);
               }}
             />
             {appState.scrolledOutside && (
