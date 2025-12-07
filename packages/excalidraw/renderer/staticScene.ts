@@ -282,6 +282,16 @@ const _renderStaticScene = ({
   // Paint visible elements
   visibleElements
     .filter((el) => !isIframeLikeElement(el))
+    .filter((element) => {
+      if (
+        appState.presentationMode &&
+        element.animation &&
+        element.animation.stepGroup > appState.presentationStep
+      ) {
+        return false;
+      }
+      return true;
+    })
     .forEach((element) => {
       try {
         const frameId = element.frameId || appState.frameToHighlight?.id;
@@ -369,6 +379,16 @@ const _renderStaticScene = ({
   // render embeddables on top
   visibleElements
     .filter((el) => isIframeLikeElement(el))
+    .filter((element) => {
+      if (
+        appState.presentationMode &&
+        element.animation &&
+        element.animation.stepGroup > appState.presentationStep
+      ) {
+        return false;
+      }
+      return true;
+    })
     .forEach((element) => {
       try {
         const render = () => {

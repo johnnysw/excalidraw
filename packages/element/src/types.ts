@@ -28,6 +28,18 @@ export type RoundnessType = ValueOf<typeof ROUNDNESS>;
 export type StrokeStyle = "solid" | "dashed" | "dotted";
 export type TextAlign = typeof TEXT_ALIGN[keyof typeof TEXT_ALIGN];
 
+/** Animation configuration for presentation mode */
+export type ElementAnimation = {
+  /** Animation type (e.g., fadeIn, slideIn) */
+  type?: string;
+  /** Animation duration in ms */
+  duration?: number;
+  /** Step group - elements with same stepGroup appear together */
+  stepGroup: number;
+  /** Trigger type */
+  trigger?: 'click' | 'auto';
+};
+
 type VerticalAlignKeys = keyof typeof VERTICAL_ALIGN;
 export type VerticalAlign = typeof VERTICAL_ALIGN[VerticalAlignKeys];
 export type FractionalIndex = string & { _brand: "franctionalIndex" };
@@ -79,6 +91,8 @@ type _ExcalidrawElementBase = Readonly<{
   link: string | null;
   locked: boolean;
   customData?: Record<string, any>;
+  /** Animation configuration for presentation mode */
+  animation?: ElementAnimation;
 }>;
 
 export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {
@@ -163,6 +177,8 @@ export type InitializedExcalidrawImageElement = MarkNonNullable<
 export type ExcalidrawFrameElement = _ExcalidrawElementBase & {
   type: "frame";
   name: string | null;
+  /** The total number of animation steps in this frame */
+  maxSteps?: number;
 };
 
 export type ExcalidrawMagicFrameElement = _ExcalidrawElementBase & {

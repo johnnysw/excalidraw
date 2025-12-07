@@ -94,6 +94,8 @@ const Presentation = () => {
     useEffect(() => {
         if (appState.presentationMode && !presentationActiveRef.current) {
             presentationActiveRef.current = true;
+            // Reset presentationStep when entering presentation mode
+            setAppState({ presentationStep: 0 });
             document.dispatchEvent(
                 new CustomEvent("excalidraw:presentationStart", {
                     detail: { total: frames.length },
@@ -111,6 +113,31 @@ const Presentation = () => {
 
     // Get custom slide order from appState
     const customSlideOrder = (appState as any).slideOrder as string[] | undefined;
+
+    const getMaxStepsForFrame = (frame: ExcalidrawFrameLikeElement) => {
+        // Check if element is inside frame bounds (fallback when frameId is not set)
+        const isInFrame = (el: any) => {
+            if (el.frameId === frame.id) return true;
+            // Geometric check: element center point within frame bounds
+            const elCenterX = el.x + (el.width || 0) / 2;
+            const elCenterY = el.y + (el.height || 0) / 2;
+            return (
+                elCenterX >= frame.x &&
+                elCenterX <= frame.x + frame.width &&
+                elCenterY >= frame.y &&
+                elCenterY <= frame.y + frame.height
+            );
+        };
+
+        const frameElements = elements.filter(el => isInFrame(el) && !el.isDeleted);
+        let max = 0;
+        for (const el of frameElements) {
+            if (el.animation && el.animation.stepGroup) {
+                max = Math.max(max, el.animation.stepGroup);
+            }
+        }
+        return max;
+    };
 
     useEffect(() => {
         const allFrames = elements.filter((el) => el.type === "frame" && !el.isDeleted) as ExcalidrawFrameLikeElement[];
@@ -180,20 +207,35 @@ const Presentation = () => {
                     total: frames.length,
                     nextFrameId: nextFrame?.id ?? null,
                     nextFrameName: nextFrame?.name,
+                    presentationStep: appState.presentationStep || 0,
                 },
             }),
         );
-    }, [currentIndex, frames, appState.presentationMode]);
+    }, [currentIndex, frames, appState.presentationMode, appState.presentationStep]);
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === KEYS.ARROW_RIGHT || event.key === KEYS.SPACE) {
-                if (currentIndex < frames.length - 1) {
+                const currentFrame = frames[currentIndex];
+                const currentStep = appState.presentationStep || 0;
+                const maxSteps = currentFrame ? getMaxStepsForFrame(currentFrame) : 0;
+
+                if (currentStep < maxSteps) {
+                    setAppState({ presentationStep: currentStep + 1 });
+                } else if (currentIndex < frames.length - 1) {
                     setCurrentIndex(currentIndex + 1);
+                    setAppState({ presentationStep: 0 });
                 }
             } else if (event.key === KEYS.ARROW_LEFT) {
-                if (currentIndex > 0) {
+                const currentStep = appState.presentationStep || 0;
+                if (currentStep > 0) {
+                    setAppState({ presentationStep: currentStep - 1 });
+                } else if (currentIndex > 0) {
+                    // When going back to previous slide, show all content (set step to maxSteps)
+                    const prevFrame = frames[currentIndex - 1];
+                    const prevMaxSteps = prevFrame ? getMaxStepsForFrame(prevFrame) : 0;
                     setCurrentIndex(currentIndex - 1);
+                    setAppState({ presentationStep: prevMaxSteps });
                 }
             } else if (event.key === KEYS.ESCAPE) {
                 setShowPenColors(false);
@@ -205,7 +247,7 @@ const Presentation = () => {
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [currentIndex, frames, setAppState, showPenColors, showHighlighterColors]);
+    }, [currentIndex, frames, setAppState, showPenColors, showHighlighterColors, appState.presentationStep, elements]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -703,7 +745,18 @@ const Presentation = () => {
                 <div className="Presentation-controls__separator" />
 
                 {/* Navigation controls */}
-                <div className="Presentation-controls__prev" onClick={() => currentIndex > 0 && setCurrentIndex(currentIndex - 1)}>
+                <div className="Presentation-controls__prev" onClick={() => {
+                    const currentStep = appState.presentationStep || 0;
+                    if (currentStep > 0) {
+                        setAppState({ presentationStep: currentStep - 1 });
+                    } else if (currentIndex > 0) {
+                        // When going back to previous slide, show all content (set step to maxSteps)
+                        const prevFrame = frames[currentIndex - 1];
+                        const prevMaxSteps = prevFrame ? getMaxStepsForFrame(prevFrame) : 0;
+                        setCurrentIndex(currentIndex - 1);
+                        setAppState({ presentationStep: prevMaxSteps });
+                    }
+                }}>
                     <div style={{ transform: "rotate(180deg)" }}>
                         {ArrowRightIcon}
                     </div>
@@ -711,7 +764,18 @@ const Presentation = () => {
                 <div className="Presentation-controls__info">
                     {currentIndex + 1} / {frames.length}
                 </div>
-                <div className="Presentation-controls__next" onClick={() => currentIndex < frames.length - 1 && setCurrentIndex(currentIndex + 1)}>
+                <div className="Presentation-controls__next" onClick={() => {
+                    const currentFrame = frames[currentIndex];
+                    const currentStep = appState.presentationStep || 0;
+                    const maxSteps = currentFrame ? getMaxStepsForFrame(currentFrame) : 0;
+
+                    if (currentStep < maxSteps) {
+                        setAppState({ presentationStep: currentStep + 1 });
+                    } else if (currentIndex < frames.length - 1) {
+                        setCurrentIndex(currentIndex + 1);
+                        setAppState({ presentationStep: 0 });
+                    }
+                }}>
                     {ArrowRightIcon}
                 </div>
                 <div className="Presentation-controls__close" onClick={() => setAppState({ presentationMode: false })}>

@@ -191,6 +191,8 @@ type _CommonCanvasAppState = {
   offsetLeft: AppState["offsetLeft"];
   offsetTop: AppState["offsetTop"];
   theme: AppState["theme"];
+  presentationMode: AppState["presentationMode"];
+  presentationStep: AppState["presentationStep"];
 };
 
 export type StaticCanvasAppState = Readonly<
@@ -395,6 +397,8 @@ export interface AppState {
   toast: { message: string; closable?: boolean; duration?: number } | null;
   zenModeEnabled: boolean;
   presentationMode: boolean;
+  /** Current animation step index in presentation mode */
+  presentationStep: number;
   /** custom slide order (frame ids) used by presentation mode */
   slideOrder?: string[];
   /** presenter notes per frame */
