@@ -193,6 +193,7 @@ type _CommonCanvasAppState = {
   theme: AppState["theme"];
   presentationMode: AppState["presentationMode"];
   presentationStep: AppState["presentationStep"];
+  animationProgress: AppState["animationProgress"];
 };
 
 export type StaticCanvasAppState = Readonly<
@@ -399,6 +400,8 @@ export interface AppState {
   presentationMode: boolean;
   /** Current animation step index in presentation mode */
   presentationStep: number;
+  /** Animation progress (0-1) for current step, used for slideIn effects */
+  animationProgress: number;
   /** custom slide order (frame ids) used by presentation mode */
   slideOrder?: string[];
   /** presenter notes per frame */

@@ -102,6 +102,7 @@ const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {
     suggestedBinding: appState.suggestedBinding,
     presentationMode: appState.presentationMode,
     presentationStep: appState.presentationStep,
+    animationProgress: appState.animationProgress,
   };
 
   return relevantAppStateProps;

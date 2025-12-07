@@ -53,6 +53,7 @@ export const SidebarInner = forwardRef(
       onDock,
       docked,
       className,
+      preventOutsideClose,
       ...rest
     }: SidebarProps & Omit<React.RefAttributes<HTMLDivElement>, "onSelect">,
     ref: React.ForwardedRef<HTMLDivElement>,
@@ -117,11 +118,15 @@ export const SidebarInner = forwardRef(
           if ((event.target as Element).closest(".sidebar-trigger")) {
             return;
           }
+          // Skip outside click close if preventOutsideClose is true
+          if (preventOutsideClose) {
+            return;
+          }
           if (!docked || !editorInterface.canFitSidebar) {
             closeLibrary();
           }
         },
-        [closeLibrary, docked, editorInterface.canFitSidebar],
+        [closeLibrary, docked, editorInterface.canFitSidebar, preventOutsideClose],
       ),
     );
 

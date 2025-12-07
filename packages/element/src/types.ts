@@ -28,6 +28,9 @@ export type RoundnessType = ValueOf<typeof ROUNDNESS>;
 export type StrokeStyle = "solid" | "dashed" | "dotted";
 export type TextAlign = typeof TEXT_ALIGN[keyof typeof TEXT_ALIGN];
 
+/** Animation target for text decoration groups */
+export type AnimationTarget = 'all' | 'text' | 'background' | 'underline' | 'strike';
+
 /** Animation configuration for presentation mode */
 export type ElementAnimation = {
   /** Animation type (e.g., fadeIn, slideIn) */
@@ -38,6 +41,8 @@ export type ElementAnimation = {
   stepGroup: number;
   /** Trigger type */
   trigger?: 'click' | 'auto';
+  /** Animation target - which elements in a decoration group should animate */
+  animationTarget?: AnimationTarget;
 };
 
 type VerticalAlignKeys = keyof typeof VERTICAL_ALIGN;

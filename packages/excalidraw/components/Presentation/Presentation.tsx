@@ -114,22 +114,22 @@ const Presentation = () => {
     // Get custom slide order from appState
     const customSlideOrder = (appState as any).slideOrder as string[] | undefined;
 
-    const getMaxStepsForFrame = (frame: ExcalidrawFrameLikeElement) => {
-        // Check if element is inside frame bounds (fallback when frameId is not set)
-        const isInFrame = (el: any) => {
-            if (el.frameId === frame.id) return true;
-            // Geometric check: element center point within frame bounds
-            const elCenterX = el.x + (el.width || 0) / 2;
-            const elCenterY = el.y + (el.height || 0) / 2;
-            return (
-                elCenterX >= frame.x &&
-                elCenterX <= frame.x + frame.width &&
-                elCenterY >= frame.y &&
-                elCenterY <= frame.y + frame.height
-            );
-        };
+    // Check if element is inside frame bounds (fallback when frameId is not set)
+    const isElementInFrame = (el: any, frame: ExcalidrawFrameLikeElement) => {
+        if (el.frameId === frame.id) return true;
+        // Geometric check: element center point within frame bounds
+        const elCenterX = el.x + (el.width || 0) / 2;
+        const elCenterY = el.y + (el.height || 0) / 2;
+        return (
+            elCenterX >= frame.x &&
+            elCenterX <= frame.x + frame.width &&
+            elCenterY >= frame.y &&
+            elCenterY <= frame.y + frame.height
+        );
+    };
 
-        const frameElements = elements.filter(el => isInFrame(el) && !el.isDeleted);
+    const getMaxStepsForFrame = (frame: ExcalidrawFrameLikeElement) => {
+        const frameElements = elements.filter(el => isElementInFrame(el, frame) && !el.isDeleted);
         let max = 0;
         for (const el of frameElements) {
             if (el.animation && el.animation.stepGroup) {
@@ -137,6 +137,18 @@ const Presentation = () => {
             }
         }
         return max;
+    };
+
+    // Get the startMode for a specific step in a frame
+    const getStepStartMode = (frame: ExcalidrawFrameLikeElement, step: number): string => {
+        const frameElements = elements.filter(el => isElementInFrame(el, frame) && !el.isDeleted);
+        // Find an element with this stepGroup and get its startMode
+        for (const el of frameElements) {
+            if (el.animation && el.animation.stepGroup === step) {
+                return (el.animation as any).startMode || 'onClick';
+            }
+        }
+        return 'onClick';
     };
 
     useEffect(() => {
@@ -221,10 +233,16 @@ const Presentation = () => {
                 const maxSteps = currentFrame ? getMaxStepsForFrame(currentFrame) : 0;
 
                 if (currentStep < maxSteps) {
-                    setAppState({ presentationStep: currentStep + 1 });
+                    setAppState({
+                        presentationStep: currentStep + 1,
+                        animationProgress: 0 // Reset animation progress immediately to prevent flash
+                    } as any);
                 } else if (currentIndex < frames.length - 1) {
                     setCurrentIndex(currentIndex + 1);
-                    setAppState({ presentationStep: 0 });
+                    setAppState({
+                        presentationStep: 0,
+                        animationProgress: 0
+                    } as any);
                 }
             } else if (event.key === KEYS.ARROW_LEFT) {
                 const currentStep = appState.presentationStep || 0;
@@ -248,6 +266,61 @@ const Presentation = () => {
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [currentIndex, frames, setAppState, showPenColors, showHighlighterColors, appState.presentationStep, elements]);
+
+    // Animation progress effect - animate from 0 to 1 when presentationStep changes
+    const prevStepRef = useRef(appState.presentationStep);
+    useEffect(() => {
+        const currentStep = appState.presentationStep || 0;
+        const currentFrame = frames[currentIndex];
+
+        // Only animate forward (new step appearing)
+        if (currentStep > prevStepRef.current) {
+            // Start animation from 0
+            setAppState({ animationProgress: 0 } as any);
+
+            const startTime = performance.now();
+            const duration = 400; // ms
+
+            const animate = (now: number) => {
+                const elapsed = now - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Easing function (ease-out)
+                const eased = 1 - Math.pow(1 - progress, 3);
+
+                setAppState({ animationProgress: eased } as any);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                } else {
+                    // Animation complete - check if next step should auto-play
+                    if (currentFrame) {
+                        const maxSteps = getMaxStepsForFrame(currentFrame);
+                        const nextStep = currentStep + 1;
+                        if (nextStep <= maxSteps) {
+                            const nextStartMode = getStepStartMode(currentFrame, nextStep);
+                            if (nextStartMode === 'afterPrevious') {
+                                // Auto-advance to next step after a brief delay
+                                setTimeout(() => {
+                                    setAppState({
+                                        presentationStep: nextStep,
+                                        animationProgress: 0
+                                    } as any);
+                                }, 50);
+                            }
+                        }
+                    }
+                }
+            };
+
+            requestAnimationFrame(animate);
+        } else {
+            // Going backward or staying same - no animation
+            setAppState({ animationProgress: 1 } as any);
+        }
+
+        prevStepRef.current = currentStep;
+    }, [appState.presentationStep, setAppState, currentIndex, frames]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -770,10 +843,16 @@ const Presentation = () => {
                     const maxSteps = currentFrame ? getMaxStepsForFrame(currentFrame) : 0;
 
                     if (currentStep < maxSteps) {
-                        setAppState({ presentationStep: currentStep + 1 });
+                        setAppState({
+                            presentationStep: currentStep + 1,
+                            animationProgress: 0
+                        } as any);
                     } else if (currentIndex < frames.length - 1) {
                         setCurrentIndex(currentIndex + 1);
-                        setAppState({ presentationStep: 0 });
+                        setAppState({
+                            presentationStep: 0,
+                            animationProgress: 0
+                        } as any);
                     }
                 }}>
                     {ArrowRightIcon}

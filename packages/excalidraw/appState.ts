@@ -132,6 +132,7 @@ export const getDefaultAppState = (): Omit<
     slideOrder: [],
     slideNotes: {},
     presentationStep: 0,
+    animationProgress: 1,
   };
 };
 
@@ -262,6 +263,7 @@ const APP_STATE_STORAGE_CONF = (<
     slideOrder: { browser: true, export: true, server: true },
     slideNotes: { browser: true, export: true, server: true },
     presentationStep: { browser: false, export: false, server: false },
+    animationProgress: { browser: false, export: false, server: false },
   });
 
 const _clearAppStateForStorage = <

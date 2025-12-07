@@ -209,6 +209,65 @@ const renderLinkIcon = (
     context.restore();
   }
 };
+
+/**
+ * 渲染动画编号标记
+ * 在有动画的元素右上角显示一个带颜色的编号圆点
+ */
+const renderAnimationBadge = (
+  element: NonDeletedExcalidrawElement,
+  context: CanvasRenderingContext2D,
+  appState: StaticCanvasAppState,
+  elementsMap: ElementsMap,
+) => {
+  // 只在非演示模式下显示编号（编辑模式）
+  if (appState.presentationMode) {
+    return;
+  }
+
+  const animation = (element as any).animation;
+  if (!animation?.stepGroup) {
+    return;
+  }
+
+  const stepGroup = animation.stepGroup;
+  const [x1, y1, x2] = getElementAbsoluteCoords(element, elementsMap);
+
+  // 计算标记位置（右上角）
+  const badgeSize = 18 / appState.zoom.value;
+  const badgeX = appState.scrollX + x2 - badgeSize / 2;
+  const badgeY = appState.scrollY + y1 - badgeSize / 2;
+
+  context.save();
+
+  // 根据动画类型选择颜色
+  const animationType = animation.type || 'fadeIn';
+  let badgeColor = '#52c41a'; // 默认绿色（fadeIn）
+  if (animationType.startsWith('slideIn')) {
+    badgeColor = '#1890ff'; // 蓝色（slideIn）
+  }
+
+  // 绘制圆形背景
+  context.beginPath();
+  context.arc(badgeX, badgeY, badgeSize / 2, 0, Math.PI * 2);
+  context.fillStyle = badgeColor;
+  context.fill();
+
+  // 绘制白色边框
+  context.strokeStyle = '#ffffff';
+  context.lineWidth = 1.5 / appState.zoom.value;
+  context.stroke();
+
+  // 绘制编号文字
+  context.fillStyle = '#ffffff';
+  context.font = `bold ${12 / appState.zoom.value}px sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillText(String(stepGroup), badgeX, badgeY);
+
+  context.restore();
+};
+
 const _renderStaticScene = ({
   canvas,
   rc,
@@ -283,11 +342,50 @@ const _renderStaticScene = ({
   visibleElements
     .filter((el) => !isIframeLikeElement(el))
     .filter((element) => {
+      // Filter out elements whose animation step hasn't been reached yet
+      // Support both presentationMode (full-screen) and isPlayingAnimation (in-editor preview)
+      const isPlayingAnimation = (appState as any).isPlayingAnimation;
+      const isPlayingAnimationFrameId = (appState as any).isPlayingAnimationFrameId;
+
+      // In presentationMode, apply to all elements
+      // In isPlayingAnimation mode, only apply to elements in the target frame
+      const shouldApplyAnimation = appState.presentationMode ||
+        (isPlayingAnimation && element.frameId === isPlayingAnimationFrameId);
+
       if (
-        appState.presentationMode &&
+        shouldApplyAnimation &&
         element.animation &&
         element.animation.stepGroup > appState.presentationStep
       ) {
+        // Check if this element should be hidden based on animationTarget
+        // If animationTarget is set and doesn't include this element, show it immediately
+        const animationTarget = element.animation.animationTarget;
+        if (animationTarget && animationTarget !== 'all') {
+          const customData = (element as any).customData;
+          const role = customData?.role as string | undefined;
+
+          // Check if this element is NOT in the animation target
+          let isInAnimationTarget = false;
+          switch (animationTarget) {
+            case 'text':
+              isInAnimationTarget = element.type === 'text' || role === 'option' || role === 'stem';
+              break;
+            case 'background':
+              isInAnimationTarget = role === 'text-background';
+              break;
+            case 'underline':
+              isInAnimationTarget = role === 'text-underline';
+              break;
+            case 'strike':
+              isInAnimationTarget = role === 'text-strike';
+              break;
+          }
+
+          // If element is NOT in animation target, show it immediately (don't hide)
+          if (!isInAnimationTarget) {
+            return true;
+          }
+        }
         return false;
       }
       return true;
@@ -306,6 +404,74 @@ const _renderStaticScene = ({
         }
 
         context.save();
+
+        // Apply animation effects for elements appearing in current step
+        // Support both presentationMode and isPlayingAnimation
+        const isPlayingAnimation = (appState as any).isPlayingAnimation;
+        const isPlayingAnimationFrameId = (appState as any).isPlayingAnimationFrameId;
+        const shouldApplyAnimation = appState.presentationMode ||
+          (isPlayingAnimation && element.frameId === isPlayingAnimationFrameId);
+        if (
+          shouldApplyAnimation &&
+          element.animation &&
+          element.animation.stepGroup === appState.presentationStep
+        ) {
+          // Check if this element should have animation applied based on animationTarget
+          const animationTarget = element.animation.animationTarget;
+          const customData = (element as any).customData;
+          const role = customData?.role as string | undefined;
+
+          // Determine if animation should be applied to this specific element
+          let shouldApplyToThisElement = true;
+          if (animationTarget && animationTarget !== 'all') {
+            switch (animationTarget) {
+              case 'text':
+                // Only apply to text elements (type === 'text', or role is option/stem)
+                shouldApplyToThisElement = element.type === 'text' || role === 'option' || role === 'stem';
+                break;
+              case 'background':
+                // Only apply to background elements (role === 'text-background')
+                shouldApplyToThisElement = role === 'text-background';
+                break;
+              case 'underline':
+                // Only apply to underline elements (role === 'text-underline')
+                shouldApplyToThisElement = role === 'text-underline';
+                break;
+              case 'strike':
+                // Only apply to strike elements (role === 'text-strike')
+                shouldApplyToThisElement = role === 'text-strike';
+                break;
+            }
+          }
+
+          if (shouldApplyToThisElement) {
+            const progress = appState.animationProgress ?? 1;
+            const animType = element.animation.type || 'fadeIn';
+            const slideOffset = 100; // pixels
+
+            switch (animType) {
+              case 'fadeIn':
+                context.globalAlpha = progress;
+                break;
+              case 'slideInLeft':
+                context.translate(-slideOffset * (1 - progress), 0);
+                context.globalAlpha = progress;
+                break;
+              case 'slideInRight':
+                context.translate(slideOffset * (1 - progress), 0);
+                context.globalAlpha = progress;
+                break;
+              case 'slideInTop':
+                context.translate(0, -slideOffset * (1 - progress));
+                context.globalAlpha = progress;
+                break;
+              case 'slideInBottom':
+                context.translate(0, slideOffset * (1 - progress));
+                context.globalAlpha = progress;
+                break;
+            }
+          }
+        }
 
         if (
           frameId &&
@@ -363,6 +529,7 @@ const _renderStaticScene = ({
 
         if (!isExporting) {
           renderLinkIcon(element, context, appState, elementsMap);
+          renderAnimationBadge(element, context, appState, elementsMap);
         }
       } catch (error: any) {
         console.error(
@@ -380,8 +547,13 @@ const _renderStaticScene = ({
   visibleElements
     .filter((el) => isIframeLikeElement(el))
     .filter((element) => {
+      // Filter embeddables based on animation step
+      const isPlayingAnimation = (appState as any).isPlayingAnimation;
+      const isPlayingAnimationFrameId = (appState as any).isPlayingAnimationFrameId;
+      const shouldApplyAnimation = appState.presentationMode ||
+        (isPlayingAnimation && element.frameId === isPlayingAnimationFrameId);
       if (
-        appState.presentationMode &&
+        shouldApplyAnimation &&
         element.animation &&
         element.animation.stepGroup > appState.presentationStep
       ) {
@@ -424,6 +596,7 @@ const _renderStaticScene = ({
           }
           if (!isExporting) {
             renderLinkIcon(element, context, appState, elementsMap);
+            renderAnimationBadge(element, context, appState, elementsMap);
           }
         };
         // - when exporting the whole canvas, we DO NOT apply clipping
