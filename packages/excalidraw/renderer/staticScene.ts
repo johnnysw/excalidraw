@@ -338,6 +338,36 @@ const _renderStaticScene = ({
 
   const inFrameGroupsMap = new Map<string, boolean>();
 
+  // 线性插值两个十六进制颜色（仅支持 #RRGGBB），用于文本变色动画
+  const interpolateColor = (from: string, to: string, t: number): string => {
+    const parse = (hex: string) => {
+      if (!hex || hex[0] !== "#" || hex.length !== 7) {
+        return null;
+      }
+      const r = parseInt(hex.slice(1, 3), 16);
+      const g = parseInt(hex.slice(3, 5), 16);
+      const b = parseInt(hex.slice(5, 7), 16);
+      if (Number.isNaN(r) || Number.isNaN(g) || Number.isNaN(b)) {
+        return null;
+      }
+      return { r, g, b };
+    };
+
+    const fromRGB = parse(from);
+    const toRGB = parse(to);
+    if (!fromRGB || !toRGB) {
+      // 如果解析失败，直接使用目标颜色或原始颜色
+      return to || from;
+    }
+
+    const lerp = (a: number, b: number) => Math.round(a + (b - a) * t);
+    const r = lerp(fromRGB.r, toRGB.r);
+    const g = lerp(fromRGB.g, toRGB.g);
+    const b = lerp(fromRGB.b, toRGB.b);
+    const toHex = (v: number) => v.toString(16).padStart(2, "0");
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  };
+
   // Paint visible elements
   visibleElements
     .filter((el) => !isIframeLikeElement(el))
@@ -357,6 +387,11 @@ const _renderStaticScene = ({
         element.animation &&
         element.animation.stepGroup > appState.presentationStep
       ) {
+        // 文本变色动画：不需要在动画前隐藏元素，始终可见
+        if (element.animation.type === "textColor") {
+          return true;
+        }
+
         // Check if this element should be hidden based on animationTarget
         // If animationTarget is set and doesn't include this element, show it immediately
         const animationTarget = element.animation.animationTarget;
@@ -405,12 +440,30 @@ const _renderStaticScene = ({
 
         context.save();
 
+        // 默认用于渲染的元素（对于文本变色动画，会在下方生成一个带有插值颜色的拷贝）
+        let elementForRender: any = element;
+
         // Apply animation effects for elements appearing in current step
         // Support both presentationMode and isPlayingAnimation
         const isPlayingAnimation = (appState as any).isPlayingAnimation;
         const isPlayingAnimationFrameId = (appState as any).isPlayingAnimationFrameId;
         const shouldApplyAnimation = appState.presentationMode ||
           (isPlayingAnimation && element.frameId === isPlayingAnimationFrameId);
+
+        // 文本变色动画特殊处理：在动画步骤到达之前，文字显示为黑色
+        if (
+          shouldApplyAnimation &&
+          element.animation &&
+          element.animation.type === 'textColor' &&
+          isTextElement(element) &&
+          element.animation.stepGroup > appState.presentationStep
+        ) {
+          elementForRender = {
+            ...(element as any),
+            strokeColor: '#000000',
+          };
+        }
+
         if (
           shouldApplyAnimation &&
           element.animation &&
@@ -469,6 +522,18 @@ const _renderStaticScene = ({
                 context.translate(0, slideOffset * (1 - progress));
                 context.globalAlpha = progress;
                 break;
+              case 'textColor': {
+                // 文本变色动画：不改变透明度与位置，从黑色渐变到当前文本颜色
+                if (isTextElement(element)) {
+                  const targetColor = (element as any).strokeColor || '#000000';
+                  const strokeColor = interpolateColor('#000000', targetColor, progress);
+                  elementForRender = {
+                    ...(element as any),
+                    strokeColor,
+                  };
+                }
+                break;
+              }
             }
           }
         }
@@ -492,7 +557,7 @@ const _renderStaticScene = ({
             frameClip(frame, context, renderConfig, appState);
           }
           renderElement(
-            element,
+            elementForRender,
             elementsMap,
             allElementsMap,
             rc,
