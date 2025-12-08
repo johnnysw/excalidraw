@@ -601,6 +601,9 @@ const CombinedTextProperties = ({
               {(appState.activeTool.type === "text" ||
                 suppportsHorizontalAlign(targetElements, elementsMap)) &&
                 renderAction("changeTextAlign")}
+              {(appState.activeTool.type === "text" ||
+                targetElements.some(isTextElement)) &&
+                renderAction("changeLineHeight")}
               {shouldAllowVerticalAlign(targetElements, elementsMap) &&
                 renderAction("changeVerticalAlign")}
             </div>
