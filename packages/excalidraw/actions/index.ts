@@ -17,6 +17,7 @@ export {
   actionChangeFontSize,
   actionChangeFontFamily,
   actionChangeTextAlign,
+  actionChangeLineHeight,
   actionChangeVerticalAlign,
   actionChangeArrowProperties,
 } from "./actionProperties";

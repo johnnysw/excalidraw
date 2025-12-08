@@ -1523,6 +1523,130 @@ export const actionChangeTextAlign = register<TextAlign>({
   },
 });
 
+// Line height options
+const LINE_HEIGHT_OPTIONS = [1.0, 1.15, 1.5] as const;
+
+export const actionChangeLineHeight = register<number>({
+  name: "changeLineHeight",
+  label: "Change line height",
+  trackEvent: false,
+  perform: (elements, appState, value, app) => {
+    return {
+      elements: changeProperty(
+        elements,
+        appState,
+        (oldElement) => {
+          if (isTextElement(oldElement)) {
+            const newElement: ExcalidrawTextElement = newElementWith(
+              oldElement,
+              { lineHeight: value as ExcalidrawTextElement["lineHeight"] },
+            );
+            redrawTextBoundingBox(
+              newElement,
+              app.scene.getContainerElement(oldElement),
+              app.scene,
+            );
+            return newElement;
+          }
+
+          return oldElement;
+        },
+        true,
+      ),
+      appState: {
+        ...appState,
+        currentItemLineHeight: value,
+      },
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    };
+  },
+  PanelComponent: ({ elements, appState, updateData, app, data }) => {
+    const elementsMap = app.scene.getNonDeletedElementsMap();
+    const { isCompact } = getStylesPanelInfo(app);
+
+    const currentValue = getFormValue(
+      elements,
+      app,
+      (element) => {
+        if (isTextElement(element)) {
+          return element.lineHeight;
+        }
+        const boundTextElement = getBoundTextElement(
+          element,
+          elementsMap,
+        );
+        if (boundTextElement) {
+          return boundTextElement.lineHeight;
+        }
+        return null;
+      },
+      (element) =>
+        isTextElement(element) ||
+        getBoundTextElement(element, elementsMap) !== null,
+      (hasSelection) =>
+        hasSelection ? null : appState.currentItemLineHeight,
+    );
+
+    const isCustomValue = currentValue !== null &&
+      !(LINE_HEIGHT_OPTIONS as readonly number[]).includes(currentValue);
+
+    return (
+      <fieldset>
+        <legend>{t("labels.lineHeight")}</legend>
+        <div className="buttonList" style={{ alignItems: "center" }}>
+          <RadioSelection<number | false>
+            group="line-height"
+            options={LINE_HEIGHT_OPTIONS.map((value) => ({
+              value,
+              text: value.toString(),
+              testId: `line-height-${value}`,
+            }))}
+            value={isCustomValue ? false : currentValue}
+            onChange={(value) => {
+              withCaretPositionPreservation(
+                () => updateData(value),
+                isCompact,
+                !!appState.editingTextElement,
+                data?.onPreventClose,
+              );
+            }}
+          />
+          <input
+            type="number"
+            min="0.5"
+            max="5"
+            step="0.1"
+            style={{
+              width: "40px",
+              height: "32px",
+              borderRadius: "8px",
+              border: "none",
+              textAlign: "center",
+              fontSize: "14px",
+              background: isCustomValue ? "var(--color-primary-light)" : "var(--button-bg)",
+              outline: isCustomValue ? "2px solid var(--color-primary)" : "none",
+              padding: "0 4px",
+            }}
+            value={currentValue !== null ? currentValue : ""}
+            onChange={(e) => {
+              const value = parseFloat(e.target.value);
+              if (!isNaN(value) && value >= 0.5 && value <= 5) {
+                withCaretPositionPreservation(
+                  () => updateData(value),
+                  isCompact,
+                  !!appState.editingTextElement,
+                  data?.onPreventClose,
+                );
+              }
+            }}
+            data-testid="line-height-custom"
+          />
+        </div>
+      </fieldset>
+    );
+  },
+});
+
 export const actionChangeVerticalAlign = register<VerticalAlign>({
   name: "changeVerticalAlign",
   label: "Change vertical alignment",

@@ -9,7 +9,7 @@ export const RadioSelection = <T extends Object>(
     options: {
       value: T;
       text: string;
-      icon: JSX.Element;
+      icon?: JSX.Element;
       testId?: string;
       /** if not supplied, defaults to value identity check */
       active?: boolean;
@@ -32,7 +32,7 @@ export const RadioSelection = <T extends Object>(
       props.type === "button" ? (
         <ButtonIcon
           key={option.text}
-          icon={option.icon}
+          icon={option.icon ?? <span>{option.text}</span>}
           title={option.text}
           testId={option.testId}
           active={option.active ?? props.value === option.value}
@@ -51,7 +51,7 @@ export const RadioSelection = <T extends Object>(
             checked={props.value === option.value}
             data-testid={option.testId}
           />
-          {option.icon}
+          {option.icon ?? <span>{option.text}</span>}
         </label>
       ),
     )}

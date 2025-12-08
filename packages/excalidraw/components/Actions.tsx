@@ -233,6 +233,7 @@ export const SelectedShapeActions = ({
           {(appState.activeTool.type === "text" ||
             suppportsHorizontalAlign(targetElements, elementsMap)) &&
             renderAction("changeTextAlign")}
+          {renderAction("changeLineHeight")}
         </>
       )}
 
