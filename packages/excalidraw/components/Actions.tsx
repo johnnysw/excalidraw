@@ -226,6 +226,8 @@ export const SelectedShapeActions = ({
       {(appState.activeTool.type === "text" ||
         targetElements.some(isTextElement)) && (
         <>
+          {renderAction("changeTextOutlineColor")}
+          {renderAction("changeTextOutlineWidth")}
           {renderAction("changeFontFamily")}
           {renderAction("changeFontSize")}
           {(appState.activeTool.type === "text" ||
@@ -590,8 +592,11 @@ const CombinedTextProperties = ({
           >
             <div className="selected-shape-actions">
               {(appState.activeTool.type === "text" ||
-                targetElements.some(isTextElement)) &&
-                renderAction("changeFontSize")}
+                targetElements.some(isTextElement)) && (
+                <>
+                  {renderAction("changeFontSize")}
+                </>
+              )}
               {(appState.activeTool.type === "text" ||
                 suppportsHorizontalAlign(targetElements, elementsMap)) &&
                 renderAction("changeTextAlign")}
@@ -816,6 +821,14 @@ export const CompactShapeActions = ({
       {canChangeStrokeColor(appState, targetElements) && (
         <div className={clsx("compact-action-item")}>
           {renderAction("changeStrokeColor")}
+        </div>
+      )}
+
+      {/* Text Outline Color - placed right after text stroke color */}
+      {(appState.activeTool.type === "text" ||
+        targetElements.some(isTextElement)) && (
+        <div className="compact-action-item">
+          {renderAction("changeTextOutlineColor")}
         </div>
       )}
 

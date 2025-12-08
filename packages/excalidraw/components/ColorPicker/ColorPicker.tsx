@@ -1,6 +1,7 @@
 import * as Popover from "@radix-ui/react-popover";
 import clsx from "clsx";
 import { useRef, useEffect } from "react";
+import type { ReactNode } from "react";
 
 import {
   COLOR_OUTLINE_CONTRAST_THRESHOLD,
@@ -73,6 +74,26 @@ interface ColorPickerProps {
   palette?: ColorPaletteCustom | null;
   topPicks?: ColorTuple;
   updateData: (formData?: any) => void;
+  bottomContent?: ReactNode;
+  /** Custom icon for the trigger button in compact mode */
+  icon?: ReactNode;
+  /** Custom title/tooltip for the trigger button */
+  title?: string;
+}
+
+interface PickerProps {
+  color: string | null;
+  onChange: (color: string) => void;
+  type: ColorPickerType;
+  elements: readonly ExcalidrawElement[];
+  palette: ColorPaletteCustom;
+  updateData: (formData?: any) => void;
+  children?: React.ReactNode;
+  showTitle?: boolean;
+  onEyeDropperToggle: (force?: boolean) => void;
+  onEscape: (event: React.KeyboardEvent | KeyboardEvent) => void;
+  showHotKey?: boolean;
+  titleLabel?: string;
 }
 
 const ColorPickerPopupContent = ({
@@ -85,6 +106,7 @@ const ColorPickerPopupContent = ({
   updateData,
   getOpenPopup,
   appState,
+  bottomContent,
 }: Pick<
   ColorPickerProps,
   | "type"
@@ -95,6 +117,7 @@ const ColorPickerPopupContent = ({
   | "palette"
   | "updateData"
   | "appState"
+  | "bottomContent"
 > & {
   getOpenPopup: () => AppState["openPopup"];
 }) => {
@@ -169,11 +192,12 @@ const ColorPickerPopupContent = ({
       }}
     >
       {palette ? (
-        <Picker
-          ref={colorPickerContentRef}
-          palette={palette}
-          color={color}
-          onChange={(changedColor) => {
+        <>
+          <Picker
+            ref={colorPickerContentRef}
+            palette={palette}
+            color={color}
+            onChange={(changedColor) => {
             // Save caret position before color change if editing text
             const savedSelection = appState.editingTextElement
               ? saveCaretPosition()
@@ -186,7 +210,7 @@ const ColorPickerPopupContent = ({
               restoreCaretPosition(savedSelection);
             }
           }}
-          onEyeDropperToggle={(force) => {
+            onEyeDropperToggle={(force) => {
             setEyeDropperState((state) => {
               if (force) {
                 state = state || {
@@ -207,7 +231,7 @@ const ColorPickerPopupContent = ({
                   };
             });
           }}
-          onEscape={(event) => {
+            onEscape={(event) => {
             if (eyeDropperState) {
               setEyeDropperState(null);
             } else {
@@ -215,16 +239,22 @@ const ColorPickerPopupContent = ({
               updateData({ openPopup: null });
             }
           }}
-          type={type}
-          elements={elements}
-          updateData={updateData}
-          showTitle={isCompactMode}
-          showHotKey={!isMobileMode}
-        >
-          {colorInputJSX}
-        </Picker>
+            type={type}
+            elements={elements}
+            updateData={updateData}
+            showTitle={isCompactMode}
+            showHotKey={!isMobileMode}
+            titleLabel={label}
+          >
+            {colorInputJSX}
+          </Picker>
+          {bottomContent}
+        </>
       ) : (
-        colorInputJSX
+        <>
+          {colorInputJSX}
+          {bottomContent}
+        </>
       )}
     </PropertiesPopover>
   );
@@ -237,6 +267,8 @@ const ColorPickerTrigger = ({
   mode = "background",
   onToggle,
   editingTextElement,
+  icon,
+  title: customTitle,
 }: {
   color: string | null;
   label: string;
@@ -244,6 +276,8 @@ const ColorPickerTrigger = ({
   mode?: "background" | "stroke";
   onToggle: () => void;
   editingTextElement?: boolean;
+  icon?: ReactNode;
+  title?: string;
 }) => {
   const stylesPanelMode = useStylesPanelMode();
   const isCompactMode = stylesPanelMode !== "full";
@@ -274,9 +308,10 @@ const ColorPickerTrigger = ({
       aria-label={label}
       style={color ? { "--swatch-color": color } : undefined}
       title={
-        type === "elementStroke"
+        customTitle ||
+        (type === "elementStroke" || type === "textOutline"
           ? t("labels.showStroke")
-          : t("labels.showBackground")
+          : t("labels.showBackground"))
       }
       data-openpopup={type}
       onClick={handleClick}
@@ -292,7 +327,7 @@ const ColorPickerTrigger = ({
                   : "#111",
             }}
           >
-            {strokeIcon}
+            {icon || strokeIcon}
           </span>
         </div>
       )}
@@ -310,6 +345,9 @@ export const ColorPicker = ({
   topPicks,
   updateData,
   appState,
+  bottomContent,
+  icon,
+  title,
 }: ColorPickerProps) => {
   const openRef = useRef(appState.openPopup);
   useEffect(() => {
@@ -349,8 +387,10 @@ export const ColorPicker = ({
             color={color}
             label={label}
             type={type}
-            mode={type === "elementStroke" ? "stroke" : "background"}
+            mode={type === "elementStroke" || type === "textOutline" ? "stroke" : "background"}
             editingTextElement={!!appState.editingTextElement}
+            icon={icon}
+            title={title}
             onToggle={() => {
               // atomic switch: if another popup is open, close it first, then open this one next tick
               if (appState.openPopup === type) {
@@ -376,6 +416,7 @@ export const ColorPicker = ({
               updateData={updateData}
               getOpenPopup={() => openRef.current}
               appState={appState}
+              bottomContent={bottomContent}
             />
           )}
         </Popover.Root>

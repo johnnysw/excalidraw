@@ -10,6 +10,8 @@ import {
   STATS_PANELS,
   THEME,
   DEFAULT_GRID_STEP,
+  DEFAULT_TEXT_OUTLINE_COLOR,
+  DEFAULT_TEXT_OUTLINE_WIDTH,
   isTestEnv,
 } from "@excalidraw/common";
 
@@ -41,6 +43,8 @@ export const getDefaultAppState = (): Omit<
     currentItemArrowType: ARROW_TYPE.round,
     currentItemStrokeStyle: DEFAULT_ELEMENT_PROPS.strokeStyle,
     currentItemStrokeWidth: DEFAULT_ELEMENT_PROPS.strokeWidth,
+    currentItemTextOutlineColor: DEFAULT_TEXT_OUTLINE_COLOR,
+    currentItemTextOutlineWidth: DEFAULT_TEXT_OUTLINE_WIDTH,
     currentItemTextAlign: DEFAULT_TEXT_ALIGN,
     currentHoveredFontFamily: null,
     cursorButton: "up",
@@ -177,6 +181,16 @@ const APP_STATE_STORAGE_CONF = (<
     currentItemStrokeColor: { browser: true, export: false, server: false },
     currentItemStrokeStyle: { browser: true, export: false, server: false },
     currentItemStrokeWidth: { browser: true, export: false, server: false },
+    currentItemTextOutlineColor: {
+      browser: true,
+      export: false,
+      server: false,
+    },
+    currentItemTextOutlineWidth: {
+      browser: true,
+      export: false,
+      server: false,
+    },
     currentItemTextAlign: { browser: true, export: false, server: false },
     currentHoveredFontFamily: { browser: false, export: false, server: false },
     cursorButton: { browser: true, export: false, server: false },

@@ -265,6 +265,16 @@ export const textWysiwyg = ({
         filter: "var(--theme-filter)",
         maxHeight: `${editorMaxHeight}px`,
       });
+
+      // Mirror canvas text outline in WYSIWYG editor using CSS stroke
+      const styleAny = editable.style as any;
+      if (updatedTextElement.textOutlineWidth > 0) {
+        styleAny.webkitTextStrokeWidth = `${updatedTextElement.textOutlineWidth}px`;
+        styleAny.webkitTextStrokeColor = updatedTextElement.textOutlineColor;
+      } else {
+        styleAny.webkitTextStrokeWidth = "";
+        styleAny.webkitTextStrokeColor = "";
+      }
       editable.scrollTop = 0;
       // For some reason updating font attribute doesn't set font family
       // hence updating font family explicitly for test environment

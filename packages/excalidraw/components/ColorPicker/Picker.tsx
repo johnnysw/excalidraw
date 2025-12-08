@@ -41,6 +41,7 @@ interface PickerProps {
   onEyeDropperToggle: (force?: boolean) => void;
   onEscape: (event: React.KeyboardEvent | KeyboardEvent) => void;
   showHotKey?: boolean;
+  titleLabel?: string;
 }
 
 export const Picker = React.forwardRef(
@@ -57,12 +58,13 @@ export const Picker = React.forwardRef(
       onEyeDropperToggle,
       onEscape,
       showHotKey = true,
+      titleLabel,
     }: PickerProps,
     ref,
   ) => {
     const title = showTitle
       ? type === "elementStroke"
-        ? t("labels.stroke")
+        ? titleLabel || t("labels.stroke")
         : type === "elementBackground"
         ? t("labels.background")
         : null

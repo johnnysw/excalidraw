@@ -530,12 +530,18 @@ const drawElementOnCanvas = (
           lineHeightPx,
         );
 
+        const hasOutline = element.textOutlineWidth > 0;
+
         for (let index = 0; index < lines.length; index++) {
-          context.fillText(
-            lines[index],
-            horizontalOffset,
-            index * lineHeightPx + verticalOffset,
-          );
+          const lineY = index * lineHeightPx + verticalOffset;
+
+          if (hasOutline) {
+            context.lineWidth = element.textOutlineWidth;
+            context.strokeStyle = element.textOutlineColor;
+            context.strokeText(lines[index], horizontalOffset, lineY);
+          }
+
+          context.fillText(lines[index], horizontalOffset, lineY);
         }
         context.restore();
         if (shouldTemporarilyAttach) {

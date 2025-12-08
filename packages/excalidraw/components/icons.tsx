@@ -438,6 +438,17 @@ export const TextSizeIcon = createIcon(
   tablerIconProps,
 );
 
+// Text outline icon - letter A with outline effect
+export const TextOutlineIcon = createIcon(
+  <g stroke="currentColor" strokeWidth="1.25" fill="none">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M9 17L12 7L15 17" />
+    <path d="M10 14h4" />
+    <rect x="4" y="4" width="16" height="16" rx="2" strokeDasharray="2.5 1.5" />
+  </g>,
+  tablerIconProps,
+);
+
 // modified tabler-icons: photo
 export const ImageIcon = createIcon(
   <g strokeWidth="1.25">

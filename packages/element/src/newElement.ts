@@ -4,6 +4,8 @@ import {
   DEFAULT_FONT_SIZE,
   DEFAULT_TEXT_ALIGN,
   DEFAULT_VERTICAL_ALIGN,
+  DEFAULT_TEXT_OUTLINE_COLOR,
+  DEFAULT_TEXT_OUTLINE_WIDTH,
   VERTICAL_ALIGN,
   randomInteger,
   randomId,
@@ -247,6 +249,8 @@ export const newTextElement = (
     containerId?: ExcalidrawTextContainer["id"] | null;
     lineHeight?: ExcalidrawTextElement["lineHeight"];
     autoResize?: ExcalidrawTextElement["autoResize"];
+    textOutlineColor?: string;
+    textOutlineWidth?: number;
   } & ElementConstructorOpts,
 ): NonDeleted<ExcalidrawTextElement> => {
   const fontFamily = opts.fontFamily || DEFAULT_FONT_FAMILY;
@@ -278,6 +282,8 @@ export const newTextElement = (
     height: metrics.height,
     containerId: opts.containerId || null,
     originalText: opts.originalText ?? text,
+    textOutlineColor: opts.textOutlineColor ?? DEFAULT_TEXT_OUTLINE_COLOR,
+    textOutlineWidth: opts.textOutlineWidth ?? DEFAULT_TEXT_OUTLINE_WIDTH,
     autoResize: opts.autoResize ?? true,
     lineHeight,
   };

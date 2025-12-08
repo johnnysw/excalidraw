@@ -10,6 +10,8 @@ import {
   DEFAULT_ELEMENT_PROPS,
   DEFAULT_GRID_SIZE,
   DEFAULT_GRID_STEP,
+  DEFAULT_TEXT_OUTLINE_COLOR,
+  DEFAULT_TEXT_OUTLINE_WIDTH,
   randomId,
   getUpdatedTimestamp,
   updateActiveTool,
@@ -332,6 +334,12 @@ export const restoreElement = (
         originalText: element.originalText || text,
         autoResize: element.autoResize ?? true,
         lineHeight,
+        textOutlineColor:
+          (element as ExcalidrawTextElement).textOutlineColor ??
+          DEFAULT_TEXT_OUTLINE_COLOR,
+        textOutlineWidth:
+          (element as ExcalidrawTextElement).textOutlineWidth ??
+          DEFAULT_TEXT_OUTLINE_WIDTH,
       });
 
       // if empty text, mark as deleted. We keep in array

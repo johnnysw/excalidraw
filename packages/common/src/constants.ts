@@ -205,6 +205,8 @@ export const DEFAULT_FONT_FAMILY: FontFamilyValues = FONT_FAMILY.Excalifont;
 export const DEFAULT_TEXT_ALIGN = "left";
 export const DEFAULT_VERTICAL_ALIGN = "top";
 export const DEFAULT_VERSION = "{version}";
+export const DEFAULT_TEXT_OUTLINE_COLOR = COLOR_PALETTE.black;
+export const DEFAULT_TEXT_OUTLINE_WIDTH = 0;
 export const DEFAULT_TRANSFORM_HANDLE_SPACING = 2;
 
 export const SIDE_RESIZING_THRESHOLD = 2 * DEFAULT_TRANSFORM_HANDLE_SPACING;

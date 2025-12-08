@@ -341,6 +341,8 @@ export interface AppState {
   currentItemBackgroundColor: string;
   currentItemFillStyle: ExcalidrawElement["fillStyle"];
   currentItemStrokeWidth: number;
+  currentItemTextOutlineColor: string;
+  currentItemTextOutlineWidth: number;
   currentItemStrokeStyle: ExcalidrawElement["strokeStyle"];
   currentItemRoughness: number;
   currentItemOpacity: number;
@@ -366,6 +368,7 @@ export interface AppState {
   | "canvasBackground"
   | "elementBackground"
   | "elementStroke"
+  | "textOutline"
   | "fontFamily"
   | "compactTextProperties"
   | "compactStrokeStyles"

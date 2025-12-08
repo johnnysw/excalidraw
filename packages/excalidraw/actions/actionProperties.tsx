@@ -1,6 +1,6 @@
 import { pointFrom } from "@excalidraw/math";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE,
@@ -82,6 +82,7 @@ import type { CaptureUpdateActionType } from "@excalidraw/element";
 import { trackEvent } from "../analytics";
 import { RadioSelection } from "../components/RadioSelection";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
+import { TopPicks } from "../components/ColorPicker/TopPicks";
 import { FontPicker } from "../components/FontPicker/FontPicker";
 import { IconPicker } from "../components/IconPicker";
 import { Range } from "../components/Range";
@@ -126,6 +127,7 @@ import {
   ArrowheadCrowfootIcon,
   ArrowheadCrowfootOneIcon,
   ArrowheadCrowfootOneOrManyIcon,
+  TextOutlineIcon,
 } from "../components/icons";
 
 import { Fonts } from "../fonts";
@@ -340,18 +342,26 @@ export const actionChangeStrokeColor = register<
     };
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => {
-    const { stylesPanelMode } = getStylesPanelInfo(app);
+    const { stylesPanelMode, isCompact } = getStylesPanelInfo(app);
+
+    const selectedElements = getSelectedElements(elements, appState);
+    const isTextContext =
+      appState.activeTool.type === "text" ||
+      (selectedElements.length > 0 &&
+        selectedElements.every((el) => isTextElement(el)));
+
+    const strokeLabel = isTextContext ? "文字色" : t("labels.stroke");
 
     return (
       <>
         {stylesPanelMode === "full" && (
-          <h3 aria-hidden="true">{t("labels.stroke")}</h3>
+          <h3 aria-hidden="true">{strokeLabel}</h3>
         )}
         <ColorPicker
           topPicks={DEFAULT_ELEMENT_STROKE_PICKS}
           palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
           type="elementStroke"
-          label={t("labels.stroke")}
+          label={strokeLabel}
           color={getFormValue(
             elements,
             app,
@@ -364,6 +374,78 @@ export const actionChangeStrokeColor = register<
           elements={elements}
           appState={appState}
           updateData={updateData}
+          title={isTextContext ? "显示文字颜色选择器" : undefined}
+        />
+      </>
+    );
+  },
+});
+
+export const actionChangeTextOutlineColor = register<
+  Pick<AppState, "currentItemTextOutlineColor">
+>({
+  name: "changeTextOutlineColor",
+  label: "labels.stroke",
+  trackEvent: false,
+  perform: (elements, appState, value) => {
+    const color = value?.currentItemTextOutlineColor;
+
+    const nextElements =
+      color != null
+        ? changeProperty(
+            elements,
+            appState,
+            (el) =>
+              isTextElement(el)
+                ? newElementWith(el, {
+                    textOutlineColor: color,
+                  })
+                : el,
+            true,
+          )
+        : undefined;
+
+    return {
+      ...(nextElements && { elements: nextElements }),
+      appState: {
+        ...appState,
+        ...value,
+      },
+      captureUpdate:
+        color != null
+          ? CaptureUpdateAction.IMMEDIATELY
+          : CaptureUpdateAction.EVENTUALLY,
+    };
+  },
+  PanelComponent: ({ elements, appState, updateData, app, data }) => {
+    const { stylesPanelMode } = getStylesPanelInfo(app);
+
+    return (
+      <>
+        {stylesPanelMode === "full" && (
+          <h3 aria-hidden="true">{t("labels.stroke")}</h3>
+        )}
+        <ColorPicker
+          topPicks={DEFAULT_ELEMENT_STROKE_PICKS}
+          palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
+          type="textOutline"
+          label={t("labels.stroke")}
+          color={getFormValue(
+            elements,
+            app,
+            (element) =>
+              isTextElement(element) ? element.textOutlineColor : null,
+            (element) => isTextElement(element),
+            (hasSelection) =>
+              !hasSelection ? appState.currentItemTextOutlineColor : null,
+          )}
+          onChange={(color) =>
+            updateData({ currentItemTextOutlineColor: color })
+          }
+          elements={elements}
+          appState={appState}
+          updateData={updateData}
+          icon={TextOutlineIcon}
         />
       </>
     );
@@ -595,6 +677,79 @@ export const actionChangeStrokeWidth = register<
       </div>
     </fieldset>
   ),
+});
+
+export const actionChangeTextOutlineWidth = register<
+  Pick<AppState, "currentItemTextOutlineWidth">
+>({
+  name: "changeTextOutlineWidth",
+  label: "labels.strokeWidth",
+  trackEvent: false,
+  perform: (elements, appState, value) => {
+    const width = value?.currentItemTextOutlineWidth;
+
+    const nextElements =
+      typeof width === "number"
+        ? changeProperty(
+            elements,
+            appState,
+            (el) =>
+              isTextElement(el)
+                ? newElementWith(el, {
+                    textOutlineWidth: width,
+                  })
+                : el,
+            true,
+          )
+        : undefined;
+
+    return {
+      ...(nextElements && { elements: nextElements }),
+      appState: {
+        ...appState,
+        ...(typeof width === "number"
+          ? { currentItemTextOutlineWidth: width }
+          : {}),
+      },
+      captureUpdate:
+        typeof width === "number"
+          ? CaptureUpdateAction.IMMEDIATELY
+          : CaptureUpdateAction.EVENTUALLY,
+    };
+  },
+  PanelComponent: ({ elements, appState, updateData, app, data }) => {
+    const value = getFormValue(
+      elements,
+      app,
+      (element) =>
+        isTextElement(element) ? element.textOutlineWidth : null,
+      (element) => isTextElement(element),
+      (hasSelection) =>
+        hasSelection ? null : appState.currentItemTextOutlineWidth,
+    );
+
+    const outlineWidth =
+      typeof value === "number"
+        ? value
+        : appState.currentItemTextOutlineWidth ?? 0;
+
+    return (
+      <fieldset>
+        <legend>{t("labels.strokeWidth")}</legend>
+        <input
+          type="number"
+          min={0}
+          max={20}
+          step={1}
+          value={outlineWidth}
+          onChange={(event) => {
+            const next = Number(event.target.value) || 0;
+            updateData({ currentItemTextOutlineWidth: next });
+          }}
+        />
+      </fieldset>
+    );
+  },
 });
 
 export const actionChangeSloppiness = register<ExcalidrawElement["roughness"]>({

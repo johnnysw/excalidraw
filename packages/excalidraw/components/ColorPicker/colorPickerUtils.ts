@@ -51,29 +51,33 @@ export const isCustomColor = ({
 
 export const getMostUsedCustomColors = (
   elements: readonly ExcalidrawElement[],
-  type: "elementBackground" | "elementStroke",
+  type: "elementBackground" | "elementStroke" | "textOutline",
   palette: ColorPaletteCustom,
 ) => {
-  const elementColorTypeMap = {
+  const elementColorTypeMap: Record<string, string> = {
     elementBackground: "backgroundColor",
     elementStroke: "strokeColor",
+    textOutline: "textOutlineColor",
   };
+
+  const colorKey = elementColorTypeMap[type];
 
   const colors = elements.filter((element) => {
     if (element.isDeleted) {
       return false;
     }
 
-    const color =
-      element[elementColorTypeMap[type] as "backgroundColor" | "strokeColor"];
+    const color = (element as any)[colorKey];
+    if (!color) {
+      return false;
+    }
 
     return isCustomColor({ color, palette });
   });
 
   const colorCountMap = new Map<string, number>();
   colors.forEach((element) => {
-    const color =
-      element[elementColorTypeMap[type] as "backgroundColor" | "strokeColor"];
+    const color = (element as any)[colorKey];
     if (colorCountMap.has(color)) {
       colorCountMap.set(color, colorCountMap.get(color)! + 1);
     } else {
@@ -156,4 +160,5 @@ export const isColorDark = (color: string, threshold = 160): boolean => {
 export type ColorPickerType =
   | "canvasBackground"
   | "elementBackground"
-  | "elementStroke";
+  | "elementStroke"
+  | "textOutline";
