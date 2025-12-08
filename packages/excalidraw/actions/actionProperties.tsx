@@ -73,6 +73,7 @@ import type {
   FontFamilyValues,
   TextAlign,
   VerticalAlign,
+  RichTextRange,
 } from "@excalidraw/element/types";
 
 import type { Scene } from "@excalidraw/element";
@@ -310,22 +311,125 @@ const changeFontSize = (
 
 // -----------------------------------------------------------------------------
 
+/**
+ * Helper function to apply a color to a specific range in richTextRanges.
+ * Handles merging and splitting of ranges.
+ */
+const applyColorToRichTextRange = (
+  existingRanges: readonly RichTextRange[] | undefined,
+  start: number,
+  end: number,
+  color: string,
+  defaultColor: string,
+): RichTextRange[] => {
+  const ranges: RichTextRange[] = existingRanges ? [...existingRanges] : [];
+
+  // If the new color is the same as default, we need to "remove" the range
+  // by not adding it and potentially splitting existing ranges
+  const isDefaultColor = color === defaultColor;
+
+  // Remove or split existing ranges that overlap with the new range
+  const newRanges: RichTextRange[] = [];
+
+  for (const range of ranges) {
+    if (range.end <= start || range.start >= end) {
+      // No overlap, keep the range
+      newRanges.push(range);
+    } else if (range.start >= start && range.end <= end) {
+      // Range is completely inside the new range, remove it
+      continue;
+    } else if (range.start < start && range.end > end) {
+      // New range is inside this range, split it
+      newRanges.push({ start: range.start, end: start, color: range.color });
+      newRanges.push({ start: end, end: range.end, color: range.color });
+    } else if (range.start < start && range.end > start) {
+      // Overlap at the start
+      newRanges.push({ start: range.start, end: start, color: range.color });
+    } else if (range.start < end && range.end > end) {
+      // Overlap at the end
+      newRanges.push({ start: end, end: range.end, color: range.color });
+    }
+  }
+
+  // Add the new range if it's not the default color
+  if (!isDefaultColor) {
+    newRanges.push({ start, end, color });
+  }
+
+  // Sort by start position
+  newRanges.sort((a, b) => a.start - b.start);
+
+  // Merge adjacent ranges with the same color
+  const mergedRanges: RichTextRange[] = [];
+  for (const range of newRanges) {
+    const last = mergedRanges[mergedRanges.length - 1];
+    if (last && last.end === range.start && last.color === range.color) {
+      last.end = range.end;
+    } else {
+      mergedRanges.push({ ...range });
+    }
+  }
+
+  return mergedRanges;
+};
+
 export const actionChangeStrokeColor = register<
   Pick<AppState, "currentItemStrokeColor">
 >({
   name: "changeStrokeColor",
   label: "labels.stroke",
   trackEvent: false,
-  perform: (elements, appState, value) => {
+  perform: (elements, appState, value, app) => {
+    const color = value?.currentItemStrokeColor;
+
+    // Check if we're editing text with a selection
+    if (
+      color &&
+      appState.editingTextElement &&
+      appState.textEditorSelection &&
+      appState.textEditorSelection.start !== appState.textEditorSelection.end
+    ) {
+      const editingElement = elements.find(
+        (el) => el.id === appState.editingTextElement?.id,
+      ) as ExcalidrawTextElement | undefined;
+
+      if (editingElement && isTextElement(editingElement)) {
+        const { start, end } = appState.textEditorSelection;
+        const newRichTextRanges = applyColorToRichTextRange(
+          editingElement.richTextRanges,
+          start,
+          end,
+          color,
+          editingElement.strokeColor,
+        );
+
+        return {
+          elements: elements.map((el) =>
+            el.id === editingElement.id
+              ? newElementWith(el as ExcalidrawTextElement, {
+                  richTextRanges: newRichTextRanges.length > 0 ? newRichTextRanges : undefined,
+                })
+              : el,
+          ),
+          appState: {
+            ...appState,
+            ...value,
+          },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        };
+      }
+    }
+
+    // Default behavior: apply color to entire element(s)
     return {
-      ...(value?.currentItemStrokeColor && {
+      ...(color && {
         elements: changeProperty(
           elements,
           appState,
           (el) => {
             return hasStrokeColor(el.type)
               ? newElementWith(el, {
-                  strokeColor: value.currentItemStrokeColor,
+                  strokeColor: color,
                 })
               : el;
           },
@@ -336,7 +440,7 @@ export const actionChangeStrokeColor = register<
         ...appState,
         ...value,
       },
-      captureUpdate: !!value?.currentItemStrokeColor
+      captureUpdate: !!color
         ? CaptureUpdateAction.IMMEDIATELY
         : CaptureUpdateAction.EVENTUALLY,
     };

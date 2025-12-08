@@ -251,6 +251,7 @@ export const newTextElement = (
     autoResize?: ExcalidrawTextElement["autoResize"];
     textOutlineColor?: string;
     textOutlineWidth?: number;
+    richTextRanges?: ExcalidrawTextElement["richTextRanges"];
   } & ElementConstructorOpts,
 ): NonDeleted<ExcalidrawTextElement> => {
   const fontFamily = opts.fontFamily || DEFAULT_FONT_FAMILY;
@@ -286,6 +287,7 @@ export const newTextElement = (
     textOutlineWidth: opts.textOutlineWidth ?? DEFAULT_TEXT_OUTLINE_WIDTH,
     autoResize: opts.autoResize ?? true,
     lineHeight,
+    richTextRanges: opts.richTextRanges,
   };
 
   const textElement: ExcalidrawTextElement = newElementWith(

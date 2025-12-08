@@ -317,6 +317,11 @@ export interface AppState {
    * set when a new text is created or when an existing text is being edited
    */
   editingTextElement: NonDeletedExcalidrawElement | null;
+  /**
+   * Selection range in the text editor when editing text.
+   * Used for applying rich text styling to selected text.
+   */
+  textEditorSelection: { start: number; end: number } | null;
   activeTool: {
     /**
      * indicates a previous tool we should revert back to if we deselect the

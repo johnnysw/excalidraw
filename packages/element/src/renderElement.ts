@@ -531,17 +531,90 @@ const drawElementOnCanvas = (
         );
 
         const hasOutline = element.textOutlineWidth > 0;
+        const hasRichTextRanges = element.richTextRanges && element.richTextRanges.length > 0;
 
-        for (let index = 0; index < lines.length; index++) {
-          const lineY = index * lineHeightPx + verticalOffset;
+        // Track global character index across all lines
+        let globalCharIndex = 0;
 
-          if (hasOutline) {
-            context.lineWidth = element.textOutlineWidth;
-            context.strokeStyle = element.textOutlineColor;
-            context.strokeText(lines[index], horizontalOffset, lineY);
+        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+          const line = lines[lineIndex];
+          const lineY = lineIndex * lineHeightPx + verticalOffset;
+
+          if (hasRichTextRanges) {
+            // Rich text rendering: render each segment with its own color
+            const richTextRanges = element.richTextRanges!;
+
+            // Helper to get color for a character at global index
+            const getColorForIndex = (index: number): string => {
+              for (const range of richTextRanges) {
+                if (index >= range.start && index < range.end) {
+                  return range.color;
+                }
+              }
+              return element.strokeColor;
+            };
+
+            // Calculate x position based on textAlign
+            let baseX = horizontalOffset;
+            if (element.textAlign === "center") {
+              // For center align, we need to start from the left edge of the text
+              const lineWidth = context.measureText(line).width;
+              baseX = (element.width - lineWidth) / 2;
+            } else if (element.textAlign === "right") {
+              const lineWidth = context.measureText(line).width;
+              baseX = element.width - lineWidth;
+            }
+
+            // Group consecutive characters by color for efficient rendering
+            let currentX = baseX;
+            let segmentStart = 0;
+            let currentColor = getColorForIndex(globalCharIndex);
+
+            // Temporarily set textAlign to "left" for character-by-character rendering
+            context.textAlign = "left";
+
+            for (let charIndex = 0; charIndex <= line.length; charIndex++) {
+              const globalIdx = globalCharIndex + charIndex;
+              const charColor = charIndex < line.length ? getColorForIndex(globalIdx) : null;
+
+              // If color changes or we reached the end, render the current segment
+              if (charColor !== currentColor || charIndex === line.length) {
+                if (charIndex > segmentStart) {
+                  const segment = line.substring(segmentStart, charIndex);
+
+                  if (hasOutline) {
+                    context.lineWidth = element.textOutlineWidth;
+                    context.strokeStyle = element.textOutlineColor;
+                    context.strokeText(segment, currentX, lineY);
+                  }
+
+                  context.fillStyle = currentColor;
+                  context.fillText(segment, currentX, lineY);
+                  currentX += context.measureText(segment).width;
+                }
+
+                segmentStart = charIndex;
+                if (charColor !== null) {
+                  currentColor = charColor;
+                }
+              }
+            }
+
+            // Restore textAlign
+            context.textAlign = element.textAlign as CanvasTextAlign;
+          } else {
+            // Original simple rendering for text without rich text ranges
+            if (hasOutline) {
+              context.lineWidth = element.textOutlineWidth;
+              context.strokeStyle = element.textOutlineColor;
+              context.strokeText(line, horizontalOffset, lineY);
+            }
+
+            context.fillText(line, horizontalOffset, lineY);
           }
 
-          context.fillText(lines[index], horizontalOffset, lineY);
+          // Update global char index (add line length + 1 for newline character)
+          globalCharIndex += line.length + 1;
         }
         context.restore();
         if (shouldTemporarilyAttach) {

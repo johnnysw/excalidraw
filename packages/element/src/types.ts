@@ -253,6 +253,19 @@ export type NonDeleted<TElement extends ExcalidrawElement> = TElement & {
 
 export type NonDeletedExcalidrawElement = NonDeleted<ExcalidrawElement>;
 
+/**
+ * Rich text range for applying different colors to parts of text.
+ * Used to support partial text coloring within a single text element.
+ */
+export type RichTextRange = {
+  /** Start character index (inclusive) */
+  start: number;
+  /** End character index (exclusive) */
+  end: number;
+  /** Color for this range */
+  color: string;
+};
+
 export type ExcalidrawTextElement = _ExcalidrawElementBase &
   Readonly<{
     type: "text";
@@ -277,6 +290,11 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
      *  with font size (using `getLineHeightInPx` helper).
      */
     lineHeight: number & { _brand: "unitlessLineHeight" };
+    /**
+     * Rich text ranges for applying different colors to parts of text.
+     * If undefined or empty, the entire text uses strokeColor.
+     */
+    richTextRanges?: readonly RichTextRange[];
   }>;
 
 export type ExcalidrawBindableElement =

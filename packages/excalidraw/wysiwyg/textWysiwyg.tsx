@@ -426,6 +426,21 @@ export const textWysiwyg = ({
     }
   };
 
+  // Update text editor selection state for rich text functionality
+  const updateTextEditorSelection = () => {
+    const { selectionStart, selectionEnd } = editable;
+    if (selectionStart !== selectionEnd) {
+      app.setState({ textEditorSelection: { start: selectionStart, end: selectionEnd } });
+    } else {
+      app.setState({ textEditorSelection: null });
+    }
+  };
+
+  // Listen for selection changes
+  editable.onselect = updateTextEditorSelection;
+  editable.onmouseup = updateTextEditorSelection;
+  editable.onkeyup = updateTextEditorSelection;
+
   const TAB_SIZE = 4;
   const TAB = " ".repeat(TAB_SIZE);
   const RE_LEADING_TAB = new RegExp(`^ {1,${TAB_SIZE}}`);
@@ -592,6 +607,12 @@ export const textWysiwyg = ({
     editable.onblur = null;
     editable.oninput = null;
     editable.onkeydown = null;
+    editable.onselect = null;
+    editable.onmouseup = null;
+    editable.onkeyup = null;
+
+    // Clear text editor selection state
+    app.setState({ textEditorSelection: null });
 
     if (observer) {
       observer.disconnect();

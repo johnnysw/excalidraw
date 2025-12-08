@@ -53,6 +53,7 @@ export const getDefaultAppState = (): Omit<
     activeEmbeddable: null,
     newElement: null,
     editingTextElement: null,
+    textEditorSelection: null,
     editingGroupId: null,
     activeTool: {
       type: "selection",
@@ -200,6 +201,7 @@ const APP_STATE_STORAGE_CONF = (<
     activeEmbeddable: { browser: false, export: false, server: false },
     newElement: { browser: false, export: false, server: false },
     editingTextElement: { browser: false, export: false, server: false },
+    textEditorSelection: { browser: false, export: false, server: false },
     editingGroupId: { browser: true, export: false, server: false },
     activeTool: { browser: true, export: false, server: false },
     preferredSelectionTool: { browser: true, export: false, server: false },
