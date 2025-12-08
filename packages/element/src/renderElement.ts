@@ -531,7 +531,10 @@ const drawElementOnCanvas = (
         );
 
         const hasOutline = element.textOutlineWidth > 0;
-        const hasRichTextRanges = element.richTextRanges && element.richTextRanges.length > 0;
+        const hasRichTextRanges =
+          element.richTextRanges && element.richTextRanges.length > 0;
+        const hasTextStyleRanges =
+          element.textStyleRanges && element.textStyleRanges.length > 0;
 
         // Track global character index across all lines
         let globalCharIndex = 0;
@@ -540,18 +543,47 @@ const drawElementOnCanvas = (
           const line = lines[lineIndex];
           const lineY = lineIndex * lineHeightPx + verticalOffset;
 
-          if (hasRichTextRanges) {
-            // Rich text rendering: render each segment with its own color
-            const richTextRanges = element.richTextRanges!;
+          if (hasRichTextRanges || hasTextStyleRanges) {
+            // Rich text rendering: render each segment with its own style
+            const richTextRanges = element.richTextRanges || [];
+            const textStyleRanges = element.textStyleRanges || [];
 
             // Helper to get color for a character at global index
             const getColorForIndex = (index: number): string => {
               for (const range of richTextRanges) {
                 if (index >= range.start && index < range.end) {
-                  return range.color;
+                  return range.color ?? element.strokeColor;
                 }
               }
               return element.strokeColor;
+            };
+
+            const getFontSizeForIndex = (index: number): number => {
+              let size = element.fontSize;
+              for (const range of textStyleRanges) {
+                if (
+                  index >= range.start &&
+                  index < range.end &&
+                  range.fontSize != null
+                ) {
+                  size = range.fontSize;
+                }
+              }
+              return size;
+            };
+
+            const getFontFamilyForIndex = (index: number): number => {
+              let fontFamily = element.fontFamily;
+              for (const range of textStyleRanges) {
+                if (
+                  index >= range.start &&
+                  index < range.end &&
+                  range.fontFamily != null
+                ) {
+                  fontFamily = range.fontFamily;
+                }
+              }
+              return fontFamily;
             };
 
             // Calculate x position based on textAlign
@@ -565,22 +597,42 @@ const drawElementOnCanvas = (
               baseX = element.width - lineWidth;
             }
 
-            // Group consecutive characters by color for efficient rendering
+            // Group consecutive characters by style for efficient rendering
             let currentX = baseX;
             let segmentStart = 0;
             let currentColor = getColorForIndex(globalCharIndex);
+            let currentFontSize = getFontSizeForIndex(globalCharIndex);
+            let currentFontFamily = getFontFamilyForIndex(globalCharIndex);
 
             // Temporarily set textAlign to "left" for character-by-character rendering
             context.textAlign = "left";
 
             for (let charIndex = 0; charIndex <= line.length; charIndex++) {
               const globalIdx = globalCharIndex + charIndex;
-              const charColor = charIndex < line.length ? getColorForIndex(globalIdx) : null;
+              const nextStyle =
+                charIndex < line.length
+                  ? {
+                      color: getColorForIndex(globalIdx),
+                      fontSize: getFontSizeForIndex(globalIdx),
+                      fontFamily: getFontFamilyForIndex(globalIdx),
+                    }
+                  : null;
 
-              // If color changes or we reached the end, render the current segment
-              if (charColor !== currentColor || charIndex === line.length) {
+              const styleChanged =
+                nextStyle &&
+                (nextStyle.color !== currentColor ||
+                  nextStyle.fontSize !== currentFontSize ||
+                  nextStyle.fontFamily !== currentFontFamily);
+
+              // If style changes or we reached the end, render the current segment
+              if (styleChanged || charIndex === line.length) {
                 if (charIndex > segmentStart) {
                   const segment = line.substring(segmentStart, charIndex);
+
+                  context.font = getFontString({
+                    fontSize: currentFontSize,
+                    fontFamily: currentFontFamily,
+                  });
 
                   if (hasOutline) {
                     context.lineWidth = element.textOutlineWidth;
@@ -594,8 +646,10 @@ const drawElementOnCanvas = (
                 }
 
                 segmentStart = charIndex;
-                if (charColor !== null) {
-                  currentColor = charColor;
+                if (nextStyle) {
+                  currentColor = nextStyle.color;
+                  currentFontSize = nextStyle.fontSize;
+                  currentFontFamily = nextStyle.fontFamily;
                 }
               }
             }

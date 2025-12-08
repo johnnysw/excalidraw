@@ -584,6 +584,20 @@ const CombinedTextProperties = ({
             style={{ maxWidth: "13rem" }}
             // Improve focus handling for text editing scenarios
             preventAutoFocusOnTouch={!!appState.editingTextElement}
+            onFocusOutside={(event) => {
+              // Prevent popover from closing when focus moves within it
+              // (e.g., clicking on custom font size input while editing text)
+              if (appState.editingTextElement) {
+                event.preventDefault();
+              }
+            }}
+            onPointerDownOutside={(event) => {
+              // Prevent popover from closing when clicking within it
+              // while editing text
+              if (appState.editingTextElement) {
+                event.preventDefault();
+              }
+            }}
             onClose={() => {
               // Refocus text editor when popover closes with caret restoration
               if (appState.editingTextElement) {

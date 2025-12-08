@@ -332,16 +332,50 @@ export const textWysiwyg = ({
     textElement: ExcalidrawTextElement,
   ) => {
     const text = textElement.originalText || "";
-    const ranges = textElement.richTextRanges || [];
+
+    // Colors are still driven by richTextRanges for backward compatibility.
+    const colorRanges = textElement.richTextRanges || [];
+    // textStyleRanges carries fontSize / fontFamily (and may also carry color).
+    const styleRanges = textElement.textStyleRanges || [];
 
     const getColorForIndex = (index: number): string => {
-      for (let i = 0; i < ranges.length; i++) {
-        const range = ranges[i];
+      for (let i = 0; i < colorRanges.length; i++) {
+        const range = colorRanges[i];
         if (index >= range.start && index < range.end && range.color) {
           return range.color;
         }
       }
       return textElement.strokeColor;
+    };
+
+    const getFontSizeForIndex = (index: number): number => {
+      let size = textElement.fontSize;
+      for (let i = 0; i < styleRanges.length; i++) {
+        const range = styleRanges[i];
+        if (
+          index >= range.start &&
+          index < range.end &&
+          range.fontSize != null
+        ) {
+          size = range.fontSize;
+        }
+      }
+      return size;
+    };
+
+    const getFontFamilyForIndex = (index: number): number => {
+      let fontFamily = textElement.fontFamily;
+      for (let i = 0; i < styleRanges.length; i++) {
+        const range = styleRanges[i];
+        if (
+          index >= range.start &&
+          index < range.end &&
+          range.fontFamily != null
+        ) {
+          fontFamily = range.fontFamily;
+        }
+      }
+      return fontFamily;
     };
 
     editable.innerHTML = "";
@@ -350,23 +384,43 @@ export const textWysiwyg = ({
       return;
     }
 
+    const getStyleForIndex = (index: number) => {
+      return {
+        color: getColorForIndex(index),
+        fontSize: getFontSizeForIndex(index),
+        fontFamily: getFontFamilyForIndex(index),
+      };
+    };
+
     let segmentStart = 0;
-    let currentColor = getColorForIndex(0);
+    let currentStyle = getStyleForIndex(0);
 
     for (let index = 0; index <= text.length; index++) {
-      const nextColor =
-        index < text.length ? getColorForIndex(index) : null;
+      const nextStyle =
+        index < text.length ? getStyleForIndex(index) : null;
 
-      if (index === text.length || nextColor !== currentColor) {
+      const styleChanged =
+        nextStyle &&
+        (nextStyle.color !== currentStyle.color ||
+          nextStyle.fontSize !== currentStyle.fontSize ||
+          nextStyle.fontFamily !== currentStyle.fontFamily);
+
+      if (index === text.length || styleChanged) {
         if (index > segmentStart) {
           const span = document.createElement("span");
           span.textContent = text.slice(segmentStart, index);
-          span.style.color = currentColor;
+
+          span.style.color = currentStyle.color;
+          span.style.fontSize = `${currentStyle.fontSize}px`;
+          span.style.fontFamily = getFontFamilyString({
+            fontFamily: currentStyle.fontFamily,
+          });
+
           editable.appendChild(span);
         }
         segmentStart = index;
-        if (nextColor !== null) {
-          currentColor = nextColor;
+        if (nextStyle) {
+          currentStyle = nextStyle;
         }
       }
     }
@@ -790,6 +844,11 @@ export const textWysiwyg = ({
       isPropertiesContent
     ) {
       temporarilyDisableSubmit();
+      // Prevent the canvas-level pointerdown handler from seeing this event,
+      // which would otherwise close openPopup (including compactTextProperties)
+      // even though we're interacting with the properties popover content.
+      event.stopPropagation();
+      return;
     } else if (
       event.target instanceof HTMLCanvasElement &&
       // Vitest simply ignores stopPropagation, capture-mode, or rAF

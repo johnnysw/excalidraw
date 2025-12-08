@@ -6968,7 +6968,18 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     if (this.state.openPopup) {
-      this.setState({ openPopup: null });
+      const clickedInsideProperties =
+        target &&
+        (target.closest(".properties-content") ||
+          target.closest(".compact-shape-actions-island"));
+
+      // When editing text and clicking inside the properties panel (including
+      // compact text properties), keep the popup open. This avoids clearing
+      // openPopup when interacting with controls like the custom font size
+      // input while a text element is being edited.
+      if (!(clickedInsideProperties && this.state.editingTextElement)) {
+        this.setState({ openPopup: null });
+      }
     }
 
     this.updateGestureOnPointerDown(event);
