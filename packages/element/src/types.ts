@@ -254,17 +254,29 @@ export type NonDeleted<TElement extends ExcalidrawElement> = TElement & {
 export type NonDeletedExcalidrawElement = NonDeleted<ExcalidrawElement>;
 
 /**
- * Rich text range for applying different colors to parts of text.
- * Used to support partial text coloring within a single text element.
+ * General text style range for applying styles to parts of text.
+ * Used to support partial styling (color / fontSize / fontFamily)
+ * within a single text element.
  */
-export type RichTextRange = {
+export type TextStyleRange = {
   /** Start character index (inclusive) */
   start: number;
   /** End character index (exclusive) */
   end: number;
-  /** Color for this range */
-  color: string;
+  /** Color for this range. If omitted, falls back to element.strokeColor. */
+  color?: string;
+  /** Font size for this range. If omitted, falls back to element.fontSize. */
+  fontSize?: number;
+  /** Font family for this range. If omitted, falls back to element.fontFamily. */
+  fontFamily?: FontFamilyValues;
 };
+
+/**
+ * Backwards-compatible alias for color-only ranges.
+ * Existing code that relies on RichTextRange will continue to work,
+ * while new code should prefer TextStyleRange.
+ */
+export type RichTextRange = TextStyleRange;
 
 export type ExcalidrawTextElement = _ExcalidrawElementBase &
   Readonly<{
@@ -293,8 +305,18 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
     /**
      * Rich text ranges for applying different colors to parts of text.
      * If undefined or empty, the entire text uses strokeColor.
+     *
+     * NOTE: prefer using `textStyleRanges` going forward. This field is
+     * kept for backwards compatibility and may be migrated internally
+     * to `textStyleRanges` in the future.
      */
     richTextRanges?: readonly RichTextRange[];
+    /**
+     * General text style ranges for partial styling (color / fontSize /
+     * fontFamily). If undefined or empty, the entire text uses element
+     * level font & color properties.
+     */
+    textStyleRanges?: readonly TextStyleRange[];
   }>;
 
 export type ExcalidrawBindableElement =

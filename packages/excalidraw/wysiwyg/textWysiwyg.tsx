@@ -112,7 +112,7 @@ export const textWysiwyg = ({
 }): SubmitHandler => {
   const textPropertiesUpdated = (
     updatedTextElement: ExcalidrawTextElement,
-    editable: HTMLTextAreaElement,
+    editable: HTMLElement,
   ) => {
     if (!editable.style.fontFamily || !editable.style.fontSize) {
       return false;
@@ -282,17 +282,22 @@ export const textWysiwyg = ({
         editable.style.fontFamily = getFontFamilyString(updatedTextElement);
       }
 
+      renderStyledTextFromElement(updatedTextElement);
+
+      // After re-rendering styled text, restore selection (if any)
+      // so users can continue applying styles to the same range.
+      restoreSelectionFromAppState();
+
       app.scene.mutateElement(updatedTextElement, { x: coordX, y: coordY });
     }
   };
 
-  const editable = document.createElement("textarea");
+  const editable = document.createElement("div");
 
   editable.dir = "auto";
   editable.tabIndex = 0;
   editable.dataset.type = "wysiwyg";
-  // prevent line wrapping on Safari
-  editable.wrap = "off";
+  editable.contentEditable = "true";
   editable.classList.add("excalidraw-wysiwyg");
 
   let whiteSpace = "pre";
@@ -322,7 +327,52 @@ export const textWysiwyg = ({
     overflowWrap: "break-word",
     boxSizing: "content-box",
   });
-  editable.value = element.originalText;
+
+  const renderStyledTextFromElement = (
+    textElement: ExcalidrawTextElement,
+  ) => {
+    const text = textElement.originalText || "";
+    const ranges = textElement.richTextRanges || [];
+
+    const getColorForIndex = (index: number): string => {
+      for (let i = 0; i < ranges.length; i++) {
+        const range = ranges[i];
+        if (index >= range.start && index < range.end && range.color) {
+          return range.color;
+        }
+      }
+      return textElement.strokeColor;
+    };
+
+    editable.innerHTML = "";
+
+    if (!text.length) {
+      return;
+    }
+
+    let segmentStart = 0;
+    let currentColor = getColorForIndex(0);
+
+    for (let index = 0; index <= text.length; index++) {
+      const nextColor =
+        index < text.length ? getColorForIndex(index) : null;
+
+      if (index === text.length || nextColor !== currentColor) {
+        if (index > segmentStart) {
+          const span = document.createElement("span");
+          span.textContent = text.slice(segmentStart, index);
+          span.style.color = currentColor;
+          editable.appendChild(span);
+        }
+        segmentStart = index;
+        if (nextColor !== null) {
+          currentColor = nextColor;
+        }
+      }
+    }
+  };
+
+  editable.innerText = element.originalText;
   updateWysiwygStyle();
 
   if (onChange) {
@@ -351,8 +401,9 @@ export const textWysiwyg = ({
           container,
           app.scene.getNonDeletedElementsMap(),
         );
+        const currentText = editable.innerText || "";
         const wrappedText = wrapText(
-          `${editable.value}${text}`,
+          `${currentText}${text}`,
           font,
           getBoundTextMaxWidth(container, boundTextElement),
         );
@@ -362,16 +413,9 @@ export const textWysiwyg = ({
     };
 
     editable.oninput = () => {
-      const normalized = normalizeText(editable.value);
-      if (editable.value !== normalized) {
-        const selectionStart = editable.selectionStart;
-        editable.value = normalized;
-        // put the cursor at some position close to where it was before
-        // normalization (otherwise it'll end up at the end of the text)
-        editable.selectionStart = selectionStart;
-        editable.selectionEnd = selectionStart;
-      }
-      onChange(editable.value);
+      const raw = editable.innerText || "";
+      const normalized = normalizeText(raw);
+      onChange(normalized);
     };
   }
 
@@ -428,13 +472,113 @@ export const textWysiwyg = ({
 
   // Update text editor selection state for rich text functionality
   const updateTextEditorSelection = () => {
-    const { selectionStart, selectionEnd } = editable;
-    if (selectionStart !== selectionEnd) {
-      app.setState({ textEditorSelection: { start: selectionStart, end: selectionEnd } });
-    } else {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
       app.setState({ textEditorSelection: null });
+      return;
     }
+
+    const range = selection.getRangeAt(0);
+
+    if (
+      !editable.contains(range.startContainer) ||
+      !editable.contains(range.endContainer)
+    ) {
+      app.setState({ textEditorSelection: null });
+      return;
+    }
+
+    let start = -1;
+    let end = -1;
+    let index = 0;
+
+    const walker = document.createTreeWalker(
+      editable,
+      NodeFilter.SHOW_TEXT,
+      null,
+    );
+
+    let node = walker.nextNode();
+    while (node) {
+      const text = node.textContent || "";
+
+      if (node === range.startContainer) {
+        start = index + range.startOffset;
+      }
+
+      if (node === range.endContainer) {
+        end = index + range.endOffset;
+        break;
+      }
+
+      index += text.length;
+      node = walker.nextNode();
+    }
+
+    if (start === -1 || end === -1 || start === end) {
+      app.setState({ textEditorSelection: null });
+      return;
+    }
+
+    app.setState({ textEditorSelection: { start, end } });
   };
+
+  function restoreSelectionFromAppState() {
+    const sel = app.state.textEditorSelection;
+    if (!sel) {
+      return;
+    }
+
+    const selection = window.getSelection();
+    if (!selection) {
+      return;
+    }
+
+    const { start, end } = sel;
+    let index = 0;
+
+    const walker = document.createTreeWalker(
+      editable,
+      NodeFilter.SHOW_TEXT,
+      null,
+    );
+
+    let node = walker.nextNode();
+    let rangeStartNode: Node | null = null;
+    let rangeEndNode: Node | null = null;
+    let rangeStartOffset = 0;
+    let rangeEndOffset = 0;
+
+    while (node) {
+      const text = node.textContent || "";
+      const nextIndex = index + text.length;
+
+      if (!rangeStartNode && start >= index && start <= nextIndex) {
+        rangeStartNode = node;
+        rangeStartOffset = start - index;
+      }
+
+      if (!rangeEndNode && end >= index && end <= nextIndex) {
+        rangeEndNode = node;
+        rangeEndOffset = end - index;
+        break;
+      }
+
+      index = nextIndex;
+      node = walker.nextNode();
+    }
+
+    if (!rangeStartNode || !rangeEndNode) {
+      return;
+    }
+
+    const range = document.createRange();
+    range.setStart(rangeStartNode, rangeStartOffset);
+    range.setEnd(rangeEndNode, rangeEndOffset);
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
 
   // Listen for selection changes
   editable.onselect = updateTextEditorSelection;
@@ -444,96 +588,23 @@ export const textWysiwyg = ({
   const TAB_SIZE = 4;
   const TAB = " ".repeat(TAB_SIZE);
   const RE_LEADING_TAB = new RegExp(`^ {1,${TAB_SIZE}}`);
+
+  // TODO: re-enable indent/outdent behavior for contenteditable editor.
+  // For now we keep these as no-ops to avoid breaking keyboard shortcuts.
   const indent = () => {
-    const { selectionStart, selectionEnd } = editable;
-    const linesStartIndices = getSelectedLinesStartIndices();
-
-    let value = editable.value;
-    linesStartIndices.forEach((startIndex: number) => {
-      const startValue = value.slice(0, startIndex);
-      const endValue = value.slice(startIndex);
-
-      value = `${startValue}${TAB}${endValue}`;
-    });
-
-    editable.value = value;
-
-    editable.selectionStart = selectionStart + TAB_SIZE;
-    editable.selectionEnd = selectionEnd + TAB_SIZE * linesStartIndices.length;
+    return;
   };
 
   const outdent = () => {
-    const { selectionStart, selectionEnd } = editable;
-    const linesStartIndices = getSelectedLinesStartIndices();
-    const removedTabs: number[] = [];
-
-    let value = editable.value;
-    linesStartIndices.forEach((startIndex) => {
-      const tabMatch = value
-        .slice(startIndex, startIndex + TAB_SIZE)
-        .match(RE_LEADING_TAB);
-
-      if (tabMatch) {
-        const startValue = value.slice(0, startIndex);
-        const endValue = value.slice(startIndex + tabMatch[0].length);
-
-        // Delete a tab from the line
-        value = `${startValue}${endValue}`;
-        removedTabs.push(startIndex);
-      }
-    });
-
-    editable.value = value;
-
-    if (removedTabs.length) {
-      if (selectionStart > removedTabs[removedTabs.length - 1]) {
-        editable.selectionStart = Math.max(
-          selectionStart - TAB_SIZE,
-          removedTabs[removedTabs.length - 1],
-        );
-      } else {
-        // If the cursor is before the first tab removed, ex:
-        // Line| #1
-        //     Line #2
-        // Lin|e #3
-        // we should reset the selectionStart to his initial value.
-        editable.selectionStart = selectionStart;
-      }
-      editable.selectionEnd = Math.max(
-        editable.selectionStart,
-        selectionEnd - TAB_SIZE * removedTabs.length,
-      );
-    }
+    return;
   };
 
   /**
-   * @returns indices of start positions of selected lines, in reverse order
+   * @returns indices of start positions of selected lines.
+   * Currently unused for contenteditable implementation.
    */
   const getSelectedLinesStartIndices = () => {
-    let { selectionStart, selectionEnd, value } = editable;
-
-    // chars before selectionStart on the same line
-    const startOffset = value.slice(0, selectionStart).match(/[^\n]*$/)![0]
-      .length;
-    // put caret at the start of the line
-    selectionStart = selectionStart - startOffset;
-
-    const selected = value.slice(selectionStart, selectionEnd);
-
-    return selected
-      .split("\n")
-      .reduce(
-        (startIndices, line, idx, lines) =>
-          startIndices.concat(
-            idx
-              ? // curr line index is prev line's start + prev line's length + \n
-                startIndices[idx - 1] + lines[idx - 1].length + 1
-              : // first selected line
-                selectionStart,
-          ),
-        [] as number[],
-      )
-      .reverse();
+    return [] as number[];
   };
 
   const stopEvent = (event: Event) => {
@@ -569,7 +640,7 @@ export const textWysiwyg = ({
     );
 
     if (container) {
-      if (editable.value.trim()) {
+      if ((editable.innerText || "").trim()) {
         const boundTextElementId = getBoundTextElementId(container);
         if (!boundTextElementId || boundTextElementId !== element.id) {
           app.scene.mutateElement(container, {
@@ -596,9 +667,11 @@ export const textWysiwyg = ({
       redrawTextBoundingBox(updateElement, container, app.scene);
     }
 
+    const finalText = normalizeText(editable.innerText || "");
+
     onSubmit({
       viaKeyboard: submittedViaKeyboard,
-      nextOriginalText: editable.value,
+      nextOriginalText: finalText,
     });
   };
 
@@ -659,6 +732,18 @@ export const textWysiwyg = ({
       // Otherwise, re-enable submit on blur and refocus the editor.
       editable.onblur = handleSubmit;
       editable.focus();
+
+      // When first entering edit mode (bindBlurEvent called without event),
+      // auto-select the whole text if requested.
+      if (autoSelect && !event) {
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.selectNodeContents(editable);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      }
     });
   };
 
@@ -741,12 +826,6 @@ export const textWysiwyg = ({
   // ---------------------------------------------------------------------------
 
   let isDestroyed = false;
-
-  if (autoSelect) {
-    // select on init (focusing is done separately inside the bindBlurEvent()
-    // because we need it to happen *after* the blur event from `pointerdown`)
-    editable.select();
-  }
   bindBlurEvent();
 
   // reposition wysiwyg in case of canvas is resized. Using ResizeObserver
