@@ -23,7 +23,7 @@ import { searchIcon } from "./icons";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
 import { LibraryMenu } from "./LibraryMenu";
-import { LibraryIcon, PresentationTabIcon } from "./icons";
+import { LibraryIcon, ViewerModeIcon } from "./icons";
 import { PresentationMenu } from "./PresentationMenu";
 
 const DefaultSidebarTrigger = withInternalFallback(
@@ -109,7 +109,7 @@ export const DefaultSidebar = Object.assign(
                   {LibraryIcon}
                 </Sidebar.TabTrigger>
                 <Sidebar.TabTrigger tab={PRESENTATION_SIDEBAR_TAB}>
-                  {PresentationTabIcon}
+                  {ViewerModeIcon}
                 </Sidebar.TabTrigger>
                 <DefaultSidebarTabTriggersTunnel.Out />
               </Sidebar.TabTriggers>

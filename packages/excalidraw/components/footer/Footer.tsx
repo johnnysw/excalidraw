@@ -11,7 +11,7 @@ import Stack from "../Stack";
 import type { ActionManager } from "../../actions/manager";
 import type { UIAppState } from "../../types";
 
-import { PlayIcon } from "../icons";
+import { PlayIcon, ViewerModeIcon, PresenterModeIcon } from "../icons";
 
 const Footer = ({
   appState,
@@ -129,8 +129,8 @@ const Footer = ({
                   }}
                 >
                   {[
-                    { key: "viewer" as const, label: "普通视图" },
-                    { key: "presenter" as const, label: "演讲者视图" },
+                    { key: "viewer" as const, label: "普通视图", icon: ViewerModeIcon },
+                    { key: "presenter" as const, label: "演讲者视图", icon: PresenterModeIcon },
                   ].map((item, index) => (
                     <button
                       key={item.key}
@@ -141,7 +141,7 @@ const Footer = ({
                       style={{
                         width: "100%",
                         textAlign: "left",
-                        padding: "10px 12px",
+                        padding: "10px 14px",
                         background: "transparent",
                         border: "none",
                         cursor: "pointer",
@@ -151,8 +151,21 @@ const Footer = ({
                           index === 0
                             ? "1px solid var(--button-gray-1)"
                             : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        transition: "background 0.15s ease",
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "var(--color-surface-mid)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
                       }}
                     >
+                      <span style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.7 }}>
+                        {item.icon}
+                      </span>
                       {item.label}
                     </button>
                   ))}

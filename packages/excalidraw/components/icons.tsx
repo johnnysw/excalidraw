@@ -2439,3 +2439,25 @@ export const ExitPresentationIcon = createIcon(
   </svg>
 );
 
+// hugeicons: presentation-01 (普通视图)
+export const ViewerModeIcon = createIcon(
+  <g strokeWidth="1.5">
+    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+    <path d="M2 5a2 2 0 0 1 2 -2h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-16a2 2 0 0 1 -2 -2v-10z" />
+    <path d="M12 17v4" />
+    <path d="M8 21h8" />
+    <path d="M10 9v2l4 -2l-4 -2z" fill="currentColor" stroke="none" />
+  </g>,
+  tablerIconProps,
+);
+
+// hugeicons: presentation-podium (演讲者视图)
+export const PresenterModeIcon = createIcon(
+  <g fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M2.5 8c0-2.828 0-4.243.879-5.121C4.257 2 5.672 2 8.5 2h7c2.828 0 4.243 0 5.121.879c.879.878.879 2.293.879 5.121v3c0 2.828 0 4.243-.879 5.121C19.743 17 18.328 17 15.5 17h-7c-2.828 0-4.243 0-5.121-.879C2.5 15.243 2.5 13.828 2.5 11z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="m8 9.725l.697-.915c.878-1.153 2.432-1.062 3.209.19c.75 1.21 2.237 1.344 3.134.283L16 8.15M8.5 22l.328-.328c.578-.578.867-.867 1.235-1.02c.367-.152.776-.152 1.594-.152h.686c.818 0 1.226 0 1.594.152c.367.152.656.441 1.234 1.02L15.5 22" />
+    <path strokeLinecap="round" d="M12 17.5V22" />
+  </g>,
+  tablerIconProps,
+);
+
