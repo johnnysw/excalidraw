@@ -429,7 +429,7 @@ export const PRESENTATION_SIDEBAR_TAB = "presentation";
 
 export const DEFAULT_SIDEBAR = {
   name: "default",
-  defaultTab: CANVAS_SEARCH_TAB,
+  defaultTab: PRESENTATION_SIDEBAR_TAB,
 } as const;
 
 export const LIBRARY_DISABLED_TYPES = new Set([

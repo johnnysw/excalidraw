@@ -81,8 +81,12 @@ const Presentation = () => {
     // Refs for navigation state (to avoid stale closures)
     const currentIndexRef = useRef(currentIndex);
     const framesLengthRef = useRef(frames.length);
+    const framesRef = useRef(frames);
+    const presentationStepRef = useRef(appState.presentationStep || 0);
     currentIndexRef.current = currentIndex;
     framesLengthRef.current = frames.length;
+    framesRef.current = frames;
+    presentationStepRef.current = appState.presentationStep || 0;
 
     // Save original element IDs when presentation mode starts
     useEffect(() => {
@@ -639,13 +643,38 @@ const Presentation = () => {
                     app.scene.replaceAllElements(elementsToKeep);
                 }
             } else if (type === 'navigate') {
-                // 处理翻页命令 (使用 refs 获取最新值)
+                // 处理翻页命令 (使用 refs 获取最新值)，支持动画步骤
                 const idx = currentIndexRef.current;
                 const len = framesLengthRef.current;
-                if (direction === 'prev' && idx > 0) {
-                    setCurrentIndex(idx - 1);
-                } else if (direction === 'next' && idx < len - 1) {
-                    setCurrentIndex(idx + 1);
+                const currentStep = presentationStepRef.current;
+                const currentFrameNav = framesRef.current[idx];
+                const maxSteps = currentFrameNav ? getMaxStepsForFrame(currentFrameNav) : 0;
+
+                if (direction === 'next') {
+                    // 先播放动画步骤，再切换幻灯片
+                    if (currentStep < maxSteps) {
+                        setAppState({
+                            presentationStep: currentStep + 1,
+                            animationProgress: 0
+                        } as any);
+                    } else if (idx < len - 1) {
+                        setCurrentIndex(idx + 1);
+                        setAppState({
+                            presentationStep: 0,
+                            animationProgress: 0
+                        } as any);
+                    }
+                } else if (direction === 'prev') {
+                    // 先回退动画步骤，再切换幻灯片
+                    if (currentStep > 0) {
+                        setAppState({ presentationStep: currentStep - 1 });
+                    } else if (idx > 0) {
+                        // 返回上一页时，显示全部内容（设置 step 为 maxSteps）
+                        const prevFrame = framesRef.current[idx - 1];
+                        const prevMaxSteps = prevFrame ? getMaxStepsForFrame(prevFrame) : 0;
+                        setCurrentIndex(idx - 1);
+                        setAppState({ presentationStep: prevMaxSteps });
+                    }
                 }
             }
         };
