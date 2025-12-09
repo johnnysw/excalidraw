@@ -28,10 +28,76 @@ import {
   shouldAllowVerticalAlign,
   canHaveArrowheads,
   toolIsArrow,
+  isFreeDrawElement,
 } from "@excalidraw/element";
 import { alignActionsPredicate } from "../actions/actionAlign";
 import { t } from "../i18n";
 import "./PropertiesMenu.scss";
+
+import type { ExcalidrawElement } from "@excalidraw/element/types";
+import type { AppState } from "../types";
+
+/**
+ * 根据元素类型和当前工具获取描边颜色的标签
+ */
+const getStrokeColorLabel = (
+  selectedElements: readonly ExcalidrawElement[],
+  activeTool: AppState["activeTool"],
+): string => {
+  // 如果没有选中元素，根据当前工具类型返回
+  if (selectedElements.length === 0) {
+    const toolType = activeTool.type;
+    if (toolType === "text") {
+      return "文字色";
+    }
+    if (toolType === "freedraw") {
+      return "笔触色";
+    }
+    if (toolType === "line" || toolIsArrow(toolType)) {
+      return "线条色";
+    }
+    // 形状工具：rectangle, diamond, ellipse
+    if (["rectangle", "diamond", "ellipse"].includes(toolType)) {
+      return "边框色";
+    }
+    return "描边色";
+  }
+
+  // 检查选中元素的类型
+  const hasText = selectedElements.some((el) => isTextElement(el));
+  const hasFreedraw = selectedElements.some((el) => isFreeDrawElement(el));
+  const hasLinear = selectedElements.some((el) => isLinearElement(el));
+  const hasShape = selectedElements.some(
+    (el) =>
+      el.type === "rectangle" ||
+      el.type === "diamond" ||
+      el.type === "ellipse",
+  );
+
+  // 统计类型数量
+  const typeCount = [hasText, hasFreedraw, hasLinear, hasShape].filter(
+    Boolean,
+  ).length;
+
+  // 如果只有一种类型
+  if (typeCount === 1) {
+    if (hasText) {
+      return "文字色";
+    }
+    if (hasFreedraw) {
+      return "笔触色";
+    }
+    if (hasLinear) {
+      return "线条色";
+    }
+    if (hasShape) {
+      return "边框色";
+    }
+  }
+
+  // 混合类型或其他情况，返回通用标签
+  return "描边色";
+};
 
 export const PropertiesMenu: React.FC = () => {
   const app = useApp();
@@ -62,22 +128,22 @@ export const PropertiesMenu: React.FC = () => {
   // 检查是否可以编辑某些属性
   const canEditStrokeColor =
     app.state.activeTool.type !== "selection" ||
-    selectedElements.some((el) => hasStrokeColor(el.type));
+    targetElements.some((el) => hasStrokeColor(el.type));
   const canEditBackgroundColor =
     app.state.activeTool.type !== "selection" ||
-    selectedElements.some((el) => hasBackground(el.type));
-  const canEditStrokeWidth = selectedElements.some((el) =>
+    targetElements.some((el) => hasBackground(el.type));
+  const canEditStrokeWidth = targetElements.some((el) =>
     hasStrokeWidth(el.type),
   );
-  const canEditStrokeStyle = selectedElements.some((el) =>
+  const canEditStrokeStyle = targetElements.some((el) =>
     hasStrokeStyle(el.type),
   );
-  const canEditRoundness = selectedElements.some((el) =>
+  const canEditRoundness = targetElements.some((el) =>
     canChangeRoundness(el.type),
   );
   const canEditTextProps =
     app.state.activeTool.type === "text" ||
-    selectedElements.some((el) => isTextElement(el));
+    targetElements.some((el) => isTextElement(el));
   const canEditArrowhead =
     toolIsArrow(app.state.activeTool.type) ||
     targetElements.some((el) => toolIsArrow(el.type));
@@ -110,7 +176,7 @@ export const PropertiesMenu: React.FC = () => {
     targetElements.length === 1 &&
     isImageElement(targetElements[0]);
 
-  if (selectedElements.length === 0) {
+  if (targetElements.length === 0) {
     return (
       <div className="PropertiesMenu">
         <div className="PropertiesMenu__empty">
@@ -129,19 +195,34 @@ export const PropertiesMenu: React.FC = () => {
       {/* 颜色 */}
       {(canEditStrokeColor || canEditBackgroundColor) && (
         <div className="PropertiesMenu__section">
-          <div className="PropertiesMenu__section-title">文字色</div>
+          <div className="PropertiesMenu__section-title">
+            {getStrokeColorLabel(targetElements, app.state.activeTool)}
+          </div>
           <div className="PropertiesMenu__color-row">
             {canEditStrokeColor &&
               actionManager.renderAction("changeStrokeColor")}
           </div>
           {canEditBackgroundColor && (
             <>
-              <div className="PropertiesMenu__section-title">描边</div>
+              <div className="PropertiesMenu__section-title">填充色</div>
               <div className="PropertiesMenu__color-row">
                 {actionManager.renderAction("changeBackgroundColor")}
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* 文字描边 (可选，放在最后或文字部分) */}
+      {canEditTextProps && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">文字描边</div>
+          <div className="PropertiesMenu__actions">
+            <div className="PropertiesMenu__inline-row">
+              {actionManager.renderAction("changeTextOutlineColor")}
+              {actionManager.renderAction("changeTextOutlineWidth")}
+            </div>
+          </div>
         </div>
       )}
 
@@ -278,17 +359,6 @@ export const PropertiesMenu: React.FC = () => {
         </div>
       )}
 
-      {/* 文字描边 (可选，放在最后或文字部分) */}
-      {canEditTextProps && (
-        <div className="PropertiesMenu__section">
-          <div className="PropertiesMenu__section-title">文字描边</div>
-          <div className="PropertiesMenu__actions">
-            {actionManager.renderAction("changeTextOutlineColor")}
-            {actionManager.renderAction("changeTextOutlineWidth")}
-          </div>
-        </div>
-      )}
-
       {/* 透明度 */}
       <div className="PropertiesMenu__section">
         <div className="PropertiesMenu__section-title">透明度</div>
@@ -349,8 +419,6 @@ export const PropertiesMenu: React.FC = () => {
             {editorInterface.formFactor !== "phone" &&
               actionManager.renderAction("deleteSelectedElements")}
             {showLinkIcon && actionManager.renderAction("hyperlink")}
-          </div>
-          <div className="PropertiesMenu__button-row buttonList">
             {actionManager.renderAction("group")}
             {actionManager.renderAction("ungroup")}
             {showCropEditorAction && actionManager.renderAction("cropEditor")}

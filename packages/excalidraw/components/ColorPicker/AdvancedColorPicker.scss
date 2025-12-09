@@ -1,0 +1,282 @@
+.advanced-color-picker {
+  width: 240px;
+  padding: 16px;
+  background: var(--island-bg-color, #fff);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
+
+  &__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+
+  &__title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary-color, #1e1e1e);
+  }
+
+  &__close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--color-gray-60, #6b7280);
+    transition: all 0.15s;
+
+    &:hover {
+      background: var(--color-gray-10, #f3f4f6);
+      color: var(--text-primary-color, #1e1e1e);
+    }
+  }
+
+  &__picker-wrapper {
+    margin-bottom: 16px;
+
+    // 自定义 react-colorful 样式
+    .react-colorful {
+      width: 100%;
+      height: auto;
+      // 移除 overflow: hidden 以允许手柄稍微超出滑道边界而不被截断
+    }
+
+    .react-colorful__saturation {
+      height: 160px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      // Saturation 区域仍需要 overflow hidden 来确保圆角
+      overflow: hidden;
+    }
+
+    .react-colorful__hue,
+    .react-colorful__alpha {
+      height: 14px;
+      border-radius: 7px;
+      margin-bottom: 12px;
+    }
+
+    .react-colorful__saturation-pointer {
+      width: 18px;
+      height: 18px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+    }
+
+    .react-colorful__hue-pointer,
+    .react-colorful__alpha-pointer {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      cursor: pointer;
+    }
+
+    // 整个交互区域都显示手型
+    .react-colorful__interactive {
+      cursor: pointer;
+    }
+
+    .react-colorful__alpha {
+      // 透明度背景棋盘格
+      background-image: linear-gradient(45deg, #ccc 25%, transparent 25%),
+        linear-gradient(-45deg, #ccc 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #ccc 75%),
+        linear-gradient(-45deg, transparent 75%, #ccc 75%);
+      background-size: 8px 8px;
+      background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+    }
+  }
+
+  &__controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__eyedropper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 36px;
+    border: 1px solid var(--default-border-color, #e5e7eb);
+    background: var(--island-bg-color, #fff);
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--color-gray-60, #6b7280);
+    transition: all 0.15s;
+    flex-shrink: 0;
+
+    &:hover {
+      background: var(--color-gray-10, #f3f4f6);
+      color: var(--text-primary-color, #1e1e1e);
+      border-color: var(--color-gray-30, #d1d5db);
+    }
+  }
+
+  &__hex-input,
+  &__opacity-input {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    border: 1px solid var(--default-border-color, #e5e7eb);
+    border-radius: var(--border-radius-md, 6px);
+    background: var(--island-bg-color, #fff);
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+    box-sizing: border-box;
+
+    &:focus-within {
+      border-color: var(--color-primary, #6965db);
+      // box-shadow: 0 0 0 1px var(--color-primary, #6965db); // 移除 focus ring
+    }
+  }
+
+  &__hex-input {
+    flex: 1;
+  }
+
+  &__opacity-input {
+    width: 68px;
+    flex-shrink: 0;
+  }
+
+  &__hex-prefix {
+    padding-left: 8px;
+    padding-right: 4px;
+    color: var(--color-gray-60, #6b7280);
+    font-size: 13px;
+    font-family: var(--ui-font);
+    line-height: 1;
+    user-select: none;
+  }
+
+  &__hex-input input {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 8px 0 0 !important;
+    margin: 0 !important;
+    font-size: 13px;
+    font-family: var(--ui-font);
+    color: var(--text-primary-color, #1e1e1e);
+    outline: none !important;
+    box-shadow: none !important;
+    text-transform: uppercase;
+    line-height: 30px;
+    border-radius: 0 !important;
+
+    &::placeholder {
+      color: var(--color-gray-40, #9ca3af);
+    }
+
+    &:focus {
+      outline: none !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+  }
+
+  &__opacity-input input {
+    flex: 1;
+    width: 0;
+    height: 100%;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 4px 0 8px !important;
+    margin: 0 !important;
+    font-size: 13px;
+    font-family: var(--ui-font);
+    color: var(--text-primary-color, #1e1e1e);
+    outline: none !important;
+    box-shadow: none !important;
+    text-align: center;
+    line-height: 30px;
+    border-radius: 0 !important;
+
+    &:focus {
+      outline: none !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    // 隐藏数字输入框的箭头
+    appearance: textfield;
+    -moz-appearance: textfield;
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  }
+
+  &__opacity-suffix {
+    padding-right: 8px;
+    padding-left: 2px;
+    color: var(--color-gray-60, #6b7280);
+    font-size: 13px;
+    font-family: var(--ui-font);
+    line-height: 1;
+    user-select: none;
+  }
+}
+
+// 深色模式适配
+.excalidraw.theme--dark {
+  .advanced-color-picker {
+    background: var(--island-bg-color, #232329);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+
+    &__title {
+      color: var(--text-primary-color, #fff);
+    }
+
+    &__close:hover {
+      background: var(--color-gray-80, #3f3f46);
+    }
+
+    &__eyedropper {
+      background: var(--island-bg-color, #232329);
+      border-color: var(--default-border-color, #3f3f46);
+
+      &:hover {
+        background: var(--color-gray-80, #3f3f46);
+        border-color: var(--color-gray-60, #52525b);
+      }
+    }
+
+    &__hex-input,
+    &__opacity-input {
+      background: var(--island-bg-color, #232329);
+      border-color: var(--default-border-color, #3f3f46);
+
+      &:focus-within {
+        border-color: var(--color-primary, #a5a2ff);
+      }
+
+      input {
+        color: var(--text-primary-color, #fff);
+        &::placeholder {
+          color: var(--color-gray-60, #6b7280);
+        }
+      }
+    }
+
+    &__hex-prefix,
+    &__opacity-suffix {
+      color: var(--color-gray-60, #a1a1aa);
+    }
+  }
+}

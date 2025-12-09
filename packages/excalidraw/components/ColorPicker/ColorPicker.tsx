@@ -7,29 +7,26 @@ import {
   COLOR_OUTLINE_CONTRAST_THRESHOLD,
   COLOR_PALETTE,
   isTransparent,
-  isWritableElement,
 } from "@excalidraw/common";
 
-import type { ColorTuple, ColorPaletteCustom } from "@excalidraw/common";
+import type { ColorPaletteCustom } from "@excalidraw/common";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { useAtom } from "../../editor-jotai";
 import { t } from "../../i18n";
-import { useExcalidrawContainer, useStylesPanelMode } from "../App";
+import { useStylesPanelMode } from "../App";
 import { ButtonSeparator } from "../ButtonSeparator";
 import { activeEyeDropperAtom } from "../EyeDropper";
-import { PropertiesPopover } from "../PropertiesPopover";
 import { slashIcon, strokeIcon } from "../icons";
+import { PropertiesPopover } from "../PropertiesPopover";
 import {
   saveCaretPosition,
   restoreCaretPosition,
   temporarilyDisableTextEditorBlur,
 } from "../../hooks/useTextEditorFocus";
 
-import { ColorInput } from "./ColorInput";
-import { Picker } from "./Picker";
-import PickerHeading from "./PickerHeading";
+import { AdvancedColorPicker } from "./AdvancedColorPicker";
 import { TopPicks } from "./TopPicks";
 import { activeColorPickerSectionAtom, isColorDark } from "./colorPickerUtils";
 
@@ -72,28 +69,13 @@ interface ColorPickerProps {
   elements: readonly ExcalidrawElement[];
   appState: AppState;
   palette?: ColorPaletteCustom | null;
-  topPicks?: ColorTuple;
+  topPicks?: readonly string[];
   updateData: (formData?: any) => void;
   bottomContent?: ReactNode;
   /** Custom icon for the trigger button in compact mode */
   icon?: ReactNode;
   /** Custom title/tooltip for the trigger button */
   title?: string;
-}
-
-interface PickerProps {
-  color: string | null;
-  onChange: (color: string) => void;
-  type: ColorPickerType;
-  elements: readonly ExcalidrawElement[];
-  palette: ColorPaletteCustom;
-  updateData: (formData?: any) => void;
-  children?: React.ReactNode;
-  showTitle?: boolean;
-  onEyeDropperToggle: (force?: boolean) => void;
-  onEscape: (event: React.KeyboardEvent | KeyboardEvent) => void;
-  showHotKey?: boolean;
-  titleLabel?: string;
 }
 
 const ColorPickerPopupContent = ({
@@ -121,141 +103,79 @@ const ColorPickerPopupContent = ({
 > & {
   getOpenPopup: () => AppState["openPopup"];
 }) => {
-  const { container } = useExcalidrawContainer();
-  const stylesPanelMode = useStylesPanelMode();
-  const isCompactMode = stylesPanelMode !== "full";
-  const isMobileMode = stylesPanelMode === "mobile";
   const [, setActiveColorPickerSection] = useAtom(activeColorPickerSectionAtom);
 
   const [eyeDropperState, setEyeDropperState] = useAtom(activeEyeDropperAtom);
 
-  const colorInputJSX = (
-    <div>
-      <PickerHeading>{t("colorPicker.hexCode")}</PickerHeading>
-      <ColorInput
-        color={color || ""}
-        label={label}
-        onChange={(color) => {
-          onChange(color);
-        }}
-        colorPickerType={type}
-        placeholder={t("colorPicker.color")}
-      />
-    </div>
-  );
+  const handleEyeDropperToggle = (force?: boolean) => {
+    setEyeDropperState((state) => {
+      if (force) {
+        state = state || {
+          keepOpenOnAlt: true,
+          onSelect: onChange,
+          colorPickerType: type,
+        };
+        state.keepOpenOnAlt = true;
+        return state;
+      }
 
-  const colorPickerContentRef = useRef<HTMLDivElement>(null);
+      return force === false || state
+        ? null
+        : {
+            keepOpenOnAlt: false,
+            onSelect: onChange,
+            colorPickerType: type,
+          };
+    });
+  };
 
-  const focusPickerContent = () => {
-    colorPickerContentRef.current?.focus();
+  const handleClose = () => {
+    // only clear if we're still the active popup (avoid racing with switch)
+    if (getOpenPopup() === type) {
+      updateData({ openPopup: null });
+    }
+    setActiveColorPickerSection(null);
+
+    // Refocus text editor when popover closes if we were editing text
+    if (appState.editingTextElement) {
+      setTimeout(() => {
+        const textEditor = document.querySelector(
+          ".excalidraw-wysiwyg",
+        ) as HTMLTextAreaElement;
+        if (textEditor) {
+          textEditor.focus();
+        }
+      }, 0);
+    }
+  };
+
+  const handleColorChange = (changedColor: string) => {
+    // Save caret position before color change if editing text
+    const savedSelection = appState.editingTextElement
+      ? saveCaretPosition()
+      : null;
+
+    onChange(changedColor);
+
+    // Restore caret position after color change if editing text
+    if (appState.editingTextElement && savedSelection) {
+      restoreCaretPosition(savedSelection);
+    }
   };
 
   return (
     <PropertiesPopover
-      container={container}
-      style={{ maxWidth: "13rem" }}
-      // Improve focus handling for text editing scenarios
-      preventAutoFocusOnTouch={!!appState.editingTextElement}
-      onFocusOutside={(event) => {
-        // refocus due to eye dropper
-        if (!isWritableElement(event.target)) {
-          focusPickerContent();
-        }
-        event.preventDefault();
-      }}
-      onPointerDownOutside={(event) => {
-        if (eyeDropperState) {
-          // prevent from closing if we click outside the popover
-          // while eyedropping (e.g. click when clicking the sidebar;
-          // the eye-dropper-backdrop is prevented downstream)
-          event.preventDefault();
-        }
-      }}
-      onClose={() => {
-        // only clear if we're still the active popup (avoid racing with switch)
-        if (getOpenPopup() === type) {
-          updateData({ openPopup: null });
-        }
-        setActiveColorPickerSection(null);
-
-        // Refocus text editor when popover closes if we were editing text
-        if (appState.editingTextElement) {
-          setTimeout(() => {
-            const textEditor = document.querySelector(
-              ".excalidraw-wysiwyg",
-            ) as HTMLTextAreaElement;
-            if (textEditor) {
-              textEditor.focus();
-            }
-          }, 0);
-        }
-      }}
+      className="advanced-color-picker-popover"
+      closeMode="manual"
+      noIsland
+      onClose={handleClose}
     >
-      {palette ? (
-        <>
-          <Picker
-            ref={colorPickerContentRef}
-            palette={palette}
-            color={color}
-            onChange={(changedColor) => {
-            // Save caret position before color change if editing text
-            const savedSelection = appState.editingTextElement
-              ? saveCaretPosition()
-              : null;
-
-            onChange(changedColor);
-
-            // Restore caret position after color change if editing text
-            if (appState.editingTextElement && savedSelection) {
-              restoreCaretPosition(savedSelection);
-            }
-          }}
-            onEyeDropperToggle={(force) => {
-            setEyeDropperState((state) => {
-              if (force) {
-                state = state || {
-                  keepOpenOnAlt: true,
-                  onSelect: onChange,
-                  colorPickerType: type,
-                };
-                state.keepOpenOnAlt = true;
-                return state;
-              }
-
-              return force === false || state
-                ? null
-                : {
-                    keepOpenOnAlt: false,
-                    onSelect: onChange,
-                    colorPickerType: type,
-                  };
-            });
-          }}
-            onEscape={(event) => {
-            if (eyeDropperState) {
-              setEyeDropperState(null);
-            } else {
-              // close explicitly on Escape
-              updateData({ openPopup: null });
-            }
-          }}
-            type={type}
-            elements={elements}
-            updateData={updateData}
-            showTitle={isCompactMode}
-            showHotKey={!isMobileMode}
-            titleLabel={label}
-          >
-            {colorInputJSX}
-          </Picker>
-          {bottomContent}
-        </>
-      ) : (
-        <>
-          {colorInputJSX}
-          {bottomContent}
-        </>
-      )}
+      <AdvancedColorPicker
+        color={color}
+        onChange={handleColorChange}
+        onEyeDropperToggle={handleEyeDropperToggle}
+        onClose={handleClose}
+      />
     </PropertiesPopover>
   );
 };

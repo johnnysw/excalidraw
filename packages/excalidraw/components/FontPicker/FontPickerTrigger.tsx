@@ -33,7 +33,11 @@ export const FontPickerTrigger = ({
 
   return (
     <Popover.Trigger asChild>
-      <div data-openpopup="fontFamily" className="properties-trigger">
+      <div
+        data-openpopup="fontFamily"
+        className="properties-trigger"
+        style={{ display: "inline-flex" }}
+      >
         <ButtonIcon
           standalone
           icon={TextIcon}
@@ -47,10 +51,7 @@ export const FontPickerTrigger = ({
                 appState.openPopup === "fontFamily" ? null : appState.openPopup,
             }));
           }}
-          style={{
-            border: "none",
-            ...compactStyle,
-          }}
+          style={compactStyle}
         />
       </div>
     </Popover.Trigger>

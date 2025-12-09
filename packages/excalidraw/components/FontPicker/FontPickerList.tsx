@@ -325,6 +325,12 @@ export const FontPickerList = React.memo(
         className="properties-content"
         container={container}
         style={{ width: "15rem" }}
+        side="bottom"
+        align="end"
+        sideOffset={8}
+        alignOffset={0}
+        showArrow={false}
+        closeMode="auto"
         onClose={() => {
           onClose();
 

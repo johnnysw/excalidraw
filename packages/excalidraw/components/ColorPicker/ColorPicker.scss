@@ -1,5 +1,21 @@
 @import "../../css/variables.module.scss";
 
+.advanced-color-picker-popover {
+  z-index: 100;
+  animation: advancedPickerFadeIn 0.15s ease-out;
+
+  @keyframes advancedPickerFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
 .excalidraw {
   .focus-visible-none {
     &:focus-visible {
@@ -38,13 +54,15 @@
 
   .color-picker__top-picks {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-start;
     align-items: center;
+    gap: 6px;
+    padding: 0 4px;
   }
 
   .color-picker__button {
     --radius: 4px;
-    --size: 1.375rem;
+    --size: 1.625rem;
 
     &.has-outline {
       box-shadow: inset 0 0 0 1px #d9d9d9;
@@ -105,15 +123,17 @@
     &.active {
       .color-picker__button-outline {
         position: absolute;
-        --offset: -1px;
+        --offset: -2.5px;
         top: var(--offset);
         left: var(--offset);
         right: var(--offset);
         bottom: var(--offset);
-        box-shadow: 0 0 0 1px var(--color-primary-darkest);
+        box-shadow: none;
+        border: 1px dashed var(--color-primary-darkest);
         z-index: 1; // due hover state so this has preference
-        border-radius: var(--radius);
+        border-radius: calc(var(--radius) + 2px);
         filter: var(--theme-filter);
+        pointer-events: none;
       }
     }
 
