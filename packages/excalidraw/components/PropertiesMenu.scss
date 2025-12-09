@@ -1,0 +1,332 @@
+.PropertiesMenu {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0.75rem;
+  overflow-y: auto;
+  background: var(--island-bg-color, #fff);
+
+  // 隐藏内部 action 组件渲染的标题（h3、legend），避免与面板 section 标题重复
+  h3,
+  legend {
+    display: none;
+  }
+
+  // Scrollbar styling
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-gray-30);
+    border-radius: 2px;
+  }
+
+  // Empty state
+  &__empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    text-align: center;
+    color: var(--color-gray-60);
+
+    p {
+      margin: 0;
+      font-size: 0.8125rem;
+    }
+  }
+
+  &__empty-hint {
+    margin-top: 0.5rem !important;
+    font-size: 0.75rem !important;
+    color: var(--color-gray-40);
+  }
+
+  // Section styling
+  &__section {
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--color-gray-15, #eee);
+
+    &:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+    }
+  }
+
+  &__section-title {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-gray-60);
+    margin-bottom: 0.5rem;
+  }
+
+  // Color row
+  &__color-row {
+    // Color picker styling
+    .color-picker-type-canvasBackground,
+    .color-picker-type-elementBackground,
+    .color-picker-type-elementStroke {
+      width: 100%;
+    }
+
+    .color-picker__button-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.375rem;
+    }
+
+    .color-picker__button {
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 4px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: all 0.15s;
+
+      &:hover {
+        transform: scale(1.1);
+      }
+
+      &--active,
+      &[aria-selected="true"] {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 2px var(--color-primary-light);
+      }
+    }
+
+    // Hide labels in color picker
+    label:not(.color-picker__button) {
+      display: none;
+    }
+  }
+
+  // Actions container
+  &__actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+
+    // Hide built-in labels/legends from Excalidraw actions
+    > fieldset {
+      border: none;
+      padding: 0;
+      margin: 0;
+
+      > legend {
+        display: none;
+      }
+    }
+
+    // Hide inline labels（包括字体等 Action 内部的 label），但保留 Range 组件使用的 .control-label
+    label:not(.control-label) {
+      display: none;
+    }
+
+    // Range component (opacity slider)
+    .control-label {
+      display: block;
+      font-size: 0;  // Hide the text label
+      --color-slider-track: var(--color-primary-light);
+      --color-slider-thumb: var(--color-gray-80);
+      --button-bg: var(--color-gray-20);
+
+      .range-wrapper {
+        padding-top: 0.5rem;
+        padding-bottom: 1.5rem;
+      }
+
+      .range-input {
+        width: 100%;
+        height: 6px; // Slightly thicker for better visibility
+        appearance: none;
+        -webkit-appearance: none;
+        // Background is set via JS style attribute for the gradient
+        border-radius: 3px;
+        cursor: pointer;
+        margin: 0;
+
+        &::-webkit-slider-thumb {
+          appearance: none;
+          -webkit-appearance: none;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: var(--color-slider-thumb);
+          cursor: pointer;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+          border: 2px solid #fff; // Add white border for better contrast
+          margin-top: -1px; // Align center vertically
+        }
+
+        &::-moz-range-thumb {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: var(--color-slider-thumb);
+          cursor: pointer;
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+      }
+
+      .value-bubble {
+        font-size: 0.75rem;
+        color: var(--color-gray-60);
+      }
+
+      .zero-label {
+        font-size: 0.75rem;
+        color: var(--color-gray-60);
+        left: 0; // Align to start
+      }
+    }
+
+    // Button list styling（仅布局，具体按钮样式在通用规则中统一定义）
+    .buttonList {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.25rem;
+    }
+
+    // Stroke width input
+    input[type="number"],
+    input[type="text"] {
+      width: 100%;
+      max-width: 5rem;
+      padding: 0.375rem 0.5rem;
+      border: 1px solid var(--color-gray-20);
+      border-radius: 4px;
+      font-size: 0.8125rem;
+      background: var(--color-gray-5, #fafafa);
+
+      &:focus {
+        outline: none;
+        border-color: var(--color-primary);
+      }
+    }
+
+    // Opacity slider
+    input[type="range"] {
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--color-gray-20);
+      appearance: none;
+      cursor: pointer;
+
+      &::-webkit-slider-thumb {
+        appearance: none;
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--color-primary);
+        cursor: pointer;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      }
+    }
+
+    // Font size buttons
+    .excalidraw-fontSizeButtons {
+      display: flex;
+      gap: 0.25rem;
+
+      button {
+        min-width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 6px;
+        border: 1px solid var(--color-gray-20);
+        background: var(--color-gray-5, #fafafa);
+        font-size: 0.75rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.15s;
+
+        &:hover {
+          background: var(--color-gray-10);
+        }
+
+        &.active,
+        &[aria-pressed="true"] {
+          background: var(--color-primary-light);
+          border-color: var(--color-primary);
+          color: var(--color-primary);
+        }
+      }
+    }
+  }
+
+  // Button row for layers/align/actions（布局，按钮样式使用通用规则）
+  &__button-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-bottom: 0.375rem;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+
+    // Delete button special styling
+    .ToolIcon--delete {
+      &:hover {
+        background: var(--color-danger-light, #fef2f2);
+        border-color: var(--color-danger, #ef4444);
+        color: var(--color-danger, #ef4444);
+      }
+    }
+  }
+
+  // 通用图标按钮样式：属性区 buttonList + 底部图层/对齐/操作的 button-row
+  &__actions .buttonList,
+  &__button-row {
+    .ToolIcon_type_button,
+    .ToolIcon_type_floating,
+    .ToolIcon_type_radio,
+    button,
+    button[class*="ToolIcon"] {
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: 6px;
+      border: 1px solid var(--color-gray-20);
+      background: var(--color-gray-5, #fafafa);
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+
+      &:hover {
+        background: var(--color-gray-10);
+        border-color: var(--color-gray-30);
+      }
+
+      &:active {
+        background: var(--color-gray-20);
+      }
+
+      svg {
+        width: 1rem;
+        height: 1rem;
+      }
+    }
+
+    // 选中/按下状态（ToolButton 的 selected、ButtonIcon 的 active 等）
+    .ToolIcon_type_button.ToolIcon--selected,
+    .ToolIcon_type_floating.ToolIcon--selected,
+    button.active,
+    button[aria-pressed="true"],
+    button[aria-checked="true"] {
+      background: var(--color-primary-light);
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+  }
+}

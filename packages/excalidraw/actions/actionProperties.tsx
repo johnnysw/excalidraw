@@ -630,9 +630,6 @@ export const actionChangeStrokeColor = register<
 
     return (
       <>
-        {stylesPanelMode === "full" && (
-          <h3 aria-hidden="true">{strokeLabel}</h3>
-        )}
         <ColorPicker
           topPicks={DEFAULT_ELEMENT_STROKE_PICKS}
           palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
@@ -919,7 +916,7 @@ export const actionChangeStrokeWidth = register<
       <legend>{t("labels.strokeWidth")}</legend>
       <div className="buttonList">
         <RadioSelection
-          group="stroke-width"
+          type="button"
           options={[
             {
               value: STROKE_WIDTH.thin,
@@ -948,7 +945,7 @@ export const actionChangeStrokeWidth = register<
             (hasSelection) =>
               hasSelection ? null : appState.currentItemStrokeWidth,
           )}
-          onChange={(value) => updateData(value)}
+          onClick={(value) => updateData(value)}
         />
       </div>
     </fieldset>
@@ -1049,7 +1046,7 @@ export const actionChangeSloppiness = register<ExcalidrawElement["roughness"]>({
       <legend>{t("labels.sloppiness")}</legend>
       <div className="buttonList">
         <RadioSelection
-          group="sloppiness"
+          type="button"
           options={[
             {
               value: 0,
@@ -1075,7 +1072,7 @@ export const actionChangeSloppiness = register<ExcalidrawElement["roughness"]>({
             (hasSelection) =>
               hasSelection ? null : appState.currentItemRoughness,
           )}
-          onChange={(value) => updateData(value)}
+          onClick={(value) => updateData(value)}
         />
       </div>
     </fieldset>
@@ -1104,7 +1101,7 @@ export const actionChangeStrokeStyle = register<
       <legend>{t("labels.strokeStyle")}</legend>
       <div className="buttonList">
         <RadioSelection
-          group="strokeStyle"
+          type="button"
           options={[
             {
               value: "solid",
@@ -1130,7 +1127,7 @@ export const actionChangeStrokeStyle = register<
             (hasSelection) =>
               hasSelection ? null : appState.currentItemStrokeStyle,
           )}
-          onChange={(value) => updateData(value)}
+          onClick={(value) => updateData(value)}
         />
       </div>
     </fieldset>
@@ -1297,7 +1294,7 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
           <legend>{t("labels.fontSize")}</legend>
           <div className="buttonList">
             <RadioSelection
-              group="font-size"
+              type="button"
               options={[
                 {
                   value: 16,
@@ -1325,7 +1322,7 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
                 },
               ]}
               value={fontSizeValue}
-              onChange={(value) => {
+              onClick={(value) => {
                 commitFontSize(value as number);
               }}
             />
@@ -1757,9 +1754,6 @@ export const actionChangeFontFamily = register<{
 
     return (
       <>
-        {stylesPanelMode === "full" && (
-          <legend>{t("labels.fontFamily")}</legend>
-        )}
         <FontPicker
           isOpened={appState.openPopup === "fontFamily"}
           selectedFontFamily={selectedFontFamily}
@@ -1905,7 +1899,7 @@ export const actionChangeTextAlign = register<TextAlign>({
         <legend>{t("labels.textAlign")}</legend>
         <div className="buttonList">
           <RadioSelection<TextAlign | false>
-            group="text-align"
+            type="button"
             options={[
               {
                 value: "left",
@@ -1948,7 +1942,7 @@ export const actionChangeTextAlign = register<TextAlign>({
               (hasSelection) =>
                 hasSelection ? null : appState.currentItemTextAlign,
             )}
-            onChange={(value) => {
+            onClick={(value) => {
               withCaretPositionPreservation(
                 () => updateData(value),
                 isCompact,
@@ -2035,14 +2029,14 @@ export const actionChangeLineHeight = register<number>({
         <legend>{t("labels.lineHeight")}</legend>
         <div className="buttonList" style={{ alignItems: "center" }}>
           <RadioSelection<number | false>
-            group="line-height"
+            type="button"
             options={LINE_HEIGHT_OPTIONS.map((value) => ({
               value,
               text: value.toString(),
               testId: `line-height-${value}`,
             }))}
             value={isCustomValue ? false : currentValue}
-            onChange={(value) => {
+            onClick={(value) => {
               withCaretPositionPreservation(
                 () => updateData(value),
                 isCompact,
@@ -2127,7 +2121,7 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
       <fieldset>
         <div className="buttonList">
           <RadioSelection<VerticalAlign | false>
-            group="text-align"
+            type="button"
             options={[
               {
                 value: VERTICAL_ALIGN.TOP,
@@ -2172,7 +2166,7 @@ export const actionChangeVerticalAlign = register<VerticalAlign>({
                 ) !== null,
               (hasSelection) => (hasSelection ? null : VERTICAL_ALIGN.MIDDLE),
             )}
-            onChange={(value) => {
+            onClick={(value) => {
               withCaretPositionPreservation(
                 () => updateData(value),
                 isCompact,
@@ -2231,7 +2225,7 @@ export const actionChangeRoundness = register<"sharp" | "round">({
         <legend>{t("labels.edges")}</legend>
         <div className="buttonList">
           <RadioSelection
-            group="edges"
+            type="button"
             options={[
               {
                 value: "sharp",
@@ -2258,7 +2252,7 @@ export const actionChangeRoundness = register<"sharp" | "round">({
               (hasSelection) =>
                 hasSelection ? null : appState.currentItemRoundness,
             )}
-            onChange={(value) => updateData(value)}
+            onClick={(value) => updateData(value)}
           />
           {renderAction("togglePolygon")}
         </div>
@@ -2642,7 +2636,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
         <legend>{t("labels.arrowtypes")}</legend>
         <div className="buttonList">
           <RadioSelection
-            group="arrowtypes"
+            type="button"
             options={[
               {
                 value: ARROW_TYPE.sharp,
@@ -2681,7 +2675,7 @@ export const actionChangeArrowType = register<keyof typeof ARROW_TYPE>({
               (hasSelection) =>
                 hasSelection ? null : appState.currentItemArrowType,
             )}
-            onChange={(value) => updateData(value)}
+            onClick={(value) => updateData(value)}
           />
         </div>
       </fieldset>

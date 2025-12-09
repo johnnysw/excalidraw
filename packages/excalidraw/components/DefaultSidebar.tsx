@@ -6,6 +6,8 @@ import {
   composeEventHandlers,
   LIBRARY_SIDEBAR_TAB,
   PRESENTATION_SIDEBAR_TAB,
+  PROPERTIES_SIDEBAR_TAB,
+  ANIMATION_SIDEBAR_TAB,
 } from "@excalidraw/common";
 
 import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
@@ -19,12 +21,14 @@ import { useExcalidrawSetAppState } from "./App";
 import { SearchMenu } from "./SearchMenu";
 import { Sidebar } from "./Sidebar/Sidebar";
 import { withInternalFallback } from "./hoc/withInternalFallback";
-import { searchIcon } from "./icons";
+import { searchIcon, PropertiesIcon, AnimationIcon } from "./icons";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
 import { LibraryMenu } from "./LibraryMenu";
 import { LibraryIcon, ViewerModeIcon } from "./icons";
 import { PresentationMenu } from "./PresentationMenu";
+import { PropertiesMenu } from "./PropertiesMenu";
+import { AnimationMenu } from "./AnimationMenu";
 
 const DefaultSidebarTrigger = withInternalFallback(
   "DefaultSidebarTrigger",
@@ -103,6 +107,12 @@ export const DefaultSidebar = Object.assign(
           <Sidebar.Tabs>
             <Sidebar.Header>
               <Sidebar.TabTriggers>
+                <Sidebar.TabTrigger tab={PROPERTIES_SIDEBAR_TAB}>
+                  {PropertiesIcon}
+                </Sidebar.TabTrigger>
+                <Sidebar.TabTrigger tab={ANIMATION_SIDEBAR_TAB}>
+                  {AnimationIcon}
+                </Sidebar.TabTrigger>
                 <Sidebar.TabTrigger tab={PRESENTATION_SIDEBAR_TAB}>
                   {ViewerModeIcon}
                 </Sidebar.TabTrigger>
@@ -115,6 +125,12 @@ export const DefaultSidebar = Object.assign(
                 <DefaultSidebarTabTriggersTunnel.Out />
               </Sidebar.TabTriggers>
             </Sidebar.Header>
+            <Sidebar.Tab tab={PROPERTIES_SIDEBAR_TAB}>
+              <PropertiesMenu />
+            </Sidebar.Tab>
+            <Sidebar.Tab tab={ANIMATION_SIDEBAR_TAB}>
+              <AnimationMenu />
+            </Sidebar.Tab>
             <Sidebar.Tab tab={PRESENTATION_SIDEBAR_TAB}>
               <PresentationMenu />
             </Sidebar.Tab>

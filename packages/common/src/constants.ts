@@ -424,13 +424,15 @@ export const DEFAULT_ELEMENT_PROPS: {
   locked: false,
 };
 
+export const PROPERTIES_SIDEBAR_TAB = "properties";
+export const ANIMATION_SIDEBAR_TAB = "animation";
 export const LIBRARY_SIDEBAR_TAB = "library";
 export const CANVAS_SEARCH_TAB = "search";
 export const PRESENTATION_SIDEBAR_TAB = "presentation";
 
 export const DEFAULT_SIDEBAR = {
   name: "default",
-  defaultTab: PRESENTATION_SIDEBAR_TAB,
+  defaultTab: PROPERTIES_SIDEBAR_TAB,
 } as const;
 
 export const LIBRARY_DISABLED_TYPES = new Set([
