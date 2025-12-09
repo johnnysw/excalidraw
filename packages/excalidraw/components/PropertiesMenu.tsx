@@ -4,6 +4,7 @@
  * 完整功能：颜色、描边、字体、透明度、图层、对齐、操作
  */
 import React from "react";
+import { Icon } from "@iconify/react";
 import {
   useApp,
   useExcalidrawElements,
@@ -113,6 +114,7 @@ export const PropertiesMenu: React.FC = () => {
     return (
       <div className="PropertiesMenu">
         <div className="PropertiesMenu__empty">
+          <Icon icon="hugeicons:cursor-02" width={48} height={48} style={{ color: '#9ca3af', marginBottom: 12 }} />
           <p>未选中元素</p>
           <p className="PropertiesMenu__empty-hint">
             选择画布上的元素以查看和编辑属性

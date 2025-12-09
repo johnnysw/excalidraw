@@ -83,6 +83,7 @@ import type { CaptureUpdateActionType } from "@excalidraw/element";
 
 import { trackEvent } from "../analytics";
 import { RadioSelection } from "../components/RadioSelection";
+import { EditableDropdown } from "../components/EditableDropdown";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
 import { TopPicks } from "../components/ColorPicker/TopPicks";
 import { FontPicker } from "../components/FontPicker/FontPicker";
@@ -1254,17 +1255,8 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
           ? fontSizeValue
           : appState.currentItemFontSize || DEFAULT_FONT_SIZE;
 
-      const [draftFontSize, setDraftFontSize] = useState<string>(
-        String(numericFontSize),
-      );
-
-      useEffect(() => {
-        setDraftFontSize(String(numericFontSize));
-      }, [numericFontSize]);
-
       const commitFontSize = (next: number) => {
         if (!Number.isFinite(next) || next <= 0) {
-          setDraftFontSize(String(numericFontSize));
           return;
         }
 
@@ -1275,24 +1267,10 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
         updateData(next as ExcalidrawTextElement["fontSize"]);
       };
 
-      const commitDraftFontSize = () => {
-        const trimmed = draftFontSize.trim();
-        if (!trimmed) {
-          setDraftFontSize(String(numericFontSize));
-          return;
-        }
-        const next = Number(trimmed);
-        if (!Number.isFinite(next) || next <= 0) {
-          setDraftFontSize(String(numericFontSize));
-          return;
-        }
-        commitFontSize(next);
-      };
-
       return (
         <fieldset>
           <legend>{t("labels.fontSize")}</legend>
-          <div className="buttonList">
+          <div className="buttonList" style={{ alignItems: "center" }}>
             <RadioSelection
               type="button"
               options={[
@@ -1326,28 +1304,12 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
                 commitFontSize(value as number);
               }}
             />
-          </div>
-          <div className="fontSizeCustomInput">
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={draftFontSize}
-              onPointerDown={() => {
-                if (isCompact && data?.onPreventClose) {
-                  data.onPreventClose();
-                }
-              }}
-              onChange={(event) => {
-                setDraftFontSize(event.target.value);
-              }}
-              onBlur={commitDraftFontSize}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  commitDraftFontSize();
-                }
-              }}
+            <EditableDropdown
+              value={numericFontSize}
+              options={[12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72, 96]}
+              onChange={commitFontSize}
+              min={1}
+              max={999}
             />
           </div>
         </fieldset>

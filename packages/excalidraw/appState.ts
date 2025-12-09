@@ -14,6 +14,8 @@ import {
   DEFAULT_TEXT_OUTLINE_COLOR,
   DEFAULT_TEXT_OUTLINE_WIDTH,
   isTestEnv,
+  DEFAULT_SIDEBAR,
+  PROPERTIES_SIDEBAR_TAB,
 } from "@excalidraw/common";
 
 import type { AppState, NormalizedZoomValue } from "./types";
@@ -78,7 +80,7 @@ export const getDefaultAppState = (): Omit<
     gridStep: DEFAULT_GRID_STEP,
     gridModeEnabled: false,
     isBindingEnabled: true,
-    defaultSidebarDockedPreference: false,
+    defaultSidebarDockedPreference: true,
     isLoading: false,
     isResizing: false,
     isRotating: false,
@@ -88,7 +90,7 @@ export const getDefaultAppState = (): Omit<
     contextMenu: null,
     openMenu: null,
     openPopup: null,
-    openSidebar: null,
+    openSidebar: { name: DEFAULT_SIDEBAR.name, tab: PROPERTIES_SIDEBAR_TAB },
     openDialog: null,
     pasteDialog: { shown: false, data: null },
     previousSelectedElementIds: {},

@@ -6,6 +6,7 @@ import { useExcalidrawSetAppState } from "../App";
 import "./SidebarTrigger.scss";
 
 import type { SidebarTriggerProps } from "./common";
+import { getCachedSidebarTab } from "./SidebarTabs";
 
 export const SidebarTrigger = ({
   name,
@@ -30,8 +31,11 @@ export const SidebarTrigger = ({
             .querySelector(".layer-ui__wrapper")
             ?.classList.remove("animate");
           const isOpen = event.target.checked;
+          // 打开时优先使用缓存的标签，如果没有则使用传入的 tab
+          const cachedTab = getCachedSidebarTab(name);
+          const effectiveTab = cachedTab || tab;
           setAppState({
-            openSidebar: isOpen ? { name, tab } : null,
+            openSidebar: isOpen ? { name, tab: effectiveTab } : null,
             openMenu: null,
             openPopup: null,
           });

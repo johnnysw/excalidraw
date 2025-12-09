@@ -8,6 +8,7 @@
  * - 预览动画效果
  */
 import React from "react";
+import { Icon } from "@iconify/react";
 import { useAnimationMenu } from "./useAnimationMenu";
 import { useDragSort } from "./useDragSort";
 import { useAnimationPreview } from "./useAnimationPreview";
@@ -22,19 +23,34 @@ import {
 import { getElementSummary, getAnimationTypeIcon } from "./animationEventUtils";
 import "./AnimationMenu.scss";
 
-/** 获取元素类型图标 */
-function getElementIcon(type: string): string {
-  const icons: Record<string, string> = {
-    text: "📝",
-    image: "🖼️",
-    rectangle: "▭",
-    ellipse: "⬭",
-    diamond: "◇",
-    line: "━",
-    arrow: "→",
-    freedraw: "✏️",
+/** 获取元素类型图标（对齐 teaching-system AnimationPanel，使用 hugeicons） */
+function getElementIcon(type: string) {
+  const commonProps = {
+    width: 14,
+    height: 14,
+    className: "AnimationMenu__element-icon",
   };
-  return icons[type] || "📦";
+
+  switch (type) {
+    case "text":
+      return <Icon icon="hugeicons:text" {...commonProps} />;
+    case "image":
+      return <Icon icon="hugeicons:image-01" {...commonProps} />;
+    case "rectangle":
+      return <Icon icon="hugeicons:rectangular" {...commonProps} />;
+    case "ellipse":
+      return <Icon icon="hugeicons:circle" {...commonProps} />;
+    case "diamond":
+      return <Icon icon="hugeicons:diamond" {...commonProps} />;
+    case "line":
+      return <Icon icon="hugeicons:minus-sign" {...commonProps} />;
+    case "arrow":
+      return <Icon icon="hugeicons:arrow-right-02" {...commonProps} />;
+    case "freedraw":
+      return <Icon icon="hugeicons:pencil-edit-02" {...commonProps} />;
+    default:
+      return <Icon icon="hugeicons:package" {...commonProps} />;
+  }
 }
 
 export const AnimationMenu: React.FC = () => {
@@ -68,6 +84,7 @@ export const AnimationMenu: React.FC = () => {
     return (
       <div className="AnimationMenu">
         <div className="AnimationMenu__empty">
+          <Icon icon="hugeicons:presentation-02" width={48} height={48} style={{ color: '#9ca3af', marginBottom: 12 }} />
           <p>未选择幻灯片</p>
           <p className="AnimationMenu__empty-hint">
             请先选择一个 Frame（幻灯片），才能配置动画
@@ -86,7 +103,15 @@ export const AnimationMenu: React.FC = () => {
             className={`AnimationMenu__preview-btn ${isPlaying ? "AnimationMenu__preview-btn--playing" : ""}`}
             onClick={() => (isPlaying ? stopPreview() : handleAnimationPreview())}
           >
-            {isPlaying ? "⏹ 停止" : "▶ 预览"}
+            <Icon
+              icon={isPlaying ? "hugeicons:stop-circle" : "hugeicons:play-circle-02"}
+              width={16}
+              height={16}
+              className="AnimationMenu__preview-icon"
+            />
+            <span className="AnimationMenu__preview-text">
+              {isPlaying ? "停止" : "预览"}
+            </span>
           </button>
         )}
       </div>
@@ -94,8 +119,8 @@ export const AnimationMenu: React.FC = () => {
       <div className="AnimationMenu__content">
         {/* 当前 Frame 信息 */}
         <div className="AnimationMenu__section">
-          <div className="AnimationMenu__section-title">当前幻灯片</div>
           <div className="AnimationMenu__current-frame">
+            <span className="AnimationMenu__frame-label">当前幻灯片：</span>
             <span className="AnimationMenu__frame-name">
               {(currentFrame as any).name || currentFrame.id.slice(0, 8)}
             </span>
@@ -105,25 +130,44 @@ export const AnimationMenu: React.FC = () => {
         {/* 已选中元素 - 添加动画 */}
         {selectedElements.length > 0 && (
           <div className="AnimationMenu__section">
-            <div className="AnimationMenu__section-title">已选中元素</div>
             <div className="AnimationMenu__selection-info">
-              <span className="AnimationMenu__selection-count">
-                {selectedElements.length} 个元素
-              </span>
-              <button
-                className="AnimationMenu__add-btn"
-                onClick={createEventFromSelection}
-              >
-                + 添加动画
-              </button>
+              <div className="AnimationMenu__selection-header">
+                <span className="AnimationMenu__selection-count">
+                  已选中 {selectedElements.length} 个元素
+                </span>
+                <button
+                  className="AnimationMenu__add-btn"
+                  onClick={createEventFromSelection}
+                >
+                  <Icon icon="mdi:animation-plus" width={14} height={14} />
+                  添加动画
+                </button>
+              </div>
+              <div className="AnimationMenu__selection-elements">
+                {selectedElements.slice(0, 5).map((el) => (
+                  <span key={el.id} className="AnimationMenu__selection-item">
+                    {getElementIcon(el.type)}
+                    <span>{getElementSummary(el as any, 8)}</span>
+                  </span>
+                ))}
+                {selectedElements.length > 5 && (
+                  <span className="AnimationMenu__selection-more">
+                    +{selectedElements.length - 5} 更多
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         )}
 
         {/* 动画事件列表 */}
         <div className="AnimationMenu__section">
-          <div className="AnimationMenu__section-title">
-            动画序列 ({events.length})
+          <div className="AnimationMenu__section-header">
+            <div className="AnimationMenu__section-title">
+              <Icon icon="material-symbols-light:animated-images-rounded" width={16} height={16} />
+              动画序列 ({events.length})
+            </div>
+            <span className="AnimationMenu__section-hint">拖拽调整播放顺序</span>
           </div>
           {events.length > 0 ? (
             <div className="AnimationMenu__event-list">
@@ -131,6 +175,7 @@ export const AnimationMenu: React.FC = () => {
                 const isSelected = selectedEvent?.id === event.id;
                 const { icon, color } = getAnimationTypeIcon(event.type);
                 const isFirstEvent = eventIndex === 0;
+                const stepGroup = getEventStepGroup(event.id);
 
                 // 获取事件中元素的摘要
                 const elementSummaries = event.elements
@@ -197,6 +242,22 @@ export const AnimationMenu: React.FC = () => {
                           {(event.duration / 1000).toFixed(1)}s
                         </span>
                       </div>
+                      {stepGroup !== null && (
+                        <button
+                          className="AnimationMenu__preview-step-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAnimationPreview(stepGroup || undefined);
+                          }}
+                          title="预览此动画"
+                        >
+                          <Icon
+                            icon="hugeicons:play-circle-02"
+                            width={14}
+                            height={14}
+                          />
+                        </button>
+                      )}
                       <button
                         className="AnimationMenu__delete-btn"
                         onClick={(e) => {
@@ -205,7 +266,7 @@ export const AnimationMenu: React.FC = () => {
                         }}
                         title="删除"
                       >
-                        ✕
+                        <Icon icon="hugeicons:delete-02" width={14} height={14} />
                       </button>
                     </div>
 

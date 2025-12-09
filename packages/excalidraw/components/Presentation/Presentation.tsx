@@ -74,6 +74,8 @@ const Presentation = () => {
     // Track element IDs that existed before presentation mode started
     const originalElementIdsRef = useRef<Set<string>>(new Set());
     const presentationActiveRef = useRef(false);
+    // Track if we've applied the initial slide index
+    const initialSlideAppliedRef = useRef(false);
 
     // BroadcastChannel ref for receiving drawing data from presenter view
     const presenterChannelRef = useRef<BroadcastChannel | null>(null);
@@ -98,8 +100,10 @@ const Presentation = () => {
     useEffect(() => {
         if (appState.presentationMode && !presentationActiveRef.current) {
             presentationActiveRef.current = true;
+            initialSlideAppliedRef.current = false; // Reset for new presentation
             // Reset presentationStep when entering presentation mode
             setAppState({ presentationStep: 0 });
+
             document.dispatchEvent(
                 new CustomEvent("excalidraw:presentationStart", {
                     detail: { total: frames.length },
@@ -181,6 +185,18 @@ const Presentation = () => {
             setFrames(allFrames);
         }
     }, [elements, customSlideOrder]);
+
+    // Apply initial slide index when frames are ready and presentation starts
+    useEffect(() => {
+        if (appState.presentationMode && frames.length > 0 && !initialSlideAppliedRef.current) {
+            const startIndex = (appState as any).presentationSlideIndex;
+            if (typeof startIndex === 'number' && startIndex >= 0 && startIndex < frames.length) {
+                setCurrentIndex(startIndex);
+                currentIndexRef.current = startIndex;
+            }
+            initialSlideAppliedRef.current = true;
+        }
+    }, [appState.presentationMode, frames.length, appState]);
 
     // Zoom to fit frame with full viewport coverage when index changes
     useEffect(() => {
@@ -329,7 +345,12 @@ const Presentation = () => {
     useEffect(() => {
         const handleFullscreenChange = () => {
             if (!document.fullscreenElement) {
-                setAppState({ presentationMode: false });
+                // 退出演示模式时恢复保存的侧边栏状态
+                setAppState((state) => ({
+                    presentationMode: false,
+                    openSidebar: (state as any)._savedOpenSidebar ?? state.openSidebar,
+                    _savedOpenSidebar: undefined, // 清除保存的状态
+                } as any));
             }
         };
 
@@ -344,9 +365,11 @@ const Presentation = () => {
             // Clear all presentation drawings on exit
             clearAllPresentationDrawings();
             // Restore original settings on exit
-            setAppState({
+            setAppState((state) => ({
                 frameRendering: originalFrameRenderingRef.current,
-            });
+                openSidebar: (state as any)._savedOpenSidebar ?? state.openSidebar,
+                _savedOpenSidebar: undefined,
+            } as any));
             // Reset to selection tool
             app.setActiveTool({ type: "selection" });
             document.removeEventListener("fullscreenchange", handleFullscreenChange);

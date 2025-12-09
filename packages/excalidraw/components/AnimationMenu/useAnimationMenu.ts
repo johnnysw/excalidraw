@@ -21,7 +21,12 @@ import type {
   AnimationTarget,
 } from "./types";
 import { DEFAULT_EVENT } from "./types";
-import { elementsToEvents, eventsToElements, createEvent } from "./animationEventUtils";
+import {
+  elementsToEvents,
+  eventsToElements,
+  createEvent,
+  reorderEvents,
+} from "./animationEventUtils";
 
 interface UseAnimationMenuReturn {
   /** 当前选中的 Frame */
@@ -178,7 +183,7 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
     }
   }, [selectedElements, events, selectedEventId]);
 
-  // 为选中元素创建新事件
+  // 为选中元素创建新事件（含 text-decoration-group 扩展）
   const createEventFromSelection = useCallback(() => {
     if (selectedElements.length === 0) return;
 
@@ -186,7 +191,38 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
       events.length > 0 ? Math.max(...events.map((e) => e.order)) : 0;
 
     const selectedIds = selectedElements.map((el) => el.id);
-    const newEvent = createEvent(selectedIds, maxOrder);
+
+    // 扩展：如果选中的是带 text-decoration-group 的元素，则自动把同组的元素一并纳入事件
+    const decorationGroupIds = new Set<string>();
+    for (const el of selectedElements) {
+      const groupIds = (el as any).groupIds as string[] | undefined;
+      if (!groupIds) continue;
+      for (const gid of groupIds) {
+        if (gid.includes("text-decoration-group")) {
+          decorationGroupIds.add(gid);
+        }
+      }
+    }
+
+    let finalElementIds = selectedIds;
+    if (decorationGroupIds.size > 0) {
+      const extraIds: string[] = [];
+      for (const el of elements) {
+        const groupIds = (el as any).groupIds as string[] | undefined;
+        if (!groupIds) continue;
+        for (const gid of groupIds) {
+          if (decorationGroupIds.has(gid)) {
+            extraIds.push(el.id);
+            break;
+          }
+        }
+      }
+
+      const idSet = new Set<string>([...selectedIds, ...extraIds]);
+      finalElementIds = Array.from(idSet);
+    }
+
+    const newEvent = createEvent(finalElementIds, maxOrder);
 
     // 更新元素
     const updatedEvents = [...events, newEvent];
@@ -200,12 +236,13 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
     setSelectedEventId(newEvent.id);
   }, [selectedElements, events, elements, currentFrame?.id, app]);
 
-  // 删除事件
+  // 删除事件（并重新整理 order）
   const deleteEvent = useCallback(
     (eventId: string) => {
-      const updatedEvents = events.filter((e) => e.id !== eventId);
+      const remainingEvents = events.filter((e) => e.id !== eventId);
+      const reordered = reorderEvents(remainingEvents);
       const updatedElements = eventsToElements(
-        updatedEvents,
+        reordered,
         elements as any,
         currentFrame?.id,
       );
@@ -219,14 +256,20 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
     [events, elements, currentFrame?.id, selectedEventId, app],
   );
 
-  // 更新事件属性
+  // 更新事件属性（修改 startMode 时重新计算顺序）
   const updateEvent = useCallback(
     (eventId: string, updates: Partial<AnimationEvent>) => {
       const updatedEvents = events.map((e) =>
         e.id === eventId ? { ...e, ...updates } : e,
       );
+
+      const finalEvents =
+        updates.startMode !== undefined
+          ? reorderEvents(updatedEvents)
+          : updatedEvents;
+
       const updatedElements = eventsToElements(
-        updatedEvents,
+        finalEvents,
         elements as any,
         currentFrame?.id,
       );
@@ -236,19 +279,22 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
     [events, elements, currentFrame?.id, app],
   );
 
-  // 重排事件顺序
+  // 重排事件顺序（首个事件不能是 withPrevious）
   const reorderEventList = useCallback(
     (newOrder: string[]) => {
-      const reorderedEvents = newOrder
-        .map((id, index) => {
-          const event = events.find((e) => e.id === id);
-          if (!event) return null;
-          return { ...event, order: index + 1 };
-        })
-        .filter((e): e is AnimationEvent => e !== null);
+      const orderedEvents = newOrder
+        .map((id) => events.find((e) => e.id === id))
+        .filter((e): e is AnimationEvent => e !== undefined)
+        .map((e, index) => {
+          const startMode =
+            index === 0 && e.startMode === "withPrevious"
+              ? "onClick"
+              : e.startMode;
+          return { ...e, order: index + 1, startMode };
+        });
 
       const updatedElements = eventsToElements(
-        reorderedEvents,
+        orderedEvents,
         elements as any,
         currentFrame?.id,
       );
@@ -286,28 +332,61 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
     [events, elements],
   );
 
-  // 获取可用的动画目标选项
+  // 获取可用的动画目标选项（根据装饰组与 customData.role 精细过滤）
   const getAvailableAnimationTargets = useCallback(
     (eventId: string): AnimationTarget[] | null => {
       const event = events.find((e) => e.id === eventId);
-      if (!event) return null;
+      if (!event || event.elements.length === 0) return null;
 
-      // 检查是否包含带装饰的文字组
-      let hasDecorationGroup = false;
-      for (const elementId of event.elements) {
-        const el = elements.find((e) => e.id === elementId);
-        if (!el) continue;
+      // 事件中的元素
+      const eventElements = event.elements
+        .map((id) => elements.find((el) => el.id === id))
+        .filter((el): el is ExcalidrawElement => el !== undefined);
 
+      // 收集所有 text-decoration-group
+      const decorationGroupIds = new Set<string>();
+      for (const el of eventElements) {
         const groupIds = (el as any).groupIds as string[] | undefined;
-        if (groupIds?.some((gid) => gid.includes("text-decoration-group"))) {
-          hasDecorationGroup = true;
-          break;
+        if (groupIds) {
+          for (const gid of groupIds) {
+            if (gid.includes("text-decoration-group")) {
+              decorationGroupIds.add(gid);
+            }
+          }
         }
       }
 
-      if (!hasDecorationGroup) return null;
+      if (decorationGroupIds.size === 0) return null;
 
-      return ["all", "text", "background", "underline", "strike"];
+      // 收集角色信息
+      const roles = new Set<string>();
+      for (const el of eventElements) {
+        const customData = (el as any).customData;
+        if (customData?.role) {
+          roles.add(customData.role);
+        }
+        if (el.type === "text") {
+          roles.add("text");
+        }
+      }
+
+      const targets: AnimationTarget[] = ["all"];
+      if (roles.has("text") || roles.has("option") || roles.has("stem")) {
+        targets.push("text");
+      }
+      if (roles.has("text-background")) {
+        targets.push("background");
+      }
+      if (roles.has("text-underline")) {
+        targets.push("underline");
+      }
+      if (roles.has("text-strike")) {
+        targets.push("strike");
+      }
+
+      if (targets.length <= 1) return null;
+
+      return targets;
     },
     [events, elements],
   );

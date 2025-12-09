@@ -1,0 +1,189 @@
+@import "../css/variables.module.scss";
+
+.excalidraw {
+  .buttonList .editable-dropdown {
+    position: relative;
+    display: inline-flex;
+
+    // 输入框容器（包含输入框和箭头）
+    &__input-wrapper {
+      display: flex;
+      align-items: center;
+      background: var(--island-bg-color);
+      border-radius: var(--border-radius-md);
+      border: 1px solid var(--default-border-color);
+      box-sizing: border-box;
+      height: 2rem; // 32px
+      overflow: hidden;
+      transition: border-color 0.15s ease;
+
+      &:focus-within {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 1px var(--color-primary);
+      }
+    }
+
+    // 输入框
+    &__input {
+      width: 40px;
+      height: 100%;
+      padding: 0 0 0 8px;
+      border: none;
+      background: transparent;
+      font-size: 13px;
+      font-family: var(--ui-font);
+      color: var(--text-primary-color);
+      text-align: left;
+      outline: none;
+      margin: 0;
+
+      &::placeholder {
+        color: var(--color-text-secondary);
+      }
+
+      // 隐藏数字输入框的箭头
+      &::-webkit-outer-spin-button,
+      &::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      -moz-appearance: textfield;
+      appearance: textfield;
+
+      &:focus {
+        box-shadow: none !important; // 覆盖全局样式
+      }
+    }
+
+    // 下拉箭头按钮
+    &__toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 100%;
+      padding: 0;
+      border: none;
+      background: transparent !important; // 强制移除可能的背景
+      color: var(--color-gray-50);
+      cursor: pointer;
+      transition: color 0.15s ease;
+      box-shadow: none !important; // 移除可能的阴影
+
+      &:hover {
+        background: transparent !important; // hover 时也不要有背景
+        color: var(--text-primary-color);
+      }
+
+      svg {
+        width: 10px;
+        height: 6px;
+      }
+    }
+
+    // 下拉菜单
+    &__menu {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      width: 100%;
+      min-width: 64px;
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--island-bg-color);
+      border-radius: var(--border-radius-md);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      z-index: 1000; // 确保在最上层
+      padding: 4px 0;
+      margin: 0;
+      list-style: none;
+
+      // 覆盖全局可能的 buttonList 样式干扰
+      display: block !important;
+      flex-wrap: nowrap !important;
+      gap: 0 !important;
+
+      // 自定义滚动条
+      &::-webkit-scrollbar {
+        width: 4px;
+      }
+      &::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      &::-webkit-scrollbar-thumb {
+        background: var(--color-gray-30);
+        border-radius: 2px;
+      }
+    }
+
+    // 下拉选项
+    &__option {
+      display: block;
+      width: 100%;
+      padding: 6px 12px;
+      border: none;
+      margin: 0;
+      background: transparent;
+      font-size: 13px;
+      font-family: var(--ui-font);
+      color: var(--text-primary-color);
+      cursor: pointer;
+      text-align: left;
+      border-radius: 0; // 移除圆角
+      transition: background-color 0.1s ease;
+      white-space: nowrap;
+
+      // 移除 buttonList 可能加上的边框
+      box-shadow: none !important;
+      border: none !important;
+
+      &:hover {
+        background: var(--color-gray-10);
+      }
+
+      &--active {
+        background: #e6f4ff;
+        color: var(--color-primary);
+        font-weight: 600;
+
+        &:hover {
+          background: #e6f4ff; // 保持选中背景
+        }
+      }
+    }
+  }
+}
+
+// 深色模式适配
+:root.theme--dark .excalidraw {
+  .buttonList .editable-dropdown {
+    &__input-wrapper {
+      background: var(--island-bg-color);
+      border-color: var(--color-gray-70);
+
+      &:focus-within {
+        border-color: var(--color-primary);
+        box-shadow: 0 0 0 1px var(--color-primary);
+      }
+    }
+
+    &__menu {
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    &__option {
+      &:hover {
+        background: var(--color-gray-80);
+      }
+
+      &--active {
+        background: rgba(var(--color-primary-rgb), 0.2);
+        color: var(--color-primary);
+
+        &:hover {
+          background: rgba(var(--color-primary-rgb), 0.2);
+        }
+      }
+    }
+  }
+}

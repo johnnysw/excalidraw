@@ -199,7 +199,7 @@ export function createEvent(
     order: newOrder,
     elements: elementIds,
     ...DEFAULT_EVENT,
-    startMode: insertAfterOrder === 0 ? "onClick" : "afterPrevious",
+    startMode: "onClick", // 所有新建动画默认为"单击时"
   };
 
   return newEvent;

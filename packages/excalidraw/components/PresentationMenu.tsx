@@ -32,8 +32,10 @@ export const PresentationMenu: React.FC = () => {
     const [dragOverId, setDragOverId] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+    const [activeSlideId, setActiveSlideId] = useState<string | null>(null);
     const thumbnailCache = useRef<Map<string, string>>(new Map());
     const initialSlideOrderRef = useRef<string[]>(slideOrder);
+    const slideRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
     // Get all frame elements
     const frameElements = useMemo(() => {
@@ -41,6 +43,48 @@ export const PresentationMenu: React.FC = () => {
             isFrameLikeElement(el) && !el.isDeleted
         );
     }, [elements]);
+
+    // 监听选中元素变化，自动高亮对应的幻灯片
+    useEffect(() => {
+        const selectedIds = Object.keys(app.state.selectedElementIds || {});
+        if (selectedIds.length === 0) {
+            setActiveSlideId(null);
+            return;
+        }
+
+        // 找到第一个选中元素所属的 Frame
+        for (const id of selectedIds) {
+            const el = elements.find(e => e.id === id);
+            if (!el) continue;
+
+            // 如果选中的是 Frame 本身
+            if (isFrameLikeElement(el)) {
+                setActiveSlideId(el.id);
+                return;
+            }
+
+            // 如果选中的元素有 frameId
+            if (el.frameId) {
+                setActiveSlideId(el.frameId);
+                return;
+            }
+        }
+
+        setActiveSlideId(null);
+    }, [app.state.selectedElementIds, elements]);
+
+    // 当 activeSlideId 变化时，自动滚动到对应的幻灯片卡片
+    useEffect(() => {
+        if (activeSlideId) {
+            const slideEl = slideRefs.current.get(activeSlideId);
+            if (slideEl) {
+                slideEl.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'nearest',
+                });
+            }
+        }
+    }, [activeSlideId]);
 
     // Initialize slide order when frames change
     useEffect(() => {
@@ -223,23 +267,56 @@ export const PresentationMenu: React.FC = () => {
                 .catch((e) => console.error(e));
         }
 
-        // Pass the ordered frame IDs to presentation mode
-        setAppState({
+        // Pass the ordered frame IDs to presentation mode, always start from first slide
+        // 保存当前的侧边栏状态，退出演示模式时恢复
+        setAppState((state) => ({
+            ...state,
             presentationMode: true,
+            _savedOpenSidebar: state.openSidebar, // 保存当前侧边栏状态
             openSidebar: null,
             // Store custom slide order
             slideOrder: slideOrder,
-        } as any);
+            presentationSlideIndex: 0, // 始终从第1张幻灯片开始
+        } as any));
     }, [orderedSlides, slideOrder, setAppState, app.excalidrawContainerRef]);
 
-    // Click on slide to scroll to it
+    // Start presentation from a specific slide
+    const startFromSlide = useCallback((slideId: string) => {
+        const slideIndex = orderedSlides.findIndex(s => s.id === slideId);
+        if (slideIndex === -1) return;
+
+        // Store the custom order in appState or trigger presentation with the order
+        if (app.excalidrawContainerRef.current) {
+            app.excalidrawContainerRef.current
+                .requestFullscreen()
+                .catch((e) => console.error(e));
+        }
+
+        // Pass the ordered frame IDs to presentation mode, starting from the selected slide
+        // 保存当前的侧边栏状态，退出演示模式时恢复
+        setAppState((state) => ({
+            ...state,
+            presentationMode: true,
+            _savedOpenSidebar: state.openSidebar, // 保存当前侧边栏状态
+            openSidebar: null,
+            slideOrder: slideOrder,
+            presentationSlideIndex: slideIndex,
+        } as any));
+    }, [orderedSlides, slideOrder, setAppState, app.excalidrawContainerRef]);
+
+    // Click on slide to scroll to it and select the frame
     const handleSlideClick = useCallback((slide: SlideItem) => {
+        // 选中对应的 Frame，这会触发 activeSlideId 自动更新
+        setAppState({
+            selectedElementIds: { [slide.id]: true },
+        } as any);
+
         app.scrollToContent(slide.element, {
             fitToViewport: true,
             viewportZoomFactor: 0.9,
             animate: true,
         });
-    }, [app]);
+    }, [app, setAppState]);
 
     if (frameElements.length === 0) {
         return (
@@ -276,8 +353,15 @@ export const PresentationMenu: React.FC = () => {
                 {orderedSlides.map((slide, index) => (
                     <div
                         key={slide.id}
+                        ref={(el) => {
+                            if (el) {
+                                slideRefs.current.set(slide.id, el);
+                            } else {
+                                slideRefs.current.delete(slide.id);
+                            }
+                        }}
                         className={`PresentationMenu__slide ${draggedId === slide.id ? "dragging" : ""
-                            } ${dragOverId === slide.id ? "drag-over" : ""}`}
+                            } ${dragOverId === slide.id ? "drag-over" : ""} ${activeSlideId === slide.id ? "active" : ""}`}
                         draggable
                         onDragStart={(e) => handleDragStart(e, slide.id)}
                         onDragOver={(e) => handleDragOver(e, slide.id)}
@@ -296,20 +380,32 @@ export const PresentationMenu: React.FC = () => {
                         </div>
                         <div className="PresentationMenu__slide-footer">
                             <div className="PresentationMenu__slide-name">{slide.name}</div>
-                            <button
-                                className="PresentationMenu__note-btn"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleEditNote(slide.id);
-                                }}
-                                title={slideNotes?.[slide.id] ? "查看/编辑注释" : "添加注释"}
-                            >
-                                <span
-                                    className={slideNotes?.[slide.id] ? "has-note-dot" : "no-note-dot"}
-                                    aria-hidden
-                                />
-                                注释
-                            </button>
+                            <div className="PresentationMenu__slide-actions">
+                                <button
+                                    className="PresentationMenu__play-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        startFromSlide(slide.id);
+                                    }}
+                                    title="从此播放"
+                                >
+                                    {PlayIcon}
+                                </button>
+                                <button
+                                    className="PresentationMenu__note-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditNote(slide.id);
+                                    }}
+                                    title={slideNotes?.[slide.id] ? "查看/编辑注释" : "添加注释"}
+                                >
+                                    <span
+                                        className={slideNotes?.[slide.id] ? "has-note-dot" : "no-note-dot"}
+                                        aria-hidden
+                                    />
+                                    注释
+                                </button>
+                            </div>
                         </div>
                     </div>
                 ))}
