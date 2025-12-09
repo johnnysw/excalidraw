@@ -1,0 +1,114 @@
+@import "../css/variables.module.scss";
+
+.excalidraw {
+  .number-input {
+    display: inline-flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    background: var(--island-bg-color);
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--default-border-color);
+    box-sizing: border-box;
+    height: 2rem;
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+    width: 52px;
+    margin: 0;
+    flex-shrink: 0;
+    padding: 0;
+
+    &--focused {
+      border-color: var(--color-primary);
+    }
+
+    &__field {
+      flex: 1 1 auto;
+      width: 0;
+      height: 100%;
+      padding: 0 0 0 8px !important;
+      border: none !important;
+      background: transparent !important;
+      font-size: 13px;
+      font-family: var(--ui-font);
+      color: var(--text-primary-color);
+      text-align: left;
+      outline: none !important;
+      margin: 0 !important;
+      min-width: 0;
+      box-shadow: none !important;
+      border-radius: 0;
+      line-height: 2rem;
+
+      &::placeholder {
+        color: var(--color-text-secondary);
+      }
+
+      &:focus {
+        box-shadow: none !important;
+        outline: none !important;
+        border: none !important;
+      }
+    }
+
+    &__controls {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      width: 16px;
+      flex-shrink: 0;
+      margin: 0 2px 0 0;
+      padding: 0;
+    }
+
+    &__button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 50%;
+      width: 100%;
+      padding: 0;
+      margin: 0;
+      background: transparent;
+      color: var(--color-gray-40);
+      cursor: pointer;
+      transition: color 0.1s ease;
+      user-select: none;
+
+      &:hover {
+        color: var(--text-primary-color);
+      }
+
+      &:active {
+        color: var(--color-primary);
+      }
+
+      svg {
+        width: 8px;
+        height: 4px;
+        display: block;
+        margin: 0;
+      }
+    }
+  }
+}
+
+:root.theme--dark .excalidraw {
+  .number-input {
+    background: var(--island-bg-color);
+    border-color: var(--color-gray-70);
+
+    &--focused {
+      border-color: var(--color-primary);
+    }
+
+    &__button {
+      &:hover {
+        color: var(--text-primary-color);
+      }
+      &:active {
+        color: var(--color-primary);
+      }
+    }
+  }
+}

@@ -84,6 +84,7 @@ import type { CaptureUpdateActionType } from "@excalidraw/element";
 import { trackEvent } from "../analytics";
 import { RadioSelection } from "../components/RadioSelection";
 import { EditableDropdown } from "../components/EditableDropdown";
+import { NumberInput } from "../components/NumberInput";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
 import { TopPicks } from "../components/ColorPicker/TopPicks";
 import { FontPicker } from "../components/FontPicker/FontPicker";
@@ -1010,14 +1011,12 @@ export const actionChangeTextOutlineWidth = register<
     return (
       <fieldset>
         <legend>{t("labels.strokeWidth")}</legend>
-        <input
-          type="number"
+        <NumberInput
+          value={outlineWidth}
           min={0}
           max={20}
           step={1}
-          value={outlineWidth}
-          onChange={(event) => {
-            const next = Number(event.target.value) || 0;
+          onChange={(next) => {
             updateData({ currentItemTextOutlineWidth: next });
           }}
         />
@@ -2007,35 +2006,24 @@ export const actionChangeLineHeight = register<number>({
               );
             }}
           />
-          <input
-            type="number"
-            min="0.5"
-            max="5"
-            step="0.1"
+          <NumberInput
+            value={currentValue !== null ? currentValue : 1.25}
+            step={0.1}
+            min={0.5}
+            max={5}
+            onChange={(value) => {
+              withCaretPositionPreservation(
+                () => updateData(value),
+                isCompact,
+                !!appState.editingTextElement,
+                data?.onPreventClose,
+              );
+            }}
             style={{
-              width: "40px",
-              height: "32px",
-              borderRadius: "8px",
-              border: "none",
-              textAlign: "center",
-              fontSize: "14px",
-              background: isCustomValue ? "var(--color-primary-light)" : "var(--button-bg)",
-              outline: isCustomValue ? "2px solid var(--color-primary)" : "none",
-              padding: "0 4px",
+              width: "52px",
+              color: isCustomValue ? "var(--color-primary)" : "var(--text-primary-color)",
+              fontWeight: isCustomValue ? 600 : 400,
             }}
-            value={currentValue !== null ? currentValue : ""}
-            onChange={(e) => {
-              const value = parseFloat(e.target.value);
-              if (!isNaN(value) && value >= 0.5 && value <= 5) {
-                withCaretPositionPreservation(
-                  () => updateData(value),
-                  isCompact,
-                  !!appState.editingTextElement,
-                  data?.onPreventClose,
-                );
-              }
-            }}
-            data-testid="line-height-custom"
           />
         </div>
       </fieldset>

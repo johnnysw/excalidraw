@@ -1,6 +1,20 @@
 @import "../css/variables.module.scss";
 
 .excalidraw {
+  // 强制显示行高输入框的上下箭头
+  input[type="number"].line-height-input {
+    &::-webkit-outer-spin-button,
+    &::-webkit-inner-spin-button {
+      -webkit-appearance: inner-spin-button !important;
+      opacity: 1 !important;
+      display: block !important;
+      margin: 0; // 移除右边距，靠右对齐
+      height: auto;
+    }
+    -moz-appearance: number-input !important;
+    appearance: auto !important;
+  }
+
   .buttonList .editable-dropdown {
     position: relative;
     display: inline-flex;
@@ -19,7 +33,7 @@
 
       &:focus-within {
         border-color: var(--color-primary);
-        box-shadow: 0 0 0 1px var(--color-primary);
+        box-shadow: none; // 移除阴影，只保留 1px 边框
       }
     }
 
@@ -163,7 +177,7 @@
 
       &:focus-within {
         border-color: var(--color-primary);
-        box-shadow: 0 0 0 1px var(--color-primary);
+        box-shadow: none; // 移除阴影，只保留 1px 边框
       }
     }
 
