@@ -110,6 +110,9 @@ export const textWysiwyg = ({
   app: App;
   autoSelect?: boolean;
 }): SubmitHandler => {
+  let currentSelection: { start: number; end: number } | null = null;
+  let isInputting = false;
+
   const textPropertiesUpdated = (
     updatedTextElement: ExcalidrawTextElement,
     editable: HTMLElement,
@@ -467,9 +470,12 @@ export const textWysiwyg = ({
     };
 
     editable.oninput = () => {
+      isInputting = true;
+      updateTextEditorSelection();
       const raw = editable.innerText || "";
       const normalized = normalizeText(raw);
       onChange(normalized);
+      isInputting = false;
     };
   }
 
@@ -569,16 +575,18 @@ export const textWysiwyg = ({
       node = walker.nextNode();
     }
 
-    if (start === -1 || end === -1 || start === end) {
+    if (start === -1 || end === -1) {
+      currentSelection = null;
       app.setState({ textEditorSelection: null });
       return;
     }
 
+    currentSelection = { start, end };
     app.setState({ textEditorSelection: { start, end } });
   };
 
   function restoreSelectionFromAppState() {
-    const sel = app.state.textEditorSelection;
+    const sel = isInputting ? currentSelection : app.state.textEditorSelection;
     if (!sel) {
       return;
     }
