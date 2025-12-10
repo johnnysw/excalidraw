@@ -9,7 +9,6 @@ import {
   useApp,
   useExcalidrawElements,
   useExcalidrawActionManager,
-  useEditorInterface,
 } from "./App";
 import { getSelectedElements, getTargetElements } from "../scene";
 import { isTransparent } from "@excalidraw/common";
@@ -103,7 +102,6 @@ export const PropertiesMenu: React.FC = () => {
   const app = useApp();
   const elements = useExcalidrawElements();
   const actionManager = useExcalidrawActionManager();
-  const editorInterface = useEditorInterface();
 
   // 获取选中的元素
   const selectedElements = getSelectedElements(elements, app.state);
@@ -192,24 +190,25 @@ export const PropertiesMenu: React.FC = () => {
 
   return (
     <div className="PropertiesMenu">
-      {/* 颜色 */}
-      {(canEditStrokeColor || canEditBackgroundColor) && (
+      {/* 边框色 */}
+      {canEditStrokeColor && (
         <div className="PropertiesMenu__section">
           <div className="PropertiesMenu__section-title">
             {getStrokeColorLabel(targetElements, app.state.activeTool)}
           </div>
           <div className="PropertiesMenu__color-row">
-            {canEditStrokeColor &&
-              actionManager.renderAction("changeStrokeColor")}
+            {actionManager.renderAction("changeStrokeColor")}
           </div>
-          {canEditBackgroundColor && (
-            <>
-              <div className="PropertiesMenu__section-title">填充色</div>
-              <div className="PropertiesMenu__color-row">
-                {actionManager.renderAction("changeBackgroundColor")}
-              </div>
-            </>
-          )}
+        </div>
+      )}
+
+      {/* 填充色 */}
+      {canEditBackgroundColor && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">填充色</div>
+          <div className="PropertiesMenu__color-row">
+            {actionManager.renderAction("changeBackgroundColor")}
+          </div>
         </div>
       )}
 
@@ -414,10 +413,8 @@ export const PropertiesMenu: React.FC = () => {
         <div className="PropertiesMenu__section">
           <div className="PropertiesMenu__section-title">操作</div>
           <div className="PropertiesMenu__button-row buttonList">
-            {editorInterface.formFactor !== "phone" &&
-              actionManager.renderAction("duplicateSelection")}
-            {editorInterface.formFactor !== "phone" &&
-              actionManager.renderAction("deleteSelectedElements")}
+            {actionManager.renderAction("duplicateSelection")}
+            {actionManager.renderAction("deleteSelectedElements")}
             {showLinkIcon && actionManager.renderAction("hyperlink")}
             {actionManager.renderAction("group")}
             {actionManager.renderAction("ungroup")}

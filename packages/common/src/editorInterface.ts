@@ -136,17 +136,10 @@ const isMobileOrTablet = (): boolean => {
 };
 
 export const getFormFactor = (
-  editorWidth: number,
-  editorHeight: number,
+  _editorWidth: number,
+  _editorHeight: number,
 ): EditorInterface["formFactor"] => {
-  if (isMobileBreakpoint(editorWidth, editorHeight)) {
-    return "phone";
-  }
-
-  if (isTabletBreakpoint(editorWidth, editorHeight)) {
-    return "tablet";
-  }
-
+  // 始终返回 desktop，取消移动端布局
   return "desktop";
 };
 
