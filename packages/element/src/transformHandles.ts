@@ -200,10 +200,10 @@ export const getTransformHandlesFromCoords = (
       ? undefined
       : generateTransformHandle(
           x1 + width / 2 - handleWidth / 2,
-          y1 -
-            dashedLineMargin -
-            handleMarginY +
-            centeringOffset -
+          y2 +
+            dashedLineMargin +
+            handleMarginY -
+            centeringOffset +
             ROTATION_RESIZE_HANDLE_GAP / zoom.value,
           handleWidth,
           handleHeight,

@@ -92,6 +92,36 @@ import type {
   RenderableElementsMap,
 } from "../scene/types";
 
+// 旋转图标 SVG 路径
+const ROTATION_ICON_PATH_STRING = "M129.9 292.5C143.2 199.5 223.3 128 320 128c53 0 101 21.5 135.8 56.2l.6.6l7.6 7.2h-47.9c-17.7 0-32 14.3-32 32s14.3 32 32 32h128c17.7 0 32-14.3 32-32V96c0-17.7-14.3-32-32-32s-32 14.3-32 32v53.4l-11.3-10.7C454.5 92.6 390.5 64 320 64C191 64 84.3 159.4 66.6 283.5c-2.5 17.5 9.6 33.7 27.1 36.2s33.7-9.7 36.2-27.1zm443.5 64c2.5-17.5-9.7-33.7-27.1-36.2s-33.7 9.7-36.2 27.1c-13.3 93-93.4 164.5-190.1 164.5c-53 0-101-21.5-135.8-56.2l-.6-.6l-7.6-7.2h47.9c17.7 0 32-14.3 32-32s-14.3-32-32-32L96 384c-8.5 0-16.7 3.4-22.7 9.5s-9.4 14.2-9.3 22.8l1 127c.1 17.7 14.6 31.9 32.3 31.7s31.9-14.6 31.7-32.3l-.4-51.5l10.7 10.1C185.6 547.4 249.5 576 320 576c129 0 235.7-95.4 253.4-219.5";
+
+let rotationIconPath2D: Path2D | null = null;
+
+// 绘制旋转图标
+const drawRotationIcon = (
+  context: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  size: number,
+  strokeColor: string,
+  zoom: number,
+) => {
+  if (!rotationIconPath2D) {
+    rotationIconPath2D = new Path2D(ROTATION_ICON_PATH_STRING);
+  }
+
+  const scale = size / 640; // 原始 SVG 是 640x640
+
+  context.save();
+  context.translate(cx - size / 2, cy - size / 2);
+  context.scale(scale, scale);
+
+  context.fillStyle = strokeColor;
+  context.fill(rotationIconPath2D);
+
+  context.restore();
+};
+
 const renderElbowArrowMidPointHighlight = (
   context: CanvasRenderingContext2D,
   appState: InteractiveCanvasAppState,
@@ -939,7 +969,18 @@ const renderTransformHandles = (
         context.strokeStyle = renderConfig.selectionColor;
       }
       if (key === "rotation") {
-        fillCircle(context, x + width / 2, y + height / 2, width / 2, true);
+        // 绘制旋转图标
+        const iconSize = width * 2.5; // 图标大小
+        const cx = x + width / 2;
+        const cy = y + height / 2;
+        const strokeColor = renderConfig.selectionColor || "#6965db";
+
+        // 先绘制白色背景圆形
+        context.fillStyle = "#ffffff";
+        fillCircle(context, cx, cy, iconSize / 2, false);
+
+        // 绘制旋转图标
+        drawRotationIcon(context, cx, cy, iconSize, strokeColor, appState.zoom.value);
         // prefer round corners if roundRect API is available
       } else if (context.roundRect) {
         context.beginPath();

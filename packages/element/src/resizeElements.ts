@@ -217,7 +217,7 @@ const rotateSingleElement = (
   if (isFrameLikeElement(element)) {
     angle = 0 as Radians;
   } else {
-    angle = ((5 * Math.PI) / 2 +
+    angle = ((3 * Math.PI) / 2 +
       Math.atan2(pointerY - cy, pointerX - cx)) as Radians;
     if (shouldRotateWithDiscreteAngle) {
       angle = (angle + SHIFT_LOCKING_ANGLE / 2) as Radians;
