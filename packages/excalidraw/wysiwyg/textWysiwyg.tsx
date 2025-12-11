@@ -112,6 +112,7 @@ export const textWysiwyg = ({
 }): SubmitHandler => {
   let currentSelection: { start: number; end: number } | null = null;
   let isInputting = false;
+  let isComposing = false;
 
   const textPropertiesUpdated = (
     updatedTextElement: ExcalidrawTextElement,
@@ -285,11 +286,13 @@ export const textWysiwyg = ({
         editable.style.fontFamily = getFontFamilyString(updatedTextElement);
       }
 
-      renderStyledTextFromElement(updatedTextElement);
+      if (!isComposing) {
+        renderStyledTextFromElement(updatedTextElement);
 
-      // After re-rendering styled text, restore selection (if any)
-      // so users can continue applying styles to the same range.
-      restoreSelectionFromAppState();
+        // After re-rendering styled text, restore selection (if any)
+        // so users can continue applying styles to the same range.
+        restoreSelectionFromAppState();
+      }
 
       app.scene.mutateElement(updatedTextElement, { x: coordX, y: coordY });
     }
@@ -550,30 +553,86 @@ export const textWysiwyg = ({
 
     let start = -1;
     let end = -1;
-    let index = 0;
+    let currentLength = 0;
 
-    const walker = document.createTreeWalker(
-      editable,
-      NodeFilter.SHOW_TEXT,
-      null,
-    );
+    // These elements behave like block elements, effectively adding a newline
+    // when they appear after other content.
+    const blockElements = new Set([
+      "DIV",
+      "P",
+      "LI",
+      "UL",
+      "OL",
+      "BLOCKQUOTE",
+      "H1",
+      "H2",
+      "H3",
+      "H4",
+      "H5",
+      "H6",
+    ]);
 
-    let node = walker.nextNode();
-    while (node) {
-      const text = node.textContent || "";
-
-      if (node === range.startContainer) {
-        start = index + range.startOffset;
+    const traverse = (node: Node) => {
+      if (start !== -1 && end !== -1) {
+        return;
       }
 
-      if (node === range.endContainer) {
-        end = index + range.endOffset;
-        break;
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (range.startContainer === node) {
+          start = currentLength + range.startOffset;
+        }
+        if (range.endContainer === node) {
+          end = currentLength + range.endOffset;
+        }
+        currentLength += (node.textContent || "").length;
+        return;
       }
 
-      index += text.length;
-      node = walker.nextNode();
-    }
+      if (node.nodeName === "BR") {
+        if (range.startContainer === node) {
+          start = currentLength + range.startOffset;
+        }
+        if (range.endContainer === node) {
+          end = currentLength + range.endOffset;
+        }
+        currentLength += 1;
+        return;
+      }
+
+      const children = node.childNodes;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i];
+        // If we are entering a block element and we already have content,
+        // assume an implicit newline (matching innerText behavior).
+        if (currentLength > 0 && blockElements.has(child.nodeName)) {
+          currentLength += 1;
+        }
+
+        if (range.startContainer === node && range.startOffset === i) {
+          start = currentLength;
+        }
+        if (range.endContainer === node && range.endOffset === i) {
+          end = currentLength;
+        }
+
+        traverse(child);
+        if (start !== -1 && end !== -1) {
+          return;
+        }
+      }
+
+      if (
+        range.startContainer === node &&
+        range.startOffset === children.length
+      ) {
+        start = currentLength;
+      }
+      if (range.endContainer === node && range.endOffset === children.length) {
+        end = currentLength;
+      }
+    };
+
+    traverse(editable);
 
     if (start === -1 || end === -1) {
       currentSelection = null;
@@ -641,6 +700,14 @@ export const textWysiwyg = ({
     selection.removeAllRanges();
     selection.addRange(range);
   }
+
+  editable.addEventListener("compositionstart", () => {
+    isComposing = true;
+  });
+
+  editable.addEventListener("compositionend", () => {
+    isComposing = false;
+  });
 
   // Listen for selection changes
   editable.onselect = updateTextEditorSelection;
@@ -730,10 +797,11 @@ export const textWysiwyg = ({
     }
 
     const finalText = normalizeText(editable.innerText || "");
+    const collapsedFinalText = finalText.replace(/\n{2,}$/g, "\n");
 
     onSubmit({
       viaKeyboard: submittedViaKeyboard,
-      nextOriginalText: finalText,
+      nextOriginalText: collapsedFinalText,
     });
   };
 

@@ -15,6 +15,33 @@ interface SlideItem {
 }
 
 export const PresentationMenu: React.FC = () => {
+    // 用于延迟渲染完整内容，确保 Tab 切换动画先完成
+    const [isReady, setIsReady] = useState(false);
+
+    useEffect(() => {
+        // 使用 requestAnimationFrame 延迟到下一帧再渲染完整内容
+        const rafId = requestAnimationFrame(() => {
+            setIsReady(true);
+        });
+        return () => cancelAnimationFrame(rafId);
+    }, []);
+
+    // 首次挂载时先显示 loading，让 Tab 切换立即响应
+    if (!isReady) {
+        return (
+            <div className="PresentationMenu">
+                <div className="PresentationMenu__initializing">
+                    <span className="PresentationMenu__loading-spinner" />
+                    <span>加载中...</span>
+                </div>
+            </div>
+        );
+    }
+
+    return <PresentationMenuContent />;
+};
+
+const PresentationMenuContent: React.FC = () => {
     const app = useApp();
     const elements = useExcalidrawElements();
     const setAppState = useExcalidrawSetAppState();
@@ -24,6 +51,7 @@ export const PresentationMenu: React.FC = () => {
     }, [app.state]);
 
     const [slides, setSlides] = useState<SlideItem[]>([]);
+    const [isLoadingThumbnails, setIsLoadingThumbnails] = useState(true);
     const [slideOrder, setSlideOrder] = useState<string[]>(() => {
         const order = (app.state as any).slideOrder as string[] | undefined;
         return Array.isArray(order) ? order.filter((id) => typeof id === "string") : [];
@@ -141,54 +169,80 @@ export const PresentationMenu: React.FC = () => {
 
     // Generate thumbnails for frames
     useEffect(() => {
-        const generateThumbnails = async () => {
-            const newSlides: SlideItem[] = [];
+        // 先立即创建不含缩略图的 slides 列表，让 UI 快速响应
+        const initialSlides: SlideItem[] = frameElements.map((frame, index) => ({
+            id: frame.id,
+            name: frame.name || `幻灯片 ${index + 1}`,
+            thumbnail: thumbnailCache.current.get(frame.id) || null,
+            element: frame,
+        }));
+        setSlides(initialSlides);
 
-            for (const frame of frameElements) {
-                let thumbnail = thumbnailCache.current.get(frame.id) || null;
+        // 检查是否所有缩略图都已缓存
+        const allCached = frameElements.every(frame => thumbnailCache.current.has(frame.id));
+        if (allCached) {
+            setIsLoadingThumbnails(false);
+            return;
+        }
 
-                if (!thumbnail) {
-                    try {
-                        // Get elements inside this frame
-                        const elementsInFrame = elements.filter(
-                            el => el.frameId === frame.id && !el.isDeleted
-                        );
+        setIsLoadingThumbnails(true);
 
-                        // exportToCanvas signature: (elements, appState, files, options, createCanvas?, loadFonts?)
-                        const canvas = await exportToCanvas(
-                            [frame, ...elementsInFrame] as any,
-                            {
-                                ...app.state,
-                                exportScale: 1,
-                                exportWithDarkMode: false,
-                            } as any,
-                            app.files,
-                            {
-                                exportBackground: true,
-                                viewBackgroundColor: "#ffffff",
-                                exportingFrame: frame,
-                            }
-                        );
+        // 使用 requestAnimationFrame 延迟执行缩略图生成，确保 Tab 切换动画先完成
+        const rafId = requestAnimationFrame(() => {
+            const generateThumbnails = async () => {
+                const updatedSlides: SlideItem[] = [];
 
-                        thumbnail = canvas.toDataURL("image/png", 0.7);
-                        thumbnailCache.current.set(frame.id, thumbnail);
-                    } catch (error) {
-                        console.error("Failed to generate thumbnail:", error);
+                for (const frame of frameElements) {
+                    let thumbnail = thumbnailCache.current.get(frame.id) || null;
+
+                    if (!thumbnail) {
+                        try {
+                            // Get elements inside this frame
+                            const elementsInFrame = elements.filter(
+                                el => el.frameId === frame.id && !el.isDeleted
+                            );
+
+                            // exportToCanvas signature: (elements, appState, files, options, createCanvas?, loadFonts?)
+                            const canvas = await exportToCanvas(
+                                [frame, ...elementsInFrame] as any,
+                                {
+                                    ...app.state,
+                                    exportScale: 1,
+                                    exportWithDarkMode: false,
+                                } as any,
+                                app.files,
+                                {
+                                    exportBackground: true,
+                                    viewBackgroundColor: "#ffffff",
+                                    exportingFrame: frame,
+                                }
+                            );
+
+                            thumbnail = canvas.toDataURL("image/png", 0.7);
+                            thumbnailCache.current.set(frame.id, thumbnail);
+                        } catch (error) {
+                            console.error("Failed to generate thumbnail:", error);
+                        }
                     }
+
+                    updatedSlides.push({
+                        id: frame.id,
+                        name: frame.name || `幻灯片 ${updatedSlides.length + 1}`,
+                        thumbnail,
+                        element: frame,
+                    });
                 }
 
-                newSlides.push({
-                    id: frame.id,
-                    name: frame.name || `幻灯片 ${newSlides.length + 1}`,
-                    thumbnail,
-                    element: frame,
-                });
-            }
+                setSlides(updatedSlides);
+                setIsLoadingThumbnails(false);
+            };
 
-            setSlides(newSlides);
+            generateThumbnails();
+        });
+
+        return () => {
+            cancelAnimationFrame(rafId);
         };
-
-        generateThumbnails();
     }, [frameElements, elements, app.state, app.files]);
 
     // Get ordered slides
@@ -350,6 +404,12 @@ export const PresentationMenu: React.FC = () => {
             </div>
 
             <div className="PresentationMenu__list">
+                {isLoadingThumbnails && (
+                    <div className="PresentationMenu__loading">
+                        <span className="PresentationMenu__loading-spinner" />
+                        <span>正在加载缩略图...</span>
+                    </div>
+                )}
                 {orderedSlides.map((slide, index) => (
                     <div
                         key={slide.id}
@@ -427,3 +487,5 @@ export const PresentationMenu: React.FC = () => {
         </div>
     );
 };
+
+PresentationMenuContent.displayName = "PresentationMenuContent";

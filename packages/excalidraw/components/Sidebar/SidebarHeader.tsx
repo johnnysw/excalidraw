@@ -2,10 +2,10 @@ import clsx from "clsx";
 import { useContext } from "react";
 
 import { t } from "../../i18n";
-import { useEditorInterface } from "../App";
 import { Button } from "../Button";
 import { Tooltip } from "../Tooltip";
 import { CloseIcon, PinIcon } from "../icons";
+import { useEditorInterface } from "../App";
 
 import { SidebarPropsContext } from "./common";
 

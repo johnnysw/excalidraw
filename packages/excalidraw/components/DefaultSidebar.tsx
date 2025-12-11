@@ -107,19 +107,25 @@ export const DefaultSidebar = Object.assign(
           <Sidebar.Tabs>
             <Sidebar.Header>
               <Sidebar.TabTriggers>
-                <Sidebar.TabTrigger tab={PROPERTIES_SIDEBAR_TAB}>
+                <Sidebar.TabTrigger
+                  tab={PROPERTIES_SIDEBAR_TAB}
+                  title="属性"
+                >
                   {PropertiesIcon}
                 </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={ANIMATION_SIDEBAR_TAB}>
+                <Sidebar.TabTrigger tab={ANIMATION_SIDEBAR_TAB} title="动画">
                   {AnimationIcon}
                 </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={PRESENTATION_SIDEBAR_TAB}>
+                <Sidebar.TabTrigger
+                  tab={PRESENTATION_SIDEBAR_TAB}
+                  title="幻灯片"
+                >
                   {ViewerModeIcon}
                 </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB}>
+                <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB} title="搜索">
                   {searchIcon}
                 </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB}>
+                <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB} title="素材库">
                   {LibraryIcon}
                 </Sidebar.TabTrigger>
                 <DefaultSidebarTabTriggersTunnel.Out />

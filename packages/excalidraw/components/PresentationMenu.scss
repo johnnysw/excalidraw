@@ -374,4 +374,41 @@
         font-size: 12px !important;
         color: var(--color-gray-40) !important;
     }
+
+    &__loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        gap: 12px;
+        color: var(--color-gray-50);
+        font-size: 13px;
+    }
+
+    &__initializing {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        gap: 12px;
+        color: var(--color-gray-50);
+        font-size: 14px;
+    }
+
+    &__loading-spinner {
+        width: 24px;
+        height: 24px;
+        border: 2px solid var(--color-gray-20);
+        border-top-color: var(--color-primary);
+        border-radius: 50%;
+        animation: presentation-spin 0.8s linear infinite;
+    }
+
+    @keyframes presentation-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
 }
