@@ -137,14 +137,6 @@ export class ActionManager {
     const elements = this.getElementsIncludingDeleted();
     const appState = this.getAppState();
 
-    console.log("[action] executeAction", {
-      name: action.name,
-      source,
-      value,
-      editingTextElement: appState.editingTextElement,
-      textEditorSelection: (appState as any).textEditorSelection,
-    });
-
     trackAction(action, source, appState, elements, this.app, value);
 
     this.updater(action.perform(elements, appState, value, this.app));
@@ -169,12 +161,6 @@ export class ActionManager {
       const elements = this.getElementsIncludingDeleted();
       const appState = this.getAppState();
       const updateData = (formState?: any) => {
-        console.log("[action] updateData", {
-          name,
-          formState,
-          editingTextElement: this.getAppState().editingTextElement,
-          textEditorSelection: (this.getAppState() as any).textEditorSelection,
-        });
         trackAction(action, "ui", appState, elements, this.app, formState);
 
         this.updater(

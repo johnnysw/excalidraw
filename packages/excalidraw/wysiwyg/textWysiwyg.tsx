@@ -289,6 +289,13 @@ export const textWysiwyg = ({
       if (!isComposing) {
         renderStyledTextFromElement(updatedTextElement);
 
+        // After rendering rich text, check if content height exceeds container height
+        // (e.g., when some text has a larger fontSize via textStyleRanges).
+        // If so, expand the editor to fit the content.
+        if (editable.scrollHeight > editable.clientHeight) {
+          editable.style.height = `${editable.scrollHeight * 1.05}px`;
+        }
+
         // After re-rendering styled text, restore selection (if any)
         // so users can continue applying styles to the same range.
         restoreSelectionFromAppState();
@@ -537,7 +544,7 @@ export const textWysiwyg = ({
   const updateTextEditorSelection = () => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
-      app.setState({ textEditorSelection: null });
+      // Don't clear textEditorSelection here - preserve it for property panel actions
       return;
     }
 
@@ -547,7 +554,7 @@ export const textWysiwyg = ({
       !editable.contains(range.startContainer) ||
       !editable.contains(range.endContainer)
     ) {
-      app.setState({ textEditorSelection: null });
+      // Don't clear textEditorSelection here - preserve it for property panel actions
       return;
     }
 

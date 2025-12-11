@@ -189,7 +189,7 @@ export const PropertiesMenu: React.FC = () => {
   }
 
   return (
-    <div className="PropertiesMenu">
+    <div className="PropertiesMenu properties-content">
       {/* 边框色 */}
       {canEditStrokeColor && (
         <div className="PropertiesMenu__section">

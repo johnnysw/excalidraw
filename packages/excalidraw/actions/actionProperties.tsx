@@ -578,9 +578,9 @@ export const actionChangeStrokeColor = register<
   trackEvent: false,
   perform: (elements, appState, value, app) => {
     const color = value?.currentItemStrokeColor;
-    console.log("[richText] actionChangeStrokeColor perform", {
+    console.log("[DEBUG] changeStrokeColor triggered", {
       color,
-      editingTextElement: appState.editingTextElement,
+      hasEditingTextElement: !!appState.editingTextElement,
       textEditorSelection: appState.textEditorSelection,
     });
 
@@ -597,13 +597,6 @@ export const actionChangeStrokeColor = register<
 
       if (editingElement && isTextElement(editingElement)) {
         const { start, end } = appState.textEditorSelection;
-        console.log("[richText] changeStrokeColor selection", {
-          elementId: editingElement.id,
-          text: editingElement.originalText,
-          start,
-          end,
-          existingRanges: editingElement.richTextRanges,
-        });
         const newRichTextRanges = applyColorToRichTextRange(
           editingElement.richTextRanges,
           start,
@@ -626,14 +619,6 @@ export const actionChangeStrokeColor = register<
           },
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         };
-
-        const updated = nextElements.elements.find(
-          (el) => el.id === editingElement.id,
-        ) as ExcalidrawTextElement | undefined;
-        console.log("[richText] changeStrokeColor result", {
-          elementId: updated?.id,
-          richTextRanges: (updated as any)?.richTextRanges,
-        });
 
         return nextElements;
       }
@@ -1209,11 +1194,6 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
     label: "labels.fontSize",
     trackEvent: false,
     perform: (elements, appState, value, app) => {
-      console.log("[richText] actionChangeFontSize perform", {
-        value,
-        editingTextElement: appState.editingTextElement,
-        textEditorSelection: appState.textEditorSelection,
-      });
       // When editing a text element with a selection, apply font size
       // locally via textStyleRanges instead of changing the whole element.
       if (
@@ -1228,14 +1208,6 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
 
         if (editingElement && isTextElement(editingElement)) {
           const { start, end } = appState.textEditorSelection;
-          console.log("[richText] changeFontSize selection", {
-            elementId: editingElement.id,
-            text: editingElement.originalText,
-            start,
-            end,
-            existingRanges: editingElement.textStyleRanges,
-            value,
-          });
           const newTextStyleRanges = applyFontSizeToRange(
             editingElement.textStyleRanges,
             start,
@@ -1261,14 +1233,6 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
             },
             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
           };
-
-          const updated = next.elements.find(
-            (el) => el.id === editingElement.id,
-          ) as ExcalidrawTextElement | undefined;
-          console.log("[richText] changeFontSize result", {
-            elementId: updated?.id,
-            textStyleRanges: (updated as any)?.textStyleRanges,
-          });
 
           return next;
         }
@@ -1470,14 +1434,6 @@ export const actionChangeFontFamily = register<{
 
       if (editingElement && isTextElement(editingElement)) {
         const { start, end } = appState.textEditorSelection;
-        console.log("[richText] changeFontFamily selection", {
-          elementId: editingElement.id,
-          text: editingElement.originalText,
-          start,
-          end,
-          existingRanges: editingElement.textStyleRanges,
-          fontFamily: nextFontFamily,
-        });
         const newTextStyleRanges = applyFontFamilyToRange(
           editingElement.textStyleRanges,
           start,
@@ -1503,14 +1459,6 @@ export const actionChangeFontFamily = register<{
           },
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         };
-
-        const updated = next.elements.find(
-          (el) => el.id === editingElement.id,
-        ) as ExcalidrawTextElement | undefined;
-        console.log("[richText] changeFontFamily result", {
-          elementId: updated?.id,
-          textStyleRanges: (updated as any)?.textStyleRanges,
-        });
 
         return next;
       }
