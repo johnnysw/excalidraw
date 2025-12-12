@@ -1,4 +1,4 @@
-import { FRAME_STYLE, throttleRAF } from "@excalidraw/common";
+import { FRAME_STYLE, ANIMATION_SIDEBAR_TAB, throttleRAF } from "@excalidraw/common";
 import { isElementLink } from "@excalidraw/element";
 import { createPlaceholderEmbeddableLabel } from "@excalidraw/element";
 import { getBoundTextElement } from "@excalidraw/element";
@@ -220,8 +220,52 @@ const renderAnimationBadge = (
   appState: StaticCanvasAppState,
   elementsMap: ElementsMap,
 ) => {
-  // 只在非演示模式下显示编号（编辑模式）
-  if (appState.presentationMode) {
+  const isPlayingAnimation = (appState as any).isPlayingAnimation;
+  const openSidebar = (appState as any).openSidebar;
+  const isSlidesTabActive =
+    openSidebar?.tab === ANIMATION_SIDEBAR_TAB;
+  if (appState.presentationMode || isPlayingAnimation || !isSlidesTabActive) {
+    return;
+  }
+
+  let activeFrameId = appState.frameToHighlight?.id;
+
+  const selectedIds = Object.keys(appState.selectedElementIds || {});
+
+  if (!activeFrameId && selectedIds.length) {
+    // 优先：如果选中了 frame / magicframe 本身，则以该元素作为激活 frame
+    for (const id of selectedIds) {
+      const selectedElement = elementsMap.get(id as any);
+      if (!selectedElement) {
+        continue;
+      }
+      if (selectedElement.type === "frame" || selectedElement.type === "magicframe") {
+        activeFrameId = selectedElement.id;
+        break;
+      }
+    }
+
+    // 其次：如果选中的是 frame 内的元素，则使用其 frameId 作为激活 frame
+    if (!activeFrameId) {
+      for (const id of selectedIds) {
+        const selectedElement = elementsMap.get(id as any);
+        if (!selectedElement) {
+          continue;
+        }
+        const frameId = (selectedElement as any).frameId as string | undefined;
+        if (frameId) {
+          activeFrameId = frameId;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!activeFrameId) {
+    return;
+  }
+
+  if ((element as any).frameId !== activeFrameId) {
     return;
   }
 

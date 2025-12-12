@@ -269,6 +269,8 @@ export type TextStyleRange = {
   fontSize?: number;
   /** Font family for this range. If omitted, falls back to element.fontFamily. */
   fontFamily?: FontFamilyValues;
+  textOutlineColor?: string;
+  textOutlineWidth?: number;
 };
 
 /**

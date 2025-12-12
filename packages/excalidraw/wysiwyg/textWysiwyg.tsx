@@ -272,7 +272,13 @@ export const textWysiwyg = ({
 
       // Mirror canvas text outline in WYSIWYG editor using CSS stroke
       const styleAny = editable.style as any;
-      if (updatedTextElement.textOutlineWidth > 0) {
+      const hasPartialTextOutline =
+        updatedTextElement.textStyleRanges?.some(
+          (range) =>
+            range.textOutlineWidth != null || range.textOutlineColor != null,
+        ) ?? false;
+
+      if (!hasPartialTextOutline && updatedTextElement.textOutlineWidth > 0) {
         styleAny.webkitTextStrokeWidth = `${updatedTextElement.textOutlineWidth}px`;
         styleAny.webkitTextStrokeColor = updatedTextElement.textOutlineColor;
       } else {
@@ -391,6 +397,36 @@ export const textWysiwyg = ({
       return fontFamily;
     };
 
+    const getTextOutlineWidthForIndex = (index: number): number => {
+      let width = textElement.textOutlineWidth;
+      for (let i = 0; i < styleRanges.length; i++) {
+        const range = styleRanges[i];
+        if (
+          index >= range.start &&
+          index < range.end &&
+          range.textOutlineWidth != null
+        ) {
+          width = range.textOutlineWidth;
+        }
+      }
+      return width;
+    };
+
+    const getTextOutlineColorForIndex = (index: number): string => {
+      let color = textElement.textOutlineColor;
+      for (let i = 0; i < styleRanges.length; i++) {
+        const range = styleRanges[i];
+        if (
+          index >= range.start &&
+          index < range.end &&
+          range.textOutlineColor != null
+        ) {
+          color = range.textOutlineColor;
+        }
+      }
+      return color;
+    };
+
     editable.innerHTML = "";
 
     if (!text.length) {
@@ -402,6 +438,8 @@ export const textWysiwyg = ({
         color: getColorForIndex(index),
         fontSize: getFontSizeForIndex(index),
         fontFamily: getFontFamilyForIndex(index),
+        textOutlineWidth: getTextOutlineWidthForIndex(index),
+        textOutlineColor: getTextOutlineColorForIndex(index),
       };
     };
 
@@ -416,7 +454,9 @@ export const textWysiwyg = ({
         nextStyle &&
         (nextStyle.color !== currentStyle.color ||
           nextStyle.fontSize !== currentStyle.fontSize ||
-          nextStyle.fontFamily !== currentStyle.fontFamily);
+          nextStyle.fontFamily !== currentStyle.fontFamily ||
+          nextStyle.textOutlineWidth !== currentStyle.textOutlineWidth ||
+          nextStyle.textOutlineColor !== currentStyle.textOutlineColor);
 
       if (index === text.length || styleChanged) {
         if (index > segmentStart) {
@@ -428,6 +468,10 @@ export const textWysiwyg = ({
           span.style.fontFamily = getFontFamilyString({
             fontFamily: currentStyle.fontFamily,
           });
+
+          const spanStyleAny = span.style as any;
+          spanStyleAny.webkitTextStrokeWidth = `${currentStyle.textOutlineWidth}px`;
+          spanStyleAny.webkitTextStrokeColor = currentStyle.textOutlineColor;
 
           editable.appendChild(span);
         }

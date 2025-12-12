@@ -530,7 +530,6 @@ const drawElementOnCanvas = (
           lineHeightPx,
         );
 
-        const hasOutline = element.textOutlineWidth > 0;
         const hasRichTextRanges =
           element.richTextRanges && element.richTextRanges.length > 0;
         const hasTextStyleRanges =
@@ -586,6 +585,34 @@ const drawElementOnCanvas = (
               return fontFamily;
             };
 
+            const getTextOutlineWidthForIndex = (index: number): number => {
+              let width = element.textOutlineWidth;
+              for (const range of textStyleRanges) {
+                if (
+                  index >= range.start &&
+                  index < range.end &&
+                  range.textOutlineWidth != null
+                ) {
+                  width = range.textOutlineWidth;
+                }
+              }
+              return width;
+            };
+
+            const getTextOutlineColorForIndex = (index: number): string => {
+              let color = element.textOutlineColor;
+              for (const range of textStyleRanges) {
+                if (
+                  index >= range.start &&
+                  index < range.end &&
+                  range.textOutlineColor != null
+                ) {
+                  color = range.textOutlineColor;
+                }
+              }
+              return color;
+            };
+
             // Calculate x position based on textAlign
             let baseX = horizontalOffset;
             if (element.textAlign === "center") {
@@ -603,6 +630,10 @@ const drawElementOnCanvas = (
             let currentColor = getColorForIndex(globalCharIndex);
             let currentFontSize = getFontSizeForIndex(globalCharIndex);
             let currentFontFamily = getFontFamilyForIndex(globalCharIndex);
+            let currentTextOutlineWidth =
+              getTextOutlineWidthForIndex(globalCharIndex);
+            let currentTextOutlineColor =
+              getTextOutlineColorForIndex(globalCharIndex);
 
             // Temporarily set textAlign to "left" for character-by-character rendering
             context.textAlign = "left";
@@ -615,6 +646,8 @@ const drawElementOnCanvas = (
                       color: getColorForIndex(globalIdx),
                       fontSize: getFontSizeForIndex(globalIdx),
                       fontFamily: getFontFamilyForIndex(globalIdx),
+                      textOutlineWidth: getTextOutlineWidthForIndex(globalIdx),
+                      textOutlineColor: getTextOutlineColorForIndex(globalIdx),
                     }
                   : null;
 
@@ -622,7 +655,9 @@ const drawElementOnCanvas = (
                 nextStyle &&
                 (nextStyle.color !== currentColor ||
                   nextStyle.fontSize !== currentFontSize ||
-                  nextStyle.fontFamily !== currentFontFamily);
+                  nextStyle.fontFamily !== currentFontFamily ||
+                  nextStyle.textOutlineWidth !== currentTextOutlineWidth ||
+                  nextStyle.textOutlineColor !== currentTextOutlineColor);
 
               // If style changes or we reached the end, render the current segment
               if (styleChanged || charIndex === line.length) {
@@ -634,9 +669,9 @@ const drawElementOnCanvas = (
                     fontFamily: currentFontFamily,
                   });
 
-                  if (hasOutline) {
-                    context.lineWidth = element.textOutlineWidth;
-                    context.strokeStyle = element.textOutlineColor;
+                  if (currentTextOutlineWidth > 0) {
+                    context.lineWidth = currentTextOutlineWidth;
+                    context.strokeStyle = currentTextOutlineColor;
                     context.strokeText(segment, currentX, lineY);
                   }
 
@@ -650,6 +685,8 @@ const drawElementOnCanvas = (
                   currentColor = nextStyle.color;
                   currentFontSize = nextStyle.fontSize;
                   currentFontFamily = nextStyle.fontFamily;
+                  currentTextOutlineWidth = nextStyle.textOutlineWidth;
+                  currentTextOutlineColor = nextStyle.textOutlineColor;
                 }
               }
             }
@@ -658,7 +695,7 @@ const drawElementOnCanvas = (
             context.textAlign = element.textAlign as CanvasTextAlign;
           } else {
             // Original simple rendering for text without rich text ranges
-            if (hasOutline) {
+            if (element.textOutlineWidth > 0) {
               context.lineWidth = element.textOutlineWidth;
               context.strokeStyle = element.textOutlineColor;
               context.strokeText(line, horizontalOffset, lineY);

@@ -410,7 +410,11 @@ const applyColorToRichTextRange = (
   return mergedRanges;
 };
 
-type TextStylePropKey = "fontSize" | "fontFamily";
+type TextStylePropKey =
+  | "fontSize"
+  | "fontFamily"
+  | "textOutlineColor"
+  | "textOutlineWidth";
 
 const applyTextStylePropToRange = <K extends TextStylePropKey>(
   existingRanges: readonly TextStyleRange[] | undefined,
@@ -454,7 +458,9 @@ const applyTextStylePropToRange = <K extends TextStylePropKey>(
         if (
           middleRange.color !== undefined ||
           middleRange.fontSize !== undefined ||
-          middleRange.fontFamily !== undefined
+          middleRange.fontFamily !== undefined ||
+          middleRange.textOutlineColor !== undefined ||
+          middleRange.textOutlineWidth !== undefined
         ) {
           processed.push(middleRange);
         }
@@ -525,7 +531,9 @@ const applyTextStylePropToRange = <K extends TextStylePropKey>(
       last.end === range.start &&
       last.color === range.color &&
       last.fontSize === range.fontSize &&
-      last.fontFamily === range.fontFamily
+      last.fontFamily === range.fontFamily &&
+      last.textOutlineColor === range.textOutlineColor &&
+      last.textOutlineWidth === range.textOutlineWidth
     ) {
       last.end = range.end;
     } else {
@@ -569,6 +577,40 @@ const applyFontFamilyToRange = (
     defaultFontFamily,
   );
 };
+
+ const applyTextOutlineColorToRange = (
+   existingRanges: readonly TextStyleRange[] | undefined,
+   start: number,
+   end: number,
+   textOutlineColor: string,
+   defaultTextOutlineColor: string,
+ ): TextStyleRange[] => {
+   return applyTextStylePropToRange(
+     existingRanges,
+     start,
+     end,
+     "textOutlineColor",
+     textOutlineColor,
+     defaultTextOutlineColor,
+   );
+ };
+
+ const applyTextOutlineWidthToRange = (
+   existingRanges: readonly TextStyleRange[] | undefined,
+   start: number,
+   end: number,
+   textOutlineWidth: number,
+   defaultTextOutlineWidth: number,
+ ): TextStyleRange[] => {
+   return applyTextStylePropToRange(
+     existingRanges,
+     start,
+     end,
+     "textOutlineWidth",
+     textOutlineWidth,
+     defaultTextOutlineWidth,
+   );
+ };
 
 export const actionChangeStrokeColor = register<
   Pick<AppState, "currentItemStrokeColor">
@@ -694,6 +736,46 @@ export const actionChangeTextOutlineColor = register<
   trackEvent: false,
   perform: (elements, appState, value) => {
     const color = value?.currentItemTextOutlineColor;
+
+     if (
+       color != null &&
+       appState.editingTextElement &&
+       appState.textEditorSelection &&
+       appState.textEditorSelection.start !== appState.textEditorSelection.end
+     ) {
+       const editingElement = elements.find(
+         (el) => el.id === appState.editingTextElement?.id,
+       ) as ExcalidrawTextElement | undefined;
+
+       if (editingElement && isTextElement(editingElement)) {
+         const { start, end } = appState.textEditorSelection;
+         const newTextStyleRanges = applyTextOutlineColorToRange(
+           editingElement.textStyleRanges,
+           start,
+           end,
+           color,
+           editingElement.textOutlineColor,
+         );
+
+         return {
+           elements: elements.map((el) =>
+             el.id === editingElement.id
+               ? newElementWith(el as ExcalidrawTextElement, {
+                   textStyleRanges:
+                     newTextStyleRanges.length > 0
+                       ? newTextStyleRanges
+                       : undefined,
+                 })
+               : el,
+           ),
+           appState: {
+             ...appState,
+             ...value,
+           },
+           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+         };
+       }
+     }
 
     const nextElements =
       color != null
@@ -992,6 +1074,46 @@ export const actionChangeTextOutlineWidth = register<
   trackEvent: false,
   perform: (elements, appState, value) => {
     const width = value?.currentItemTextOutlineWidth;
+
+     if (
+       typeof width === "number" &&
+       appState.editingTextElement &&
+       appState.textEditorSelection &&
+       appState.textEditorSelection.start !== appState.textEditorSelection.end
+     ) {
+       const editingElement = elements.find(
+         (el) => el.id === appState.editingTextElement?.id,
+       ) as ExcalidrawTextElement | undefined;
+
+       if (editingElement && isTextElement(editingElement)) {
+         const { start, end } = appState.textEditorSelection;
+         const newTextStyleRanges = applyTextOutlineWidthToRange(
+           editingElement.textStyleRanges,
+           start,
+           end,
+           width,
+           editingElement.textOutlineWidth,
+         );
+
+         return {
+           elements: elements.map((el) =>
+             el.id === editingElement.id
+               ? newElementWith(el as ExcalidrawTextElement, {
+                   textStyleRanges:
+                     newTextStyleRanges.length > 0
+                       ? newTextStyleRanges
+                       : undefined,
+                 })
+               : el,
+           ),
+           appState: {
+             ...appState,
+             currentItemTextOutlineWidth: width,
+           },
+           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+         };
+       }
+     }
 
     const nextElements =
       typeof width === "number"

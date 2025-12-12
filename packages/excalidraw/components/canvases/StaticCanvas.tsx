@@ -103,6 +103,7 @@ const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {
     presentationMode: appState.presentationMode,
     presentationStep: appState.presentationStep,
     animationProgress: appState.animationProgress,
+    openSidebarTab: appState.openSidebar?.tab,
   };
 
   return relevantAppStateProps;
