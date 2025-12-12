@@ -278,11 +278,11 @@ export class Scene {
     const _nextElements = toArray(nextElements);
     const nextFrameLikes: ExcalidrawFrameLikeElement[] = [];
 
-    if (!options?.skipValidation) {
-      validateIndicesThrottled(_nextElements);
-    }
-
     this.elements = syncInvalidIndices(_nextElements);
+
+    if (!options?.skipValidation) {
+      validateIndicesThrottled(this.elements);
+    }
     this.elementsMap.clear();
     this.elements.forEach((element) => {
       if (isFrameLikeElement(element)) {

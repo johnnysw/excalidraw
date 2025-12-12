@@ -37,21 +37,19 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
 
   // 停止预览
   const stopPreview = useCallback(() => {
-    if (previewRef.current.isPlaying) {
-      previewRef.current.isPlaying = false;
-      setIsPlaying(false);
-      cancelAnimationFrame(previewRef.current.rafId);
-      previewRef.current.timeoutIds.forEach(clearTimeout);
-      previewRef.current.timeoutIds = [];
+    previewRef.current.isPlaying = false;
+    setIsPlaying(false);
+    cancelAnimationFrame(previewRef.current.rafId);
+    previewRef.current.timeoutIds.forEach(clearTimeout);
+    previewRef.current.timeoutIds = [];
 
-      // 重置到初始状态
-      setAppState({
-        presentationStep: 0,
-        animationProgress: 0,
-        isPlayingAnimation: false,
-        isPlayingAnimationFrameId: null,
-      } as any);
-    }
+    // 重置到初始状态
+    setAppState({
+      presentationStep: 0,
+      animationProgress: 0,
+      isPlayingAnimation: false,
+      isPlayingAnimationFrameId: null,
+    } as any);
   }, [setAppState]);
 
   // 动画预览逻辑
@@ -157,8 +155,7 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
         if (targetStep) {
           const tid = window.setTimeout(() => {
             runStepAnimation(targetStep, () => {
-              previewRef.current.isPlaying = false;
-              setIsPlaying(false);
+              stopPreview();
             });
           }, 50);
           previewRef.current.timeoutIds.push(tid);
@@ -171,8 +168,7 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
       const playNextStep = () => {
         if (!previewRef.current.isPlaying) return;
         if (currentPlayIndex >= playSteps.length) {
-          previewRef.current.isPlaying = false;
-          setIsPlaying(false);
+          stopPreview();
           return;
         }
 
@@ -186,8 +182,7 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
             const tid = window.setTimeout(playNextStep, delay);
             previewRef.current.timeoutIds.push(tid);
           } else {
-            previewRef.current.isPlaying = false;
-            setIsPlaying(false);
+            stopPreview();
           }
         });
       };

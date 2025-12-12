@@ -141,6 +141,7 @@ import {
   isBindingElement,
   isBindingElementType,
   isBoundToContainer,
+  isFrameElement,
   isFrameLikeElement,
   isImageElement,
   isEmbeddableElement,
@@ -442,7 +443,13 @@ import {
   isPointHittingLink,
   isPointHittingLinkIcon,
 } from "./hyperlink/helpers";
-import { MagicIcon, copyIcon, fullscreenIcon } from "./icons";
+import {
+  MagicIcon,
+  copyIcon,
+  fullscreenIcon,
+  PlayIcon,
+  pencilIcon,
+} from "./icons";
 import { Toast } from "./Toast";
 
 import { findShapeByKey } from "./shapes";
@@ -1945,6 +1952,62 @@ class App extends React.Component<AppProps, AppState> {
 
     const firstSelectedElement = selectedElements[0];
 
+    const slideOrder = (this.state as any).slideOrder as string[] | undefined;
+    const slideNotes = (this.state as any).slideNotes as
+      | Record<string, string>
+      | undefined;
+
+    const getPresentationFrames = () => {
+      const allFrames = this.scene
+        .getNonDeletedElements()
+        .filter((el) => isFrameElement(el)) as any[];
+
+      if (slideOrder && slideOrder.length > 0) {
+        const orderedFrames = slideOrder
+          .map((id) => allFrames.find((f) => f.id === id))
+          .filter((f): f is any => Boolean(f));
+
+        const remainingFrames = allFrames
+          .filter((f) => !slideOrder.includes(f.id))
+          .sort((a, b) => {
+            if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
+            return a.x - b.x;
+          });
+
+        return [...orderedFrames, ...remainingFrames];
+      }
+
+      return allFrames.sort((a, b) => {
+        if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
+        return a.x - b.x;
+      });
+    };
+
+    const startPresentationFromFrame = (frameId: string) => {
+      const frames = getPresentationFrames();
+      const slideIndex = frames.findIndex((f) => f.id === frameId);
+      if (slideIndex === -1) {
+        return;
+      }
+
+      if (this.excalidrawContainerRef.current) {
+        this.excalidrawContainerRef.current
+          .requestFullscreen()
+          .catch((e) => console.error(e));
+      }
+
+      this.setAppState((state) =>
+        ({
+          ...(state as any),
+          presentationMode: true,
+          _savedOpenSidebar: (state as any).openSidebar,
+          openSidebar: null,
+          slideOrder: slideOrder ?? (state as any).slideOrder,
+          presentationSlideIndex: slideIndex,
+        }) as any,
+      );
+    };
+
     const showShapeSwitchPanel =
       editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
 
@@ -2049,6 +2112,61 @@ class App extends React.Component<AppProps, AppState> {
                                 this.updateEmbedValidationStatus
                               }
                             />
+                          )}
+                        {selectedElements.length === 1 &&
+                          isFrameElement(firstSelectedElement) && (
+                            <ElementCanvasButtons
+                              element={firstSelectedElement}
+                              elementsMap={elementsMap}
+                            >
+                              <ElementCanvasButton
+                                title="从此播放"
+                                icon={PlayIcon}
+                                checked={false}
+                                onChange={() =>
+                                  startPresentationFromFrame(
+                                    firstSelectedElement.id,
+                                  )
+                                }
+                              />
+                              <ElementCanvasButton
+                                title={
+                                  slideNotes?.[firstSelectedElement.id]
+                                    ? "查看/编辑注释"
+                                    : "添加注释"
+                                }
+                                icon={
+                                  <>
+                                    {pencilIcon}
+                                    <span
+                                      className={
+                                        slideNotes?.[firstSelectedElement.id]
+                                          ? "has-note-dot"
+                                          : "no-note-dot"
+                                      }
+                                      aria-hidden
+                                    />
+                                  </>
+                                }
+                                checked={false}
+                                onChange={() => {
+                                  const event = new CustomEvent(
+                                    "excalidraw:editSlideNote",
+                                    {
+                                      detail: {
+                                        frameId: firstSelectedElement.id,
+                                        note:
+                                          slideNotes?.[
+                                            firstSelectedElement.id
+                                          ] || "",
+                                      },
+                                      bubbles: true,
+                                    },
+                                  );
+                                  document.dispatchEvent(event);
+                                }}
+                              />
+                            </ElementCanvasButtons>
                           )}
                         {this.props.aiEnabled !== false &&
                           selectedElements.length === 1 &&

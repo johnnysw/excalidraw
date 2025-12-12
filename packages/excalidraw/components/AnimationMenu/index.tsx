@@ -99,20 +99,29 @@ export const AnimationMenu: React.FC = () => {
       <div className="AnimationMenu__header">
         <span className="AnimationMenu__title">动画配置</span>
         {events.length > 0 && (
-          <button
-            className={`AnimationMenu__preview-btn ${isPlaying ? "AnimationMenu__preview-btn--playing" : ""}`}
-            onClick={() => (isPlaying ? stopPreview() : handleAnimationPreview())}
-          >
-            <Icon
-              icon={isPlaying ? "hugeicons:stop-circle" : "hugeicons:play-circle-02"}
-              width={16}
-              height={16}
-              className="AnimationMenu__preview-icon"
-            />
-            <span className="AnimationMenu__preview-text">
-              {isPlaying ? "停止" : "预览"}
-            </span>
-          </button>
+          <div className="AnimationMenu__header-actions">
+            <button
+              className="AnimationMenu__fix-btn"
+              onClick={stopPreview}
+              title="修复动画标号显示"
+            >
+              <Icon icon="hugeicons:refresh" width={16} height={16} />
+            </button>
+            <button
+              className={`AnimationMenu__preview-btn ${isPlaying ? "AnimationMenu__preview-btn--playing" : ""}`}
+              onClick={() => (isPlaying ? stopPreview() : handleAnimationPreview())}
+            >
+              <Icon
+                icon={isPlaying ? "hugeicons:stop-circle" : "hugeicons:play-circle-02"}
+                width={16}
+                height={16}
+                className="AnimationMenu__preview-icon"
+              />
+              <span className="AnimationMenu__preview-text">
+                {isPlaying ? "停止" : "预览"}
+              </span>
+            </button>
+          </div>
         )}
       </div>
 

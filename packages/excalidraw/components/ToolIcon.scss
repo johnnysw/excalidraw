@@ -160,6 +160,30 @@
     user-select: none;
   }
 
+  .ToolIcon__MagicButton {
+    .has-note-dot,
+    .no-note-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      display: inline-block;
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      pointer-events: none;
+    }
+
+    .has-note-dot {
+      background: var(--color-primary);
+      box-shadow: 0 0 0 4px rgba(74, 144, 226, 0.1);
+    }
+
+    .no-note-dot {
+      background: var(--color-gray-30);
+      box-shadow: none;
+    }
+  }
+
   .unlocked-icon {
     :root[dir="ltr"] & {
       left: 2px;
