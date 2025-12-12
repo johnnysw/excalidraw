@@ -229,6 +229,7 @@
     "systemMode": "System mode",
     "zenMode": "Zen mode",
     "objectsSnapMode": "Snap to objects",
+    "snapHaptics": "Snap haptics",
     "exitZenMode": "Exit zen mode",
     "cancel": "Cancel",
     "saveLibNames": "Save name(s) and exit",

@@ -229,6 +229,7 @@
     "systemMode": "系统模式",
     "zenMode": "禅模式",
     "objectsSnapMode": "吸附至对象",
+    "snapHaptics": "吸附触觉反馈",
     "exitZenMode": "退出禅模式",
     "cancel": "取消",
     "saveLibNames": "保存名称并退出",

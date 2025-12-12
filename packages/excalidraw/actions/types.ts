@@ -59,6 +59,7 @@ export type ActionName =
   | "gridMode"
   | "zenMode"
   | "objectsSnapMode"
+  | "snapHaptics"
   | "stats"
   | "changeStrokeColor"
   | "changeTextOutlineColor"

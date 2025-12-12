@@ -310,6 +310,7 @@ import {
   actionToggleElementLock,
   actionToggleLinearEditor,
   actionToggleObjectsSnapMode,
+  actionToggleSnapHaptics,
   actionToggleCropEditor,
 } from "../actions";
 import { actionWrapTextInContainer } from "../actions/actionBoundText";
@@ -395,6 +396,7 @@ import {
   SnapCache,
   isGridModeEnabled,
 } from "../snapping";
+import { createHapticsController } from "../utils/haptics";
 import { convertToExcalidrawElements } from "../data/transform";
 import { Renderer } from "../scene/Renderer";
 import {
@@ -652,6 +654,57 @@ class App extends React.Component<AppProps, AppState> {
   eraserTrail = new EraserTrail(this.animationFrameHandler, this);
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
 
+  private snapHapticsController = createHapticsController();
+
+  private getSnapHapticsSignature = (
+    snapLines: AppState["snapLines"] | null | undefined,
+  ): string | null => {
+    if (!snapLines?.length) {
+      return null;
+    }
+
+    const round = (value: number) => Math.round(value * 100) / 100;
+    const getRangeKey = (a: number, b: number) => {
+      const min = Math.min(a, b);
+      const max = Math.max(a, b);
+      return `${round(min)}:${round(max)}`;
+    };
+
+    return snapLines
+      .map((snapLine) => {
+        if (snapLine.type === "points") {
+          const xs = snapLine.points.map((point) => round(point[0]));
+          const ys = snapLine.points.map((point) => round(point[1]));
+          const x0 = xs[0];
+          const y0 = ys[0];
+          const isVertical = xs.every((x) => x === x0);
+          const isHorizontal = ys.every((y) => y === y0);
+
+          if (isVertical) {
+            return `points:v:${x0}`;
+          }
+
+          if (isHorizontal) {
+            return `points:h:${y0}`;
+          }
+
+          return `points:${xs.join(",")}:${ys.join(",")}`;
+        }
+
+        if (snapLine.type === "gap") {
+          return snapLine.direction === "horizontal"
+            ? `gap:h:${getRangeKey(snapLine.points[0][0], snapLine.points[1][0])}`
+            : `gap:v:${getRangeKey(snapLine.points[0][1], snapLine.points[1][1])}`;
+        }
+
+        return snapLine.direction === "vertical"
+          ? `pointer:v:${round(snapLine.points[0][0])}`
+          : `pointer:h:${round(snapLine.points[0][1])}`;
+      })
+      .sort()
+      .join(";");
+  };
+
   onChangeEmitter = new Emitter<
     [
       elements: readonly ExcalidrawElement[],
@@ -694,6 +747,7 @@ class App extends React.Component<AppProps, AppState> {
       zenModeEnabled = false,
       gridModeEnabled = false,
       objectsSnapModeEnabled = false,
+      snapHapticsEnabled = defaultAppState.snapHapticsEnabled,
       theme = defaultAppState.theme,
       name = `${t("labels.untitled")}-${getDateTime()}`,
     } = props;
@@ -705,6 +759,7 @@ class App extends React.Component<AppProps, AppState> {
       viewModeEnabled,
       zenModeEnabled,
       objectsSnapModeEnabled,
+      snapHapticsEnabled,
       gridModeEnabled: gridModeEnabled ?? defaultAppState.gridModeEnabled,
       name,
       width: window.innerWidth,
@@ -3194,6 +3249,13 @@ class App extends React.Component<AppProps, AppState> {
       this.setState({ viewModeEnabled: !!this.props.viewModeEnabled });
     }
 
+    if (
+      prevProps.snapHapticsEnabled !== this.props.snapHapticsEnabled &&
+      typeof this.props.snapHapticsEnabled === "boolean"
+    ) {
+      this.setState({ snapHapticsEnabled: this.props.snapHapticsEnabled });
+    }
+
     if (prevState.viewModeEnabled !== this.state.viewModeEnabled) {
       this.addEventListeners();
       this.deselectElements();
@@ -3242,6 +3304,19 @@ class App extends React.Component<AppProps, AppState> {
     // in the editingTextElement being now a deleted element
     if (this.state.editingTextElement?.isDeleted) {
       this.setState({ editingTextElement: null });
+    }
+
+    if (prevState.snapHapticsEnabled !== this.state.snapHapticsEnabled) {
+      this.snapHapticsController.reset();
+    }
+
+    if (
+      this.state.snapHapticsEnabled &&
+      prevState.snapLines !== this.state.snapLines
+    ) {
+      this.snapHapticsController.maybeTrigger(
+        this.getSnapHapticsSignature(this.state.snapLines),
+      );
     }
 
     this.store.commit(elementsMap, this.state);
@@ -11854,6 +11929,7 @@ class App extends React.Component<AppProps, AppState> {
         CONTEXT_MENU_SEPARATOR,
         actionToggleGridMode,
         actionToggleObjectsSnapMode,
+        actionToggleSnapHaptics,
         actionToggleZenMode,
         actionToggleViewMode,
         actionToggleStats,
