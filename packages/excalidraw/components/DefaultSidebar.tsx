@@ -25,7 +25,7 @@ import { searchIcon, PropertiesIcon, AnimationIcon } from "./icons";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
 import { LibraryMenu } from "./LibraryMenu";
-import { LibraryIcon, ViewerModeIcon } from "./icons";
+import { LibraryIcon, PlaySquareIcon } from "./icons";
 import { PresentationMenu } from "./PresentationMenu";
 import { PropertiesMenu } from "./PropertiesMenu";
 import { AnimationMenu } from "./AnimationMenu";
@@ -120,7 +120,7 @@ export const DefaultSidebar = Object.assign(
                   tab={PRESENTATION_SIDEBAR_TAB}
                   title="幻灯片"
                 >
-                  {ViewerModeIcon}
+                  {PlaySquareIcon}
                 </Sidebar.TabTrigger>
                 <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB} title="搜索">
                   {searchIcon}

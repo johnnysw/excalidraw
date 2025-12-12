@@ -11,7 +11,7 @@ import Stack from "../Stack";
 import type { ActionManager } from "../../actions/manager";
 import type { UIAppState } from "../../types";
 
-import { PlayIcon, ViewerModeIcon, PresenterModeIcon } from "../icons";
+import { PlaySquareIcon, Presentation05Icon, PresenterModeIcon } from "../icons";
 
 const Footer = ({
   appState,
@@ -108,7 +108,7 @@ const Footer = ({
                 }}
               >
                 <div style={{ width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {PlayIcon}
+                  {PlaySquareIcon}
                 </div>
               </button>
 
@@ -129,7 +129,7 @@ const Footer = ({
                   }}
                 >
                   {[
-                    { key: "viewer" as const, label: "普通视图", icon: ViewerModeIcon },
+                    { key: "viewer" as const, label: "普通视图", icon: Presentation05Icon },
                     { key: "presenter" as const, label: "演讲者视图", icon: PresenterModeIcon },
                   ].map((item, index) => (
                     <button

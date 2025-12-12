@@ -244,8 +244,11 @@
     &__note-btn {
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 6px 10px;
+        justify-content: center;
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        gap: 0;
         border-radius: 8px;
         border: 1px solid var(--color-gray-20);
         background: rgba(255, 255, 255, 0.65);
@@ -256,9 +259,9 @@
         z-index: 3;
 
         &:hover {
-            background: var(--color-gray-10);
-            border-color: var(--color-primary-light);
-            color: var(--color-primary);
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #fff;
         }
 
         :root[data-theme="dark"] & {
@@ -267,8 +270,30 @@
             border-color: var(--color-gray-40);
 
             &:hover {
-                background: rgba(60, 60, 60, 0.7);
+                background: var(--color-primary);
                 border-color: var(--color-primary);
+                color: #fff;
+            }
+        }
+
+        .PresentationMenu__note-icon {
+            position: relative;
+            width: 14px;
+            height: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            svg {
+                width: 14px;
+                height: 14px;
+            }
+
+            .has-note-dot,
+            .no-note-dot {
+                position: absolute;
+                top: -2px;
+                right: -2px;
             }
         }
 

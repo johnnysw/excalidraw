@@ -445,9 +445,12 @@ import {
 } from "./hyperlink/helpers";
 import {
   MagicIcon,
+  Comment01Icon,
   copyIcon,
   fullscreenIcon,
   PlayIcon,
+  PresenterModeIcon,
+  Presentation05Icon,
   pencilIcon,
 } from "./icons";
 import { Toast } from "./Toast";
@@ -753,7 +756,7 @@ class App extends React.Component<AppProps, AppState> {
       viewModeEnabled = false,
       zenModeEnabled = false,
       gridModeEnabled = false,
-      objectsSnapModeEnabled = false,
+      objectsSnapModeEnabled = defaultAppState.objectsSnapModeEnabled,
       snapHapticsEnabled = defaultAppState.snapHapticsEnabled,
       theme = defaultAppState.theme,
       name = `${t("labels.untitled")}-${getDateTime()}`,
@@ -2008,6 +2011,44 @@ class App extends React.Component<AppProps, AppState> {
       );
     };
 
+    const openPresenterViewFromFrame = (frameId: string) => {
+      const frames = getPresentationFrames();
+      const slideIndex = frames.findIndex((f) => f.id === frameId);
+      if (slideIndex === -1) {
+        return;
+      }
+
+      const nextFrameId = frames[slideIndex + 1]?.id ?? null;
+      const total = frames.length;
+
+      let presenterWindow: Window | null = null;
+      presenterWindow = window.open(
+        "",
+        "presenter-view",
+        "width=520,height=740",
+      );
+      if (presenterWindow) {
+        try {
+          presenterWindow.blur();
+          window.focus();
+        } catch {
+        }
+      }
+
+      const event = new CustomEvent("excalidraw:startPresentation", {
+        detail: {
+          mode: "presenter",
+          presenterWindow,
+          frameId,
+          nextFrameId,
+          index: slideIndex,
+          total,
+        },
+        bubbles: true,
+      });
+      document.dispatchEvent(event);
+    };
+
     const showShapeSwitchPanel =
       editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
 
@@ -2121,10 +2162,20 @@ class App extends React.Component<AppProps, AppState> {
                             >
                               <ElementCanvasButton
                                 title="从此播放"
-                                icon={PlayIcon}
+                                icon={Presentation05Icon}
                                 checked={false}
                                 onChange={() =>
                                   startPresentationFromFrame(
+                                    firstSelectedElement.id,
+                                  )
+                                }
+                              />
+                              <ElementCanvasButton
+                                title="演讲者视图"
+                                icon={PresenterModeIcon}
+                                checked={false}
+                                onChange={() =>
+                                  openPresenterViewFromFrame(
                                     firstSelectedElement.id,
                                   )
                                 }
@@ -2137,7 +2188,7 @@ class App extends React.Component<AppProps, AppState> {
                                 }
                                 icon={
                                   <>
-                                    {pencilIcon}
+                                    {Comment01Icon}
                                     <span
                                       className={
                                         slideNotes?.[firstSelectedElement.id]

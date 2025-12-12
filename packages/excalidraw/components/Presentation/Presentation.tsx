@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import "./Presentation.scss";
 import { useApp, useExcalidrawAppState, useExcalidrawElements, useExcalidrawSetAppState } from "../App";
 import { ArrowRightIcon, CloseIcon, pencilIcon, EraserIcon, ClearCanvasIcon, HighlighterIcon, ExitPresentationIcon } from "../icons";
@@ -71,6 +71,12 @@ const Presentation = () => {
     // Store original settings to restore on exit
     const originalFrameRenderingRef = useRef(appState.frameRendering);
 
+    const savedViewportRef = useRef<{
+        scrollX: number;
+        scrollY: number;
+        zoom: any;
+    } | null>(null);
+
     // Track element IDs that existed before presentation mode started
     const originalElementIdsRef = useRef<Set<string>>(new Set());
     const presentationActiveRef = useRef(false);
@@ -90,6 +96,27 @@ const Presentation = () => {
     framesRef.current = frames;
     presentationStepRef.current = appState.presentationStep || 0;
 
+    const exitPresentation = useCallback(() => {
+        setShowPenColors(false);
+        setShowHighlighterColors(false);
+
+        const savedViewport = savedViewportRef.current;
+        savedViewportRef.current = null;
+
+        setAppState((state) => ({
+            presentationMode: false,
+            openSidebar: (state as any)._savedOpenSidebar ?? state.openSidebar,
+            _savedOpenSidebar: undefined,
+            ...(savedViewport
+                ? {
+                    scrollX: savedViewport.scrollX,
+                    scrollY: savedViewport.scrollY,
+                    zoom: savedViewport.zoom,
+                }
+                : {}),
+        } as any));
+    }, [setAppState]);
+
     // Save original element IDs when presentation mode starts
     useEffect(() => {
         if (appState.presentationMode) {
@@ -100,6 +127,11 @@ const Presentation = () => {
     useEffect(() => {
         if (appState.presentationMode && !presentationActiveRef.current) {
             presentationActiveRef.current = true;
+            savedViewportRef.current = {
+                scrollX: (appState as any).scrollX,
+                scrollY: (appState as any).scrollY,
+                zoom: (appState as any).zoom,
+            };
             initialSlideAppliedRef.current = false; // Reset for new presentation
             // Reset presentationStep when entering presentation mode
             setAppState({ presentationStep: 0 });
@@ -247,6 +279,9 @@ const Presentation = () => {
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
+            if (!appState.presentationMode) {
+                return;
+            }
             if (event.key === KEYS.ARROW_RIGHT || event.key === KEYS.SPACE) {
                 const currentFrame = frames[currentIndex];
                 const currentStep = appState.presentationStep || 0;
@@ -279,13 +314,13 @@ const Presentation = () => {
                 setShowPenColors(false);
                 setShowHighlighterColors(false);
                 if (!showPenColors && !showHighlighterColors) {
-                    setAppState({ presentationMode: false });
+                    exitPresentation();
                 }
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [currentIndex, frames, setAppState, showPenColors, showHighlighterColors, appState.presentationStep, elements]);
+    }, [currentIndex, frames, setAppState, showPenColors, showHighlighterColors, appState.presentationMode, appState.presentationStep, elements, exitPresentation]);
 
     // Animation progress effect - animate from 0 to 1 when presentationStep changes
     const prevStepRef = useRef(appState.presentationStep);
@@ -344,13 +379,8 @@ const Presentation = () => {
 
     useEffect(() => {
         const handleFullscreenChange = () => {
-            if (!document.fullscreenElement) {
-                // 退出演示模式时恢复保存的侧边栏状态
-                setAppState((state) => ({
-                    presentationMode: false,
-                    openSidebar: (state as any)._savedOpenSidebar ?? state.openSidebar,
-                    _savedOpenSidebar: undefined, // 清除保存的状态
-                } as any));
+            if (appState.presentationMode && !document.fullscreenElement) {
+                exitPresentation();
             }
         };
 
@@ -374,7 +404,7 @@ const Presentation = () => {
             app.setActiveTool({ type: "selection" });
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
         };
-    }, [appState.presentationMode, setAppState, app]);
+    }, [appState.presentationMode, setAppState, app, exitPresentation]);
 
     // Hide settings panel when clicking on canvas to start drawing
     useEffect(() => {
@@ -909,7 +939,7 @@ const Presentation = () => {
                 }}>
                     {ArrowRightIcon}
                 </div>
-                <div className="Presentation-controls__close" onClick={() => setAppState({ presentationMode: false })}>
+                <div className="Presentation-controls__close" onClick={exitPresentation}>
                     {ExitPresentationIcon}
                 </div>
             </div>

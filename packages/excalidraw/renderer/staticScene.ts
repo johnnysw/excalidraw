@@ -416,6 +416,12 @@ const _renderStaticScene = ({
   visibleElements
     .filter((el) => !isIframeLikeElement(el))
     .filter((element) => {
+      if (
+        appState.presentationMode &&
+        (element as any).customData?.type === "questionTagBadge"
+      ) {
+        return false;
+      }
       // Filter out elements whose animation step hasn't been reached yet
       // Support both presentationMode (full-screen) and isPlayingAnimation (in-editor preview)
       const isPlayingAnimation = (appState as any).isPlayingAnimation;
@@ -656,6 +662,12 @@ const _renderStaticScene = ({
   visibleElements
     .filter((el) => isIframeLikeElement(el))
     .filter((element) => {
+      if (
+        appState.presentationMode &&
+        (element as any).customData?.type === "questionTagBadge"
+      ) {
+        return false;
+      }
       // Filter embeddables based on animation step
       const isPlayingAnimation = (appState as any).isPlayingAnimation;
       const isPlayingAnimationFrameId = (appState as any).isPlayingAnimationFrameId;

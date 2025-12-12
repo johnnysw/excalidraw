@@ -2498,3 +2498,28 @@ export const PresenterModeIcon = createIcon(
   tablerIconProps,
 );
 
+export const Presentation05Icon = createIcon(
+  <g fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path d="M2.5 11c0 2.828 0 4.243.879 5.121C4.257 17 5.672 17 8.5 17h7c2.828 0 4.243 0 5.121-.879c.879-.878.879-2.293.879-5.121V8c0-2.828 0-4.243-.879-5.121C19.743 2 18.328 2 15.5 2h-7c-2.828 0-4.243 0-5.121.879C2.5 3.757 2.5 5.172 2.5 8z" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="m8.5 22l.328-.328c.578-.578.867-.867 1.235-1.02c.367-.152.776-.152 1.594-.152h.686c.818 0 1.226 0 1.594.152c.367.152.656.441 1.234 1.02L15.5 22" />
+    <path strokeLinecap="round" d="M12 17.5V22" />
+  </g>,
+  tablerIconProps,
+);
+
+export const Comment01Icon = createIcon(
+  <g fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5">
+    <path strokeLinejoin="round" d="M8 13.5h8m-8-5h4" />
+    <path d="M6.099 19q-1.949-.192-2.927-1.172C2 16.657 2 14.771 2 11v-.5c0-3.771 0-5.657 1.172-6.828S6.229 2.5 10 2.5h4c3.771 0 5.657 0 6.828 1.172S22 6.729 22 10.5v.5c0 3.771 0 5.657-1.172 6.828S17.771 19 14 19c-.56.012-1.007.055-1.445.155c-1.199.276-2.309.89-3.405 1.424c-1.563.762-2.344 1.143-2.834.786c-.938-.698-.021-2.863.184-3.865" />
+  </g>,
+  tablerIconProps,
+);
+
+export const PlaySquareIcon = createIcon(
+  <g fill="none" stroke="currentColor" strokeWidth="1.5">
+    <path strokeLinejoin="round" d="M14.953 12.395c-.151.627-.867 1.07-2.3 1.955c-1.383.856-2.075 1.285-2.633 1.113a1.4 1.4 0 0 1-.61-.393C9 14.62 9 13.746 9 12s0-2.62.41-3.07c.17-.186.38-.321.61-.392c.558-.173 1.25.256 2.634 1.112c1.432.886 2.148 1.329 2.3 1.955a1.7 1.7 0 0 1 0 .79Z" />
+    <path d="M2.5 12c0-4.478 0-6.718 1.391-8.109S7.521 2.5 12 2.5c4.478 0 6.718 0 8.109 1.391S21.5 7.521 21.5 12c0 4.478 0 6.718-1.391 8.109S16.479 21.5 12 21.5c-4.478 0-6.718 0-8.109-1.391S2.5 16.479 2.5 12Z" />
+  </g>,
+  tablerIconProps,
+);
+

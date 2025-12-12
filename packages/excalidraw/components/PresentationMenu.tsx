@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { useApp, useExcalidrawElements, useExcalidrawSetAppState } from "./App";
 import { isFrameLikeElement } from "@excalidraw/element";
 import { exportToCanvas } from "../scene/export";
-import { PlayIcon, save } from "./icons";
+import { PlayIcon, PresenterModeIcon, Presentation05Icon, Comment01Icon, save } from "./icons";
 import "./PresentationMenu.scss";
 
 import type { ExcalidrawFrameLikeElement, ExcalidrawElement } from "@excalidraw/element/types";
@@ -483,6 +483,42 @@ const PresentationMenuContent: React.FC = () => {
         } as any));
     }, [orderedSlides, slideOrder, setAppState, app.excalidrawContainerRef]);
 
+    const openPresenterViewFromSlide = useCallback((slideId: string) => {
+        const slideIndex = orderedSlides.findIndex(s => s.id === slideId);
+        if (slideIndex === -1) return;
+
+        const nextFrameId = orderedSlides[slideIndex + 1]?.id ?? null;
+        const total = orderedSlides.length;
+
+        let presenterWindow: Window | null = null;
+        presenterWindow = window.open(
+            "",
+            "presenter-view",
+            "width=520,height=740",
+        );
+
+        if (presenterWindow) {
+            try {
+                presenterWindow.blur();
+                window.focus();
+            } catch {
+            }
+        }
+
+        const event = new CustomEvent("excalidraw:startPresentation", {
+            detail: {
+                mode: "presenter",
+                presenterWindow,
+                frameId: slideId,
+                nextFrameId,
+                index: slideIndex,
+                total,
+            },
+            bubbles: true,
+        });
+        document.dispatchEvent(event);
+    }, [orderedSlides]);
+
     // Start presentation from a specific slide
     const startFromSlide = useCallback((slideId: string) => {
         const slideIndex = orderedSlides.findIndex(s => s.id === slideId);
@@ -592,7 +628,17 @@ const PresentationMenuContent: React.FC = () => {
                                     }}
                                     title="从此播放"
                                 >
-                                    {PlayIcon}
+                                    {Presentation05Icon}
+                                </button>
+                                <button
+                                    className="PresentationMenu__play-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        openPresenterViewFromSlide(slide.id);
+                                    }}
+                                    title="演讲者视图"
+                                >
+                                    {PresenterModeIcon}
                                 </button>
                                 <button
                                     className="PresentationMenu__note-btn"
@@ -602,11 +648,13 @@ const PresentationMenuContent: React.FC = () => {
                                     }}
                                     title={slideNotes?.[slide.id] ? "查看/编辑注释" : "添加注释"}
                                 >
-                                    <span
-                                        className={slideNotes?.[slide.id] ? "has-note-dot" : "no-note-dot"}
-                                        aria-hidden
-                                    />
-                                    注释
+                                    <span className="PresentationMenu__note-icon" aria-hidden>
+                                        {Comment01Icon}
+                                        <span
+                                            className={slideNotes?.[slide.id] ? "has-note-dot" : "no-note-dot"}
+                                            aria-hidden
+                                        />
+                                    </span>
                                 </button>
                             </div>
                         </div>
