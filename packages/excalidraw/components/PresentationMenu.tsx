@@ -158,6 +158,43 @@ const PresentationMenuContent: React.FC = () => {
         }
     }, [activeSlideId]);
 
+    // 用于追踪是否是内部更新，避免循环
+    const isInternalUpdateRef = useRef(false);
+    const lastExternalOrderRef = useRef<string[] | null>(null);
+
+    // 监听外部 slideOrder 变化（如画布上的 SlideOrderButton 修改）
+    useEffect(() => {
+        // 如果是内部更新触发的，跳过
+        if (isInternalUpdateRef.current) {
+            isInternalUpdateRef.current = false;
+            return;
+        }
+
+        const externalOrder = (app.state as any).slideOrder as string[] | undefined;
+        if (!Array.isArray(externalOrder)) {
+            return;
+        }
+
+        // 比较外部顺序与上次外部顺序，避免重复处理
+        const lastExternal = lastExternalOrderRef.current;
+        const isSameAsLast = lastExternal !== null &&
+            externalOrder.length === lastExternal.length &&
+            externalOrder.every((id, index) => id === lastExternal[index]);
+        if (isSameAsLast) {
+            return;
+        }
+
+        // 比较外部顺序与本地顺序，如果不同则同步
+        const isSame = externalOrder.length === slideOrder.length &&
+            externalOrder.every((id, index) => id === slideOrder[index]);
+        if (!isSame) {
+            lastExternalOrderRef.current = externalOrder;
+            setSlideOrder(externalOrder.filter((id) => typeof id === "string"));
+            // 同步更新初始顺序引用，避免显示为未保存
+            initialSlideOrderRef.current = externalOrder.filter((id) => typeof id === "string");
+        }
+    }, [(app.state as any).slideOrder]);
+
     // Initialize slide order when frames change
     useEffect(() => {
         const frameIds = frameElements.map(f => f.id);
@@ -166,6 +203,11 @@ const PresentationMenuContent: React.FC = () => {
         setSlideOrder(prevOrder => {
             const existingOrder = prevOrder.filter(id => frameIds.includes(id));
             const newFrames = frameIds.filter(id => !prevOrder.includes(id));
+
+            // 如果没有新 frame 且没有需要移除的，不更新
+            if (newFrames.length === 0 && existingOrder.length === prevOrder.length) {
+                return prevOrder;
+            }
 
             // Sort new frames by Y position
             const sortedNewFrames = newFrames.sort((a, b) => {
@@ -180,6 +222,8 @@ const PresentationMenuContent: React.FC = () => {
 
     // Persist slide order into appState so host apps can store it
     useEffect(() => {
+        // 标记为内部更新，避免触发外部监听 effect 的循环
+        isInternalUpdateRef.current = true;
         setAppState((prevAppState: any) => ({
             ...prevAppState,
             slideOrder,
@@ -611,6 +655,7 @@ const PresentationMenuContent: React.FC = () => {
                         title={slide.name}
                     >
                         <div className="PresentationMenu__slide-thumbnail">
+                            <span className="PresentationMenu__slide-order">{index + 1}</span>
                             {slide.thumbnail ? (
                                 <img src={slide.thumbnail} alt={slide.name} />
                             ) : (

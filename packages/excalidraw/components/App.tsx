@@ -407,6 +407,7 @@ import {
   setCursorForShape,
 } from "../cursor";
 import { ElementCanvasButtons } from "../components/ElementCanvasButtons";
+import { SlideOrderButton } from "../components/SlideOrderButton";
 import { LaserTrails } from "../laser-trails";
 import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
 import { textWysiwyg } from "../wysiwyg/textWysiwyg";
@@ -452,6 +453,7 @@ import {
   PresenterModeIcon,
   Presentation05Icon,
   pencilIcon,
+  ListOrderedIcon,
 } from "./icons";
 import { Toast } from "./Toast";
 
@@ -1809,54 +1811,78 @@ class App extends React.Component<AppProps, AppState> {
 
       const frameName = getFrameLikeTitle(f);
 
+      // 获取 frame 在 slideOrder 中的序号
+      const slideOrder = (this.state as any).slideOrder as string[] | undefined;
+      const slideIndex = slideOrder?.indexOf(f.id) ?? -1;
+      const slideOrderLabel = slideIndex !== -1 ? `[${slideIndex + 1}]` : "[-]";
+
       if (f.id === this.state.editingFrame) {
         const frameNameInEdit = frameName;
 
         frameNameJSX = (
-          <input
-            autoFocus
-            value={frameNameInEdit}
-            onChange={(e) => {
-              this.scene.mutateElement(f, {
-                name: e.target.value,
-              });
-            }}
-            onFocus={(e) => e.target.select()}
-            onBlur={() => this.resetEditingFrame(f)}
-            onKeyDown={(event) => {
-              // for some inexplicable reason, `onBlur` triggered on ESC
-              // does not reset `state.editingFrame` despite being called,
-              // and we need to reset it here as well
-              if (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) {
-                this.resetEditingFrame(f);
-              }
-            }}
+          <span
             style={{
-              background: this.state.viewBackgroundColor,
-              filter: isDarkTheme ? THEME_FILTER : "none",
-              zIndex: 2,
-              border: "none",
-              display: "block",
-              padding: `${FRAME_NAME_EDIT_PADDING}px`,
-              borderRadius: 4,
-              boxShadow: "inset 0 0 0 1px var(--color-primary)",
-              fontFamily: "Assistant",
-              fontSize: `${FRAME_STYLE.nameFontSize}px`,
+              display: "inline-flex",
+              alignItems: "center",
               transform: `translate(-${FRAME_NAME_EDIT_PADDING}px, ${FRAME_NAME_EDIT_PADDING}px)`,
-              color: "var(--color-gray-80)",
-              overflow: "hidden",
-              maxWidth: `${document.body.clientWidth - x1 - FRAME_NAME_EDIT_PADDING
-                }px`,
             }}
-            size={frameNameInEdit.length + 1 || 1}
-            dir="auto"
-            autoComplete="off"
-            autoCapitalize="off"
-            autoCorrect="off"
-          />
+          >
+            <span
+              className="frame-slide-order"
+              style={{ marginRight: 4, color: "var(--color-primary)" }}
+            >
+              {slideOrderLabel}
+            </span>
+            <input
+              autoFocus
+              value={frameNameInEdit}
+              onChange={(e) => {
+                this.scene.mutateElement(f, {
+                  name: e.target.value,
+                });
+              }}
+              onFocus={(e) => e.target.select()}
+              onBlur={() => this.resetEditingFrame(f)}
+              onKeyDown={(event) => {
+                // for some inexplicable reason, `onBlur` triggered on ESC
+                // does not reset `state.editingFrame` despite being called,
+                // and we need to reset it here as well
+                if (event.key === KEYS.ESCAPE || event.key === KEYS.ENTER) {
+                  this.resetEditingFrame(f);
+                }
+              }}
+              style={{
+                background: this.state.viewBackgroundColor,
+                filter: isDarkTheme ? THEME_FILTER : "none",
+                zIndex: 2,
+                border: "none",
+                display: "block",
+                padding: `${FRAME_NAME_EDIT_PADDING}px`,
+                borderRadius: 4,
+                boxShadow: "inset 0 0 0 1px var(--color-primary)",
+                fontFamily: "Assistant",
+                fontSize: `${FRAME_STYLE.nameFontSize}px`,
+                color: "var(--color-gray-80)",
+                overflow: "hidden",
+                maxWidth: `${document.body.clientWidth - x1 - FRAME_NAME_EDIT_PADDING}px`,
+              }}
+              size={frameNameInEdit.length + 1 || 1}
+              dir="auto"
+              autoComplete="off"
+              autoCapitalize="off"
+              autoCorrect="off"
+            />
+          </span>
         );
       } else {
-        frameNameJSX = frameName;
+        frameNameJSX = (
+          <>
+            <span className="frame-slide-order" style={{ marginRight: 4, color: "var(--color-primary)" }}>
+              {slideOrderLabel}
+            </span>
+            {frameName}
+          </>
+        );
       }
 
       return (
@@ -2049,6 +2075,67 @@ class App extends React.Component<AppProps, AppState> {
       document.dispatchEvent(event);
     };
 
+    // 获取当前 frame 在 slideOrder 中的顺序 (1-indexed)
+    const getFrameSlideOrder = (frameId: string): number | null => {
+      if (!slideOrder || slideOrder.length === 0) {
+        return null;
+      }
+      const index = slideOrder.indexOf(frameId);
+      return index === -1 ? null : index + 1;
+    };
+
+    // 更新 frame 在 slideOrder 中的顺序
+    const updateFrameSlideOrder = (frameId: string, newOrder: number) => {
+      const allFrames = this.scene
+        .getNonDeletedElements()
+        .filter((el) => isFrameElement(el));
+      const totalFrames = allFrames.length;
+
+      // 确保 newOrder 在有效范围内
+      const clampedOrder = Math.max(1, Math.min(newOrder, totalFrames));
+
+      // 创建或更新 slideOrder
+      let newSlideOrder: string[] = [];
+
+      if (slideOrder && slideOrder.length > 0) {
+        // 复制现有顺序
+        newSlideOrder = [...slideOrder];
+        // 移除当前 frame（如果存在）
+        const currentIndex = newSlideOrder.indexOf(frameId);
+        if (currentIndex !== -1) {
+          newSlideOrder.splice(currentIndex, 1);
+        }
+      } else {
+        // 如果没有 slideOrder，根据位置创建初始顺序
+        newSlideOrder = allFrames
+          .sort((a, b) => {
+            if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
+            return a.x - b.x;
+          })
+          .map((f) => f.id)
+          .filter((id) => id !== frameId);
+      }
+
+      // 确保所有 frame 都在列表中
+      for (const frame of allFrames) {
+        if (frame.id !== frameId && !newSlideOrder.includes(frame.id)) {
+          newSlideOrder.push(frame.id);
+        }
+      }
+
+      // 在新位置插入 frame
+      const insertIndex = clampedOrder - 1;
+      newSlideOrder.splice(insertIndex, 0, frameId);
+
+      // 更新 appState
+      this.setAppState((state) =>
+        ({
+          ...(state as any),
+          slideOrder: newSlideOrder,
+        }) as any,
+      );
+    };
+
     const showShapeSwitchPanel =
       editorJotaiStore.get(convertElementTypePopupAtom)?.type === "panel";
 
@@ -2216,6 +2303,18 @@ class App extends React.Component<AppProps, AppState> {
                                   );
                                   document.dispatchEvent(event);
                                 }}
+                              />
+                              <SlideOrderButton
+                                frameId={firstSelectedElement.id}
+                                currentOrder={getFrameSlideOrder(
+                                  firstSelectedElement.id,
+                                )}
+                                totalSlides={
+                                  this.scene
+                                    .getNonDeletedElements()
+                                    .filter((el) => isFrameElement(el)).length
+                                }
+                                onOrderChange={updateFrameSlideOrder}
                               />
                             </ElementCanvasButtons>
                           )}
@@ -3341,6 +3440,44 @@ class App extends React.Component<AppProps, AppState> {
 
     if (!this.state.showWelcomeScreen && !elements.length) {
       this.setState({ showWelcomeScreen: true });
+    }
+
+    const nonDeletedFrameElements = this.scene
+      .getNonDeletedElements()
+      .filter((el) => isFrameElement(el));
+
+    if (nonDeletedFrameElements.length > 0) {
+      const frameIds = nonDeletedFrameElements.map((el) => el.id);
+      const currentSlideOrder = (this.state as any).slideOrder as
+        | string[]
+        | undefined;
+
+      const normalizedOrder = (
+        Array.isArray(currentSlideOrder) ? currentSlideOrder : []
+      ).filter((id) => frameIds.includes(id));
+
+      const missingFrameIds = nonDeletedFrameElements
+        .filter((el) => !normalizedOrder.includes(el.id))
+        .sort((a, b) => {
+          if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
+          return a.x - b.x;
+        })
+        .map((el) => el.id);
+
+      const nextSlideOrder = [...normalizedOrder, ...missingFrameIds];
+      const isSameSlideOrder =
+        Array.isArray(currentSlideOrder) &&
+        currentSlideOrder.length === nextSlideOrder.length &&
+        currentSlideOrder.every((id, index) => id === nextSlideOrder[index]);
+
+      if (!isSameSlideOrder) {
+        this.setAppState((state) =>
+          ({
+            ...(state as any),
+            slideOrder: nextSlideOrder,
+          }) as any,
+        );
+      }
     }
 
     const hasFollowedPersonLeft =
