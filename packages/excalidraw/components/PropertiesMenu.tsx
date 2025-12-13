@@ -31,6 +31,8 @@ import {
 } from "@excalidraw/element";
 import { alignActionsPredicate } from "../actions/actionAlign";
 import { t } from "../i18n";
+import { NumberInput } from "./NumberInput";
+import { actionChangeStrokeWidth } from "../actions/actionProperties";
 import "./PropertiesMenu.scss";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
@@ -130,9 +132,9 @@ export const PropertiesMenu: React.FC = () => {
   const canEditBackgroundColor =
     app.state.activeTool.type !== "selection" ||
     targetElements.some((el) => hasBackground(el.type));
-  const canEditStrokeWidth = targetElements.some((el) =>
-    hasStrokeWidth(el.type),
-  );
+  const isFreedrawToolActive = app.state.activeTool.type === "freedraw";
+  const canEditStrokeWidth =
+    isFreedrawToolActive || targetElements.some((el) => hasStrokeWidth(el.type));
   const canEditStrokeStyle = targetElements.some((el) =>
     hasStrokeStyle(el.type),
   );
@@ -174,7 +176,7 @@ export const PropertiesMenu: React.FC = () => {
     targetElements.length === 1 &&
     isImageElement(targetElements[0]);
 
-  if (targetElements.length === 0) {
+  if (targetElements.length === 0 && !isFreedrawToolActive) {
     return (
       <div className="PropertiesMenu">
         <div className="PropertiesMenu__empty">
@@ -236,14 +238,30 @@ export const PropertiesMenu: React.FC = () => {
       )}
 
       {/* 描边宽度 */}
-      {canEditStrokeWidth && (
-        <div className="PropertiesMenu__section">
-          <div className="PropertiesMenu__section-title">描边宽度</div>
-          <div className="PropertiesMenu__actions">
-            {actionManager.renderAction("changeStrokeWidth")}
+      {canEditStrokeWidth && (() => {
+        const strokeWidthValue = targetElements.length > 0
+          ? targetElements[0].strokeWidth
+          : app.state.currentItemStrokeWidth;
+        return (
+          <div className="PropertiesMenu__section">
+            <div className="PropertiesMenu__section-title">描边宽度</div>
+            <div className="PropertiesMenu__actions">
+              <div className="PropertiesMenu__inline-row">
+                {actionManager.renderAction("changeStrokeWidth")}
+                <NumberInput
+                  value={strokeWidthValue}
+                  min={0.5}
+                  max={100}
+                  step={0.5}
+                  onChange={(value) => {
+                    actionManager.executeAction(actionChangeStrokeWidth, "ui", value);
+                  }}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 笔触形状 (自由绘制) */}
       {(app.state.activeTool.type === "freedraw" ||
@@ -359,23 +377,27 @@ export const PropertiesMenu: React.FC = () => {
       )}
 
       {/* 透明度 */}
-      <div className="PropertiesMenu__section">
-        <div className="PropertiesMenu__section-title">透明度</div>
-        <div className="PropertiesMenu__actions">
-          {actionManager.renderAction("changeOpacity")}
+      {(targetElements.length > 0 || isFreedrawToolActive) && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">透明度</div>
+          <div className="PropertiesMenu__actions">
+            {actionManager.renderAction("changeOpacity")}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 图层 */}
-      <div className="PropertiesMenu__section">
-        <div className="PropertiesMenu__section-title">图层</div>
-        <div className="PropertiesMenu__button-row buttonList">
-          {actionManager.renderAction("sendToBack")}
-          {actionManager.renderAction("sendBackward")}
-          {actionManager.renderAction("bringForward")}
-          {actionManager.renderAction("bringToFront")}
+      {(targetElements.length > 0 || isFreedrawToolActive) && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">图层</div>
+          <div className="PropertiesMenu__button-row buttonList">
+            {actionManager.renderAction("sendToBack")}
+            {actionManager.renderAction("sendBackward")}
+            {actionManager.renderAction("bringForward")}
+            {actionManager.renderAction("bringToFront")}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* 对齐 */}
       {showAlignActions && (

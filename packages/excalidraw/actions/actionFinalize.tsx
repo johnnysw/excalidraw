@@ -297,6 +297,17 @@ export const actionFinalize = register<FormData>({
         }
       : selectedLinearElement;
 
+    // 如果是 freedraw 元素，将其移动到数组末尾（置顶）
+    if (element && isFreeDrawElement(element)) {
+      const freedrawElement = newElements.find((el) => el.id === element.id);
+      if (freedrawElement) {
+        newElements = [
+          ...newElements.filter((el) => el.id !== element.id),
+          freedrawElement,
+        ];
+      }
+    }
+
     return {
       elements: newElements,
       appState: {

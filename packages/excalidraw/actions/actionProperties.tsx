@@ -110,8 +110,10 @@ import {
   SloppinessArchitectIcon,
   SloppinessArtistIcon,
   SloppinessCartoonistIcon,
+  StrokeWidthExtraThinIcon,
   StrokeWidthBaseIcon,
   StrokeWidthBoldIcon,
+  StrokeWidthMediumIcon,
   StrokeWidthExtraBoldIcon,
   FontSizeSmallIcon,
   FontSizeMediumIcon,
@@ -620,12 +622,6 @@ export const actionChangeStrokeColor = register<
   trackEvent: false,
   perform: (elements, appState, value, app) => {
     const color = value?.currentItemStrokeColor;
-    console.log("[DEBUG] changeStrokeColor triggered", {
-      color,
-      hasEditingTextElement: !!appState.editingTextElement,
-      textEditorSelection: appState.textEditorSelection,
-    });
-
     // Check if we're editing text with a selection
     if (
       color &&
@@ -1033,6 +1029,12 @@ export const actionChangeStrokeWidth = register<
           type="button"
           options={[
             {
+              value: STROKE_WIDTH.extraThin,
+              text: t("labels.extraThin"),
+              icon: StrokeWidthExtraThinIcon,
+              testId: "strokeWidth-extraThin",
+            },
+            {
               value: STROKE_WIDTH.thin,
               text: t("labels.thin"),
               icon: StrokeWidthBaseIcon,
@@ -1043,6 +1045,12 @@ export const actionChangeStrokeWidth = register<
               text: t("labels.bold"),
               icon: StrokeWidthBoldIcon,
               testId: "strokeWidth-bold",
+            },
+            {
+              value: STROKE_WIDTH.medium,
+              text: t("labels.medium"),
+              icon: StrokeWidthMediumIcon,
+              testId: "strokeWidth-medium",
             },
             {
               value: STROKE_WIDTH.extraBold,
