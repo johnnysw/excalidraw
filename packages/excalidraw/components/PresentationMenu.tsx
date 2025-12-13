@@ -549,6 +549,29 @@ const PresentationMenuContent: React.FC = () => {
             }
         }
 
+        // 让画布全屏（与 Footer 中的行为一致）
+        if (app.excalidrawContainerRef.current) {
+            try {
+                const maybePromise =
+                    app.excalidrawContainerRef.current.requestFullscreen();
+                if (maybePromise && typeof (maybePromise as any).catch === "function") {
+                    (maybePromise as Promise<void>).catch(() => {
+                        // 忽略全屏权限错误，保持演示流程
+                    });
+                }
+            } catch (err) {
+                // 忽略权限失败，继续后续逻辑
+            }
+        }
+        setAppState((state) => ({
+            ...state,
+            presentationMode: true,
+            _savedOpenSidebar: state.openSidebar,
+            openSidebar: null,
+            slideOrder: slideOrder,
+            presentationSlideIndex: slideIndex,
+        } as any));
+
         const event = new CustomEvent("excalidraw:startPresentation", {
             detail: {
                 mode: "presenter",
@@ -561,7 +584,7 @@ const PresentationMenuContent: React.FC = () => {
             bubbles: true,
         });
         document.dispatchEvent(event);
-    }, [orderedSlides]);
+    }, [orderedSlides, slideOrder, app.excalidrawContainerRef, setAppState]);
 
     // Start presentation from a specific slide
     const startFromSlide = useCallback((slideId: string) => {

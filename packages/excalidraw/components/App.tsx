@@ -2061,6 +2061,29 @@ class App extends React.Component<AppProps, AppState> {
         }
       }
 
+      // 让画布全屏（与 Footer 中的行为一致）
+      if (this.excalidrawContainerRef.current) {
+        try {
+          const maybePromise =
+            this.excalidrawContainerRef.current.requestFullscreen();
+          if (maybePromise && typeof (maybePromise as any).catch === "function") {
+            (maybePromise as Promise<void>).catch(() => {
+              // 忽略全屏权限错误，保持演示流程
+            });
+          }
+        } catch (err) {
+          // 忽略权限失败，继续后续逻辑
+        }
+      }
+      this.setAppState((state) => ({
+        ...(state as any),
+        presentationMode: true,
+        _savedOpenSidebar: (state as any).openSidebar,
+        openSidebar: null,
+        slideOrder: slideOrder ?? (state as any).slideOrder,
+        presentationSlideIndex: slideIndex,
+      }) as any);
+
       const event = new CustomEvent("excalidraw:startPresentation", {
         detail: {
           mode: "presenter",
