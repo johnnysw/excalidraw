@@ -407,6 +407,7 @@ export interface AppState {
   toast: { message: string; closable?: boolean; duration?: number } | null;
   zenModeEnabled: boolean;
   presentationMode: boolean;
+  presentationAnnotationSessionId: string | null;
   /** Current animation step index in presentation mode */
   presentationStep: number;
   /** Animation progress (0-1) for current step, used for slideIn effects */

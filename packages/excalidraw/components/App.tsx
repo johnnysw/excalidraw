@@ -235,6 +235,7 @@ import {
   Scene,
   Store,
   CaptureUpdateAction,
+  type SceneMutationGuards,
   type ElementUpdate,
   hitElementBoundingBox,
   isLineElement,
@@ -620,6 +621,10 @@ class App extends React.Component<AppProps, AppState> {
   public library: AppClassProperties["library"];
   public libraryItemsFromStorage: LibraryItems | undefined;
   public id: string;
+  // private isMobile: boolean;
+
+  private presentationHistorySnapshot: ReturnType<History["createSnapshot"]> | null =
+    null;
   private store: Store;
   private history: History;
   public excalidrawContainerValue: {
@@ -790,6 +795,64 @@ class App extends React.Component<AppProps, AppState> {
       this,
     );
     this.scene = new Scene();
+
+    const isPresentationAnnotation = (el: any, sessionId: string | null) => {
+      return (
+        !!sessionId &&
+        el?.type === "freedraw" &&
+        el?.customData?.annotationSessionId === sessionId
+      );
+    };
+
+    const presentationMutationGuards: SceneMutationGuards = {
+      shouldAllowMutation: (element, updates) => {
+        if (!this.state.presentationMode) {
+          return true;
+        }
+        const sessionId = this.state.presentationAnnotationSessionId;
+        // allow mutating only current session annotations
+        if (isPresentationAnnotation(element, sessionId)) {
+          return true;
+        }
+        // allow deleting only current session annotations (all others protected)
+        if ((updates as any)?.isDeleted) {
+          return false;
+        }
+        // block any other updates on non-annotation elements
+        return false;
+      },
+      filterNextElements: (prevElements, nextElements) => {
+        if (!this.state.presentationMode) {
+          return nextElements;
+        }
+        const sessionId = this.state.presentationAnnotationSessionId;
+        const prevById = new Map(prevElements.map((el) => [el.id, el]));
+
+        // keep all non-annotation elements as they were
+        // allow changes only for current session annotations
+        const result: ExcalidrawElement[] = [];
+        for (const prevEl of prevElements) {
+          if (isPresentationAnnotation(prevEl, sessionId)) {
+            // will be handled by nextElements below
+            continue;
+          }
+          result.push(prevEl);
+        }
+
+        for (const nextEl of nextElements) {
+          if (isPresentationAnnotation(nextEl, sessionId)) {
+            result.push(nextEl);
+          } else if (!prevById.has(nextEl.id)) {
+            // ignore newly inserted non-annotation elements in presentation
+            continue;
+          }
+        }
+
+        return result;
+      },
+    };
+
+    this.scene.setMutationGuards(presentationMutationGuards);
 
     this.canvas = document.createElement("canvas");
     this.rc = rough.canvas(this.canvas);
@@ -2972,6 +3035,17 @@ class App extends React.Component<AppProps, AppState> {
     this.history.clear();
   };
 
+  private isPresentationAnnotation = (
+    el: any,
+    sessionId: string | null,
+  ): boolean => {
+    return (
+      !!sessionId &&
+      el?.type === "freedraw" &&
+      el?.customData?.annotationSessionId === sessionId
+    );
+  };
+
   private resetStore = () => {
     this.store.clear();
   };
@@ -3206,8 +3280,10 @@ class App extends React.Component<AppProps, AppState> {
         },
         setState: {
           configurable: true,
-          value: (...args: Parameters<typeof setState>) => {
-            return this.setState(...args);
+          value: (
+            ...args: Parameters<React.Component<any, AppState>["setState"]>
+          ) => {
+            return setState(...args);
           },
         },
         app: {
@@ -3230,7 +3306,7 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     this.store.onDurableIncrementEmitter.on((increment) => {
-      this.history.record(increment.delta);
+      this.history.record(increment.delta, increment.change, this.state);
     });
 
     const { onIncrement } = this.props;
@@ -3461,8 +3537,60 @@ class App extends React.Component<AppProps, AppState> {
     const elements = this.scene.getElementsIncludingDeleted();
     const elementsMap = this.scene.getElementsMapIncludingDeleted();
 
+    if (this.state.presentationMode) {
+      const sessionId = this.state.presentationAnnotationSessionId;
+      const selectedIds = Object.keys(this.state.selectedElementIds).filter(
+        (id) => (this.state.selectedElementIds as any)[id],
+      );
+      if (selectedIds.length) {
+        const byId = this.scene.getNonDeletedElementsMap();
+        const removedIds: string[] = [];
+        const nextSelectedElementIds: Record<string, true> = {};
+        for (const id of selectedIds) {
+          const el = byId.get(id);
+          if (this.isPresentationAnnotation(el, sessionId)) {
+            nextSelectedElementIds[id] = true;
+          } else {
+            removedIds.push(id);
+          }
+        }
+
+        if (removedIds.length) {
+          this.setState((prev) => {
+            return {
+              ...selectGroupsForSelectedElements(
+                {
+                  editingGroupId: prev.editingGroupId,
+                  selectedElementIds: makeNextSelectedElementIds(
+                    nextSelectedElementIds,
+                    prev,
+                  ),
+                },
+                this.scene.getNonDeletedElements(),
+                prev,
+                this,
+              ),
+              selectedLinearElement: null,
+            };
+          });
+        }
+      }
+    }
+
     if (!this.state.showWelcomeScreen && !elements.length) {
       this.setState({ showWelcomeScreen: true });
+    }
+
+    if (!prevState.presentationMode && this.state.presentationMode) {
+      this.presentationHistorySnapshot = this.history.createSnapshot();
+      this.history.clear();
+    } else if (prevState.presentationMode && !this.state.presentationMode) {
+      if (this.presentationHistorySnapshot) {
+        this.history.restoreSnapshot(this.presentationHistorySnapshot);
+        this.presentationHistorySnapshot = null;
+      } else {
+        this.history.clear();
+      }
     }
 
     const nonDeletedFrameElements = this.scene
@@ -5153,6 +5281,18 @@ class App extends React.Component<AppProps, AppState> {
           includeBoundTextElement: true,
           includeElementsInFrames: true,
         });
+
+        if (this.state.presentationMode) {
+          const sessionId = this.state.presentationAnnotationSessionId;
+          selectedElements = selectedElements.filter((el) =>
+            this.isPresentationAnnotation(el, sessionId),
+          );
+
+          if (!selectedElements.length) {
+            event.preventDefault();
+            return;
+          }
+        }
 
         const arrowIdsToRemove = new Set<string>();
 
@@ -8291,6 +8431,24 @@ class App extends React.Component<AppProps, AppState> {
           )
         ) {
           pointerDownState.hit.element = null;
+        } else if ((this.state as any).presentationMode) {
+          const sessionId = (this.state as any).presentationAnnotationSessionId as
+            | string
+            | null;
+
+          // In presentation mode, prevent selecting non-annotation elements
+          pointerDownState.hit.allHitElements = unlockedHitElements.filter((el) =>
+            this.isPresentationAnnotation(el, sessionId),
+          );
+
+          if (
+            hitElementMightBeLocked &&
+            this.isPresentationAnnotation(hitElementMightBeLocked, sessionId)
+          ) {
+            pointerDownState.hit.element = hitElementMightBeLocked;
+          } else {
+            pointerDownState.hit.element = null;
+          }
         } else {
           // hitElement may already be set above, so check first
           pointerDownState.hit.element =
@@ -8639,6 +8797,13 @@ class App extends React.Component<AppProps, AppState> {
       type: elementType,
       x: gridX,
       y: gridY,
+      ...(this.state.presentationMode && this.state.presentationAnnotationSessionId
+        ? {
+            customData: {
+              annotationSessionId: this.state.presentationAnnotationSessionId,
+            },
+          }
+        : {}),
       strokeColor: this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
@@ -9522,7 +9687,8 @@ class App extends React.Component<AppProps, AppState> {
         (hasHitASelectedElement ||
           pointerDownState.hit.hasHitCommonBoundingBoxOfSelectedElements) &&
         !isSelectingPointsInLineEditor &&
-        !pointerDownState.drag.blockDragging
+        !pointerDownState.drag.blockDragging &&
+        !(this.state as any).presentationMode
       ) {
         const selectedElements = this.scene.getSelectedElements(this.state);
         if (
@@ -10042,7 +10208,7 @@ class App extends React.Component<AppProps, AppState> {
               shouldReuseSelection = false;
             }
           }
-          const elementsWithinSelection = this.state.selectionElement
+          let elementsWithinSelection = this.state.selectionElement
             ? getElementsWithinSelection(
               elements,
               this.state.selectionElement,
@@ -10050,6 +10216,13 @@ class App extends React.Component<AppProps, AppState> {
               false,
             )
             : [];
+
+          if (this.state.presentationMode) {
+            const sessionId = this.state.presentationAnnotationSessionId;
+            elementsWithinSelection = elementsWithinSelection.filter((el) =>
+              this.isPresentationAnnotation(el, sessionId),
+            );
+          }
 
           this.setState((prevState) => {
             const nextSelectedElementIds = {

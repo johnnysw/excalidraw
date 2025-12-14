@@ -643,7 +643,11 @@ const LayerUI = ({
                     // 忽略权限失败，继续后续逻辑
                   }
                 }
-                setAppState({ presentationMode: true });
+                setAppState({
+                  presentationMode: true,
+                  presentationSlideIndex: 0,
+                  presentationStep: 0,
+                } as any);
                 const event = new CustomEvent("excalidraw:startPresentation", {
                   detail: { mode, presenterWindow },
                   bubbles: true,

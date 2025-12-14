@@ -111,9 +111,27 @@ export class EraserTrail extends AnimatedTrail {
       "frame",
       "magicframe",
     ]);
+    const isPresentationMode = (this.app.state as any).presentationMode;
+    const presentationAnnotationSessionId = (this.app.state as any)
+      .presentationAnnotationSessionId as string | null | undefined;
+
     const candidateElements = this.app.visibleElements.filter((el) => {
       if (el.locked) {
         return false;
+      }
+      // 在演示模式下，只允许擦除 freedraw 类型的元素（画笔/荧光笔笔迹）
+      if (isPresentationMode && el.type !== "freedraw") {
+        return false;
+      }
+      // 在演示模式下，只允许擦除当前会话新增的标注（通过 customData.annotationSessionId 识别）
+      if (isPresentationMode) {
+        if (!presentationAnnotationSessionId) {
+          return false;
+        }
+        const annotationSessionId = (el as any).customData?.annotationSessionId;
+        if (annotationSessionId !== presentationAnnotationSessionId) {
+          return false;
+        }
       }
       // 检查元素类型，阻止擦除 Frame 类型
       if (nonErasableElementTypes.has(el.type)) {

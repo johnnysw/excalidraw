@@ -42,6 +42,17 @@ import type {
 
 import type { AppState } from "../../excalidraw/types";
 
+export type SceneMutationGuards = {
+  shouldAllowMutation?: (
+    element: ExcalidrawElement,
+    updates: ElementUpdate<Mutable<ExcalidrawElement>>,
+  ) => boolean;
+  filterNextElements?: (
+    prevElements: readonly ExcalidrawElement[],
+    nextElements: readonly ExcalidrawElement[],
+  ) => readonly ExcalidrawElement[];
+};
+
 type SceneStateCallback = () => void;
 type SceneStateCallbackRemover = () => void;
 
@@ -112,6 +123,8 @@ export class Scene {
 
   private callbacks: Set<SceneStateCallback> = new Set();
 
+  private mutationGuards: SceneMutationGuards | null = null;
+
   private nonDeletedElements: readonly Ordered<NonDeletedExcalidrawElement>[] =
     [];
   private nonDeletedElementsMap = toBrandedType<NonDeletedSceneElementsMap>(
@@ -173,6 +186,10 @@ export class Scene {
     if (elements) {
       this.replaceAllElements(elements, options);
     }
+  }
+
+  setMutationGuards(guards: SceneMutationGuards | null) {
+    this.mutationGuards = guards;
   }
 
   getSelectedElements(opts: {
@@ -275,7 +292,12 @@ export class Scene {
     },
   ) {
     // we do trust the insertion order on the map, though maybe we shouldn't and should prefer order defined by fractional indices
-    const _nextElements = toArray(nextElements);
+    let _nextElements = toArray(nextElements);
+    if (this.mutationGuards?.filterNextElements) {
+      _nextElements = toArray(
+        this.mutationGuards.filterNextElements(this.elements, _nextElements),
+      );
+    }
     const nextFrameLikes: ExcalidrawFrameLikeElement[] = [];
 
     this.elements = syncInvalidIndices(_nextElements);
@@ -351,6 +373,15 @@ export class Scene {
       ...this.elements.slice(index),
     ];
 
+    const guardedElements = this.mutationGuards?.filterNextElements
+      ? this.mutationGuards.filterNextElements(this.elements, nextElements)
+      : nextElements;
+
+    if (guardedElements !== nextElements) {
+      this.replaceAllElements(guardedElements);
+      return;
+    }
+
     syncMovedIndices(nextElements, arrayToMap([element]));
 
     this.replaceAllElements(nextElements);
@@ -372,6 +403,15 @@ export class Scene {
       ...elements,
       ...this.elements.slice(index),
     ];
+
+    const guardedElements = this.mutationGuards?.filterNextElements
+      ? this.mutationGuards.filterNextElements(this.elements, nextElements)
+      : nextElements;
+
+    if (guardedElements !== nextElements) {
+      this.replaceAllElements(guardedElements);
+      return;
+    }
 
     syncMovedIndices(nextElements, arrayToMap(elements));
 
@@ -444,6 +484,16 @@ export class Scene {
     },
   ) {
     const elementsMap = this.getNonDeletedElementsMap();
+
+    if (
+      this.mutationGuards?.shouldAllowMutation &&
+      !this.mutationGuards.shouldAllowMutation(
+        element,
+        updates as ElementUpdate<Mutable<ExcalidrawElement>>,
+      )
+    ) {
+      return element;
+    }
 
     const { version: prevVersion } = element;
     const { version: nextVersion } = mutateElement(

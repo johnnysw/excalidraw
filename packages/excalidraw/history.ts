@@ -1,7 +1,9 @@
 import { Emitter } from "@excalidraw/common";
 
 import {
+  AppStateDelta,
   CaptureUpdateAction,
+  ElementsDelta,
   StoreChange,
   StoreDelta,
 } from "@excalidraw/element";
@@ -108,19 +110,92 @@ export class History {
   public clear() {
     this.undoStack.length = 0;
     this.redoStack.length = 0;
+
+    this.onHistoryChangedEmitter.trigger(
+      new HistoryChangedEvent(this.isUndoStackEmpty, this.isRedoStackEmpty),
+    );
+  }
+
+  public createSnapshot() {
+    return {
+      undoStack: [...this.undoStack],
+      redoStack: [...this.redoStack],
+    };
+  }
+
+  public restoreSnapshot(snapshot: {
+    undoStack: HistoryDelta[];
+    redoStack: HistoryDelta[];
+  }) {
+    this.undoStack.length = 0;
+    this.redoStack.length = 0;
+
+    this.undoStack.push(...snapshot.undoStack);
+    this.redoStack.push(...snapshot.redoStack);
+
+    this.onHistoryChangedEmitter.trigger(
+      new HistoryChangedEvent(this.isUndoStackEmpty, this.isRedoStackEmpty),
+    );
   }
 
   /**
    * Record a non-empty local durable increment, which will go into the undo stack..
    * Do not re-record history entries, which were already pushed to undo / redo stack, as part of history action.
    */
-  public record(delta: StoreDelta) {
+  public record(delta: StoreDelta, change?: StoreChange, appState?: AppState) {
     if (delta.isEmpty() || delta instanceof HistoryDelta) {
       return;
     }
 
+    let nextDelta: StoreDelta = delta;
+
+    if (
+      appState?.presentationMode &&
+      appState.presentationAnnotationSessionId &&
+      change
+    ) {
+      const sessionId = appState.presentationAnnotationSessionId;
+      const isPresentationAnnotation = (element: any) =>
+        element?.type === "freedraw" &&
+        element?.customData?.annotationSessionId === sessionId;
+
+      const allowedIds = new Set(
+        Object.entries(change.elements)
+          .filter(([, element]) => isPresentationAnnotation(element))
+          .map(([id]) => id),
+      );
+
+      if (!allowedIds.size) {
+        return;
+      }
+
+      const filterRecord = <T,>(record: Record<string, T>) => {
+        const filtered: Record<string, T> = {};
+        for (const [id, entry] of Object.entries(record)) {
+          if (allowedIds.has(id)) {
+            filtered[id] = entry;
+          }
+        }
+        return filtered;
+      };
+
+      const elementsDelta = ElementsDelta.create(
+        filterRecord(nextDelta.elements.added),
+        filterRecord(nextDelta.elements.removed),
+        filterRecord(nextDelta.elements.updated),
+      );
+
+      nextDelta = StoreDelta.create(elementsDelta, AppStateDelta.empty(), {
+        id: nextDelta.id,
+      });
+    }
+
+    if (nextDelta.isEmpty()) {
+      return;
+    }
+
     // construct history entry, so once it's emitted, it's not recorded again
-    const historyDelta = HistoryDelta.inverse(delta);
+    const historyDelta = HistoryDelta.inverse(nextDelta);
 
     this.undoStack.push(historyDelta);
 

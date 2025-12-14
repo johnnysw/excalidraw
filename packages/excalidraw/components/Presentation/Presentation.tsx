@@ -4,7 +4,7 @@ import { useApp, useExcalidrawAppState, useExcalidrawElements, useExcalidrawSetA
 import { ArrowRightIcon, CloseIcon, pencilIcon, EraserIcon, ClearCanvasIcon, HighlighterIcon, ExitPresentationIcon } from "../icons";
 import { KEYS, randomId } from "@excalidraw/common";
 import { ExcalidrawFrameLikeElement, ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
-import { newFreeDrawElement, syncInvalidIndices } from "@excalidraw/element";
+import { CaptureUpdateAction, newFreeDrawElement, syncInvalidIndices } from "@excalidraw/element";
 import type { LocalPoint } from "@excalidraw/math";
 
 const PRESENTER_CHANNEL_NAME = 'presenter-drawing';
@@ -78,13 +78,17 @@ const Presentation = () => {
     } | null>(null);
 
     // Track element IDs that existed before presentation mode started
-    const originalElementIdsRef = useRef<Set<string>>(new Set());
     const presentationActiveRef = useRef(false);
     // Track if we've applied the initial slide index
     const initialSlideAppliedRef = useRef(false);
 
     // BroadcastChannel ref for receiving drawing data from presenter view
     const presenterChannelRef = useRef<BroadcastChannel | null>(null);
+
+    const presentationSessionIdRef = useRef<string | null>(
+        appState.presentationAnnotationSessionId,
+    );
+    presentationSessionIdRef.current = appState.presentationAnnotationSessionId;
 
     // Refs for navigation state (to avoid stale closures)
     const currentIndexRef = useRef(currentIndex);
@@ -100,11 +104,28 @@ const Presentation = () => {
         setShowPenColors(false);
         setShowHighlighterColors(false);
 
+        const sessionId = appState.presentationAnnotationSessionId;
+        if (sessionId) {
+            const currentElements = app.scene.getElementsIncludingDeleted();
+            const elementsToKeep = currentElements.filter(
+                (el) =>
+                    el.type !== "freedraw" ||
+                    (el as any).customData?.annotationSessionId !== sessionId,
+            );
+            if (elementsToKeep.length !== currentElements.length) {
+                (app as any).updateScene({
+                    elements: elementsToKeep,
+                    captureUpdate: CaptureUpdateAction.NEVER,
+                });
+            }
+        }
+
         const savedViewport = savedViewportRef.current;
         savedViewportRef.current = null;
 
         setAppState((state) => ({
             presentationMode: false,
+            presentationAnnotationSessionId: null,
             openSidebar: (state as any)._savedOpenSidebar ?? state.openSidebar,
             _savedOpenSidebar: undefined,
             ...(savedViewport
@@ -115,14 +136,7 @@ const Presentation = () => {
                 }
                 : {}),
         } as any));
-    }, [setAppState]);
-
-    // Save original element IDs when presentation mode starts
-    useEffect(() => {
-        if (appState.presentationMode) {
-            originalElementIdsRef.current = new Set(elements.map(el => el.id));
-        }
-    }, [appState.presentationMode]);
+    }, [setAppState, app, appState.presentationAnnotationSessionId]);
 
     useEffect(() => {
         if (appState.presentationMode && !presentationActiveRef.current) {
@@ -134,7 +148,13 @@ const Presentation = () => {
             };
             initialSlideAppliedRef.current = false; // Reset for new presentation
             // Reset presentationStep when entering presentation mode
-            setAppState({ presentationStep: 0 });
+            // Save existing element IDs to prevent erasing them in presentation mode
+            setAppState({
+                presentationStep: 0,
+                presentationAnnotationSessionId: randomId(),
+            } as any);
+            // Set tool to hand to prevent selecting/moving elements
+            app.setActiveTool({ type: "hand" });
 
             document.dispatchEvent(
                 new CustomEvent("excalidraw:presentationStart", {
@@ -393,7 +413,7 @@ const Presentation = () => {
                 });
             }
             // Clear all presentation drawings on exit
-            clearAllPresentationDrawings();
+            clearAllPresentationDrawings(CaptureUpdateAction.NEVER);
             // Restore original settings on exit
             setAppState((state) => ({
                 frameRendering: originalFrameRenderingRef.current,
@@ -426,18 +446,28 @@ const Presentation = () => {
     }, [appState.presentationMode, showPenColors, showHighlighterColors]);
 
     // Clear all drawings made during presentation
-    const clearAllPresentationDrawings = () => {
-        const originalIds = originalElementIdsRef.current;
-        const currentElements = app.scene.getNonDeletedElements();
+    const clearAllPresentationDrawings = (
+        captureUpdate: any = CaptureUpdateAction.IMMEDIATELY,
+    ) => {
+        const sessionId = appState.presentationAnnotationSessionId;
+        if (!sessionId) {
+            return;
+        }
+        const currentElements = app.scene.getElementsIncludingDeleted();
 
         // Find elements that were added during presentation (freedraw elements)
         const elementsToKeep = currentElements.filter(
-            (el) => originalIds.has(el.id) || el.type !== "freedraw"
+            (el) =>
+                el.type !== "freedraw" ||
+                (el as any).customData?.annotationSessionId !== sessionId,
         );
 
         // Replace all elements with only the original ones (excluding presentation drawings)
         if (elementsToKeep.length !== currentElements.length) {
-            app.scene.replaceAllElements(elementsToKeep);
+            (app as any).updateScene({
+                elements: elementsToKeep,
+                captureUpdate,
+            });
         }
     };
 
@@ -606,6 +636,8 @@ const Presentation = () => {
         channel.onmessage = (event: MessageEvent) => {
             const { type, stroke, frameId, tool, color, strokeWidth, opacity, direction } = event.data || {};
 
+            const sessionId = presentationSessionIdRef.current;
+
             // 处理参数同步消息
             if (type === 'param-sync') {
                 if (tool === 'pen') {
@@ -660,6 +692,13 @@ const Presentation = () => {
                     type: "freedraw",
                     x: minX,
                     y: minY,
+                    ...(sessionId
+                        ? {
+                            customData: {
+                                annotationSessionId: sessionId,
+                            },
+                        }
+                        : {}),
                     strokeColor: presenterStroke.color,
                     strokeWidth: presenterStroke.strokeWidth,
                     opacity: presenterStroke.opacity,
@@ -677,21 +716,30 @@ const Presentation = () => {
             } else if (type === 'erase-stroke') {
                 // 删除指定的笔迹
                 const currentElements = app.scene.getNonDeletedElements();
-                // 查找演示期间添加的 freedraw 元素
-                const freedrawElements = currentElements.filter((el) => el.type === 'freedraw' && !originalElementIdsRef.current.has(el.id));
+                // 查找当前演示会话期间添加的 freedraw 元素
+                const freedrawElements = sessionId
+                    ? currentElements.filter(
+                        (el) =>
+                            el.type === 'freedraw' &&
+                            (el as any).customData?.annotationSessionId === sessionId,
+                    )
+                    : [];
                 if (freedrawElements.length > 0) {
                     // 删除最后一个 freedraw 元素
                     const elementToRemove = freedrawElements[freedrawElements.length - 1];
                     const elementsToKeep = currentElements.filter((el) => el.id !== elementToRemove.id);
                     app.scene.replaceAllElements(elementsToKeep);
                 }
-            } else if (type === 'clear' && frameId) {
+            } else if (type === 'clear') {
                 // 清除所有演示笔迹
-                const originalIds = originalElementIdsRef.current;
                 const currentElements = app.scene.getNonDeletedElements();
-                const elementsToKeep = currentElements.filter(
-                    (el) => originalIds.has(el.id) || el.type !== "freedraw"
-                );
+                const elementsToKeep = sessionId
+                    ? currentElements.filter(
+                        (el) =>
+                            el.type !== "freedraw" ||
+                            (el as any).customData?.annotationSessionId !== sessionId,
+                    )
+                    : currentElements;
                 if (elementsToKeep.length !== currentElements.length) {
                     app.scene.replaceAllElements(elementsToKeep);
                 }

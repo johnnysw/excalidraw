@@ -36,6 +36,13 @@ import { register } from "./register";
 
 import type { AppClassProperties, AppState } from "../types";
 
+const isPresentationAnnotation = (
+  element: ExcalidrawElement | undefined,
+  sessionId: string,
+) =>
+  element?.type === "freedraw" &&
+  (element as any)?.customData?.annotationSessionId === sessionId;
+
 const deleteSelectedElements = (
   elements: readonly ExcalidrawElement[],
   appState: AppState,
@@ -211,6 +218,71 @@ export const actionDeleteSelected = register({
   icon: TrashIcon,
   trackEvent: { category: "element", action: "delete" },
   perform: (elements, appState, formData, app) => {
+    if (appState.presentationMode) {
+      const sessionId = appState.presentationAnnotationSessionId;
+      if (!sessionId) {
+        return false;
+      }
+
+      const selectedIds = Object.keys(appState.selectedElementIds).filter(
+        (id) => appState.selectedElementIds[id],
+      );
+
+      if (!selectedIds.length) {
+        return false;
+      }
+
+      const byId = new Map(elements.map((el) => [el.id, el] as const));
+      const allowedSelectedElementIds: Record<ExcalidrawElement["id"], true> =
+        {};
+      const blockedSelectedIds: string[] = [];
+
+      for (const id of selectedIds) {
+        const el = byId.get(id);
+        if (isPresentationAnnotation(el, sessionId)) {
+          allowedSelectedElementIds[id] = true;
+        } else {
+          blockedSelectedIds.push(id);
+        }
+      }
+
+      if (!Object.keys(allowedSelectedElementIds).length) {
+        return false;
+      }
+
+      // Only delete allowed annotation elements. Non-annotation elements are
+      // protected during presentation mode and are removed from selection.
+      const presentationAppState: AppState = {
+        ...appState,
+        selectedElementIds: allowedSelectedElementIds,
+      };
+
+      let { elements: nextElements, appState: nextAppState } =
+        deleteSelectedElements(elements, presentationAppState, app);
+
+      fixBindingsAfterDeletion(
+        nextElements,
+        nextElements.filter((el) => el.isDeleted),
+      );
+
+      nextAppState = handleGroupEditingState(nextAppState, nextElements);
+
+      return {
+        elements: nextElements,
+        appState: {
+          ...nextAppState,
+          activeTool: updateActiveTool(appState, {
+            type: app.state.preferredSelectionTool.type,
+          }),
+          multiElement: null,
+          newElement: null,
+          activeEmbeddable: null,
+          selectedLinearElement: null,
+        },
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      };
+    }
+
     if (appState.selectedLinearElement?.isEditing) {
       const { elementId, selectedPointsIndices } =
         appState.selectedLinearElement;
