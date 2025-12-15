@@ -564,6 +564,30 @@ export type OnUserFollowedPayload = {
   action: "FOLLOW" | "UNFOLLOW";
 };
 
+/**
+ * 分享模式权限配置
+ * 用于控制分享模式下的 UI 显示和功能权限
+ */
+export type ShareModePermissions = {
+  /** 是否启用分享模式 */
+  enabled?: boolean;
+  /** 侧边栏权限配置 */
+  sidebar?: {
+    /** 允许显示的 tab 列表（如 [CANVAS_SEARCH_TAB]） */
+    allowedTabs?: string[];
+  };
+  /** Footer 权限配置 */
+  footer?: {
+    /** 演示模式按钮配置 */
+    presentation?: {
+      /** 是否在 viewMode 下也显示演示按钮 */
+      visible?: boolean;
+      /** 允许的演示视图类型（'normal' = 普通视图, 'presenter' = 演讲者视图） */
+      allowedViews?: Array<'normal' | 'presenter'>;
+    };
+  };
+};
+
 export interface ExcalidrawProps {
   onChange?: (
     elements: readonly OrderedExcalidrawElement[],
@@ -660,6 +684,8 @@ export interface ExcalidrawProps {
   aiEnabled?: boolean;
   showDeprecatedFonts?: boolean;
   renderScrollbars?: boolean;
+  /** 分享模式权限配置 */
+  shareModePermissions?: ShareModePermissions;
 }
 
 export type SceneData = {

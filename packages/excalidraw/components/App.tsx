@@ -2310,6 +2310,7 @@ class App extends React.Component<AppProps, AppState> {
                           generateLinkForSelection={
                             this.props.generateLinkForSelection
                           }
+                          shareModePermissions={this.props.shareModePermissions}
                         >
                           {this.props.children}
                         </LayerUI>

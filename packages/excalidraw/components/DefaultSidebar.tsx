@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   CANVAS_SEARCH_TAB,
@@ -16,6 +16,7 @@ import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
 
 import { useTunnels } from "../context/tunnels";
 import { useUIAppState } from "../context/ui-appState";
+import { useShareMode } from "../context/share-mode";
 
 import "../components/dropdownMenu/DropdownMenu.scss";
 
@@ -83,8 +84,27 @@ export const DefaultSidebar = Object.assign(
       const appState = useUIAppState();
       const setAppState = useExcalidrawSetAppState();
       const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+      const shareModePermissions = useShareMode();
 
       const { DefaultSidebarTabTriggersTunnel } = useTunnels();
+
+      // 分享模式下允许的 tabs
+      const allowedTabs = shareModePermissions?.sidebar?.allowedTabs;
+      const isTabAllowed = (tab: string) => !allowedTabs || allowedTabs.includes(tab);
+
+      useEffect(() => {
+        if (!allowedTabs) return;
+        const activeTab = appState.openSidebar?.tab;
+        if (!activeTab) return;
+        if (!allowedTabs.includes(activeTab)) {
+          setAppState({
+            openSidebar: {
+              name: DEFAULT_SIDEBAR.name,
+              tab: CANVAS_SEARCH_TAB,
+            },
+          });
+        }
+      }, [allowedTabs, appState.openSidebar?.tab, setAppState]);
 
       const moreTabItems = [
         { tab: LIBRARY_SIDEBAR_TAB, title: "素材库", icon: LibraryIcon },
@@ -121,77 +141,100 @@ export const DefaultSidebar = Object.assign(
           <Sidebar.Tabs>
             <Sidebar.Header>
               <Sidebar.TabTriggers>
-                <Sidebar.TabTrigger
-                  tab={PROPERTIES_SIDEBAR_TAB}
-                  title="属性"
-                >
-                  {PropertiesIcon}
-                </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={ANIMATION_SIDEBAR_TAB} title="动画">
-                  {AnimationIcon}
-                </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger
-                  tab={PRESENTATION_SIDEBAR_TAB}
-                  title="幻灯片"
-                >
-                  {PlaySquareIcon}
-                </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB} title="搜索">
-                  {searchIcon}
-                </Sidebar.TabTrigger>
-                <div className="sidebar-more-trigger">
-                  <DropdownMenu open={moreMenuOpen}>
-                    <DropdownMenu.Trigger
-                      onToggle={() => setMoreMenuOpen(!moreMenuOpen)}
-                      className={clsx("sidebar-tab-trigger", {
-                        "sidebar-tab-trigger--active": isMoreTabActive,
-                      })}
-                      data-state={isMoreTabActive ? "active" : "inactive"}
-                    >
-                      {DotsHorizontalIcon}
-                    </DropdownMenu.Trigger>
-                    <DropdownMenu.Content>
-                      {moreTabItems.map((item) => (
-                        <DropdownMenu.Item
-                          key={item.tab}
-                          icon={item.icon}
-                          onSelect={() => {
-                            setAppState({
-                              openSidebar: {
-                                name: DEFAULT_SIDEBAR.name,
-                                tab: item.tab,
-                              },
-                            });
-                            setMoreMenuOpen(false);
-                          }}
-                        >
-                          {item.title}
-                        </DropdownMenu.Item>
-                      ))}
-                    </DropdownMenu.Content>
-                  </DropdownMenu>
-                </div>
+                {isTabAllowed(PROPERTIES_SIDEBAR_TAB) && (
+                  <Sidebar.TabTrigger
+                    tab={PROPERTIES_SIDEBAR_TAB}
+                    title="属性"
+                  >
+                    {PropertiesIcon}
+                  </Sidebar.TabTrigger>
+                )}
+                {isTabAllowed(ANIMATION_SIDEBAR_TAB) && (
+                  <Sidebar.TabTrigger tab={ANIMATION_SIDEBAR_TAB} title="动画">
+                    {AnimationIcon}
+                  </Sidebar.TabTrigger>
+                )}
+                {isTabAllowed(PRESENTATION_SIDEBAR_TAB) && (
+                  <Sidebar.TabTrigger
+                    tab={PRESENTATION_SIDEBAR_TAB}
+                    title="幻灯片"
+                  >
+                    {PlaySquareIcon}
+                  </Sidebar.TabTrigger>
+                )}
+                {isTabAllowed(CANVAS_SEARCH_TAB) && (
+                  <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB} title="搜索">
+                    {searchIcon}
+                  </Sidebar.TabTrigger>
+                )}
+                {/* 分享模式下隐藏“更多”菜单 */}
+                {!allowedTabs && (
+                  <div className="sidebar-more-trigger">
+                    <DropdownMenu open={moreMenuOpen}>
+                      <DropdownMenu.Trigger
+                        onToggle={() => setMoreMenuOpen(!moreMenuOpen)}
+                        className={clsx("sidebar-tab-trigger", {
+                          "sidebar-tab-trigger--active": isMoreTabActive,
+                        })}
+                        data-state={isMoreTabActive ? "active" : "inactive"}
+                      >
+                        {DotsHorizontalIcon}
+                      </DropdownMenu.Trigger>
+                      <DropdownMenu.Content>
+                        {moreTabItems.map((item) => (
+                          <DropdownMenu.Item
+                            key={item.tab}
+                            icon={item.icon}
+                            onSelect={() => {
+                              setAppState({
+                                openSidebar: {
+                                  name: DEFAULT_SIDEBAR.name,
+                                  tab: item.tab,
+                                },
+                              });
+                              setMoreMenuOpen(false);
+                            }}
+                          >
+                            {item.title}
+                          </DropdownMenu.Item>
+                        ))}
+                      </DropdownMenu.Content>
+                    </DropdownMenu>
+                  </div>
+                )}
                 <DefaultSidebarTabTriggersTunnel.Out />
               </Sidebar.TabTriggers>
             </Sidebar.Header>
-            <Sidebar.Tab tab={PROPERTIES_SIDEBAR_TAB}>
-              <PropertiesMenu />
-            </Sidebar.Tab>
-            <Sidebar.Tab tab={ANIMATION_SIDEBAR_TAB}>
-              <AnimationMenu />
-            </Sidebar.Tab>
-            <Sidebar.Tab tab={PRESENTATION_SIDEBAR_TAB}>
-              <PresentationMenu />
-            </Sidebar.Tab>
-            <Sidebar.Tab tab={LIBRARY_SIDEBAR_TAB}>
-              <LibraryMenu />
-            </Sidebar.Tab>
-            <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
-              <SearchMenu />
-            </Sidebar.Tab>
-            <Sidebar.Tab tab={SHARE_SIDEBAR_TAB}>
-              <ShareMenu />
-            </Sidebar.Tab>
+            {isTabAllowed(PROPERTIES_SIDEBAR_TAB) && (
+              <Sidebar.Tab tab={PROPERTIES_SIDEBAR_TAB}>
+                <PropertiesMenu />
+              </Sidebar.Tab>
+            )}
+            {isTabAllowed(ANIMATION_SIDEBAR_TAB) && (
+              <Sidebar.Tab tab={ANIMATION_SIDEBAR_TAB}>
+                <AnimationMenu />
+              </Sidebar.Tab>
+            )}
+            {isTabAllowed(PRESENTATION_SIDEBAR_TAB) && (
+              <Sidebar.Tab tab={PRESENTATION_SIDEBAR_TAB}>
+                <PresentationMenu />
+              </Sidebar.Tab>
+            )}
+            {isTabAllowed(LIBRARY_SIDEBAR_TAB) && (
+              <Sidebar.Tab tab={LIBRARY_SIDEBAR_TAB}>
+                <LibraryMenu />
+              </Sidebar.Tab>
+            )}
+            {isTabAllowed(CANVAS_SEARCH_TAB) && (
+              <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
+                <SearchMenu />
+              </Sidebar.Tab>
+            )}
+            {isTabAllowed(SHARE_SIDEBAR_TAB) && (
+              <Sidebar.Tab tab={SHARE_SIDEBAR_TAB}>
+                <ShareMenu />
+              </Sidebar.Tab>
+            )}
             {children}
           </Sidebar.Tabs>
         </Sidebar>

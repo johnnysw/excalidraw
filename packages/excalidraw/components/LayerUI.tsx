@@ -23,6 +23,7 @@ import { trackEvent } from "../analytics";
 import { isHandToolActive } from "../appState";
 import { TunnelsContext, useInitializeTunnels } from "../context/tunnels";
 import { UIAppStateContext } from "../context/ui-appState";
+import { ShareModeContext } from "../context/share-mode";
 import { useAtom, useAtomValue } from "../editor-jotai";
 
 import { t } from "../i18n";
@@ -100,6 +101,7 @@ interface LayerUIProps {
   app: AppClassProperties;
   isCollaborating: boolean;
   generateLinkForSelection?: AppProps["generateLinkForSelection"];
+  shareModePermissions?: ExcalidrawProps["shareModePermissions"];
 }
 
 const DefaultMainMenu: React.FC<{
@@ -155,6 +157,7 @@ const LayerUI = ({
   app,
   isCollaborating,
   generateLinkForSelection,
+  shareModePermissions,
 }: LayerUIProps) => {
   const editorInterface = useEditorInterface();
   const stylesPanelMode = useStylesPanelMode();
@@ -677,11 +680,13 @@ const LayerUI = ({
 
   return (
     <UIAppStateContext.Provider value={appState}>
-      <TunnelsJotaiProvider>
-        <TunnelsContext.Provider value={tunnels}>
-          {layerUIJSX}
-        </TunnelsContext.Provider>
-      </TunnelsJotaiProvider>
+      <ShareModeContext.Provider value={shareModePermissions}>
+        <TunnelsJotaiProvider>
+          <TunnelsContext.Provider value={tunnels}>
+            {layerUIJSX}
+          </TunnelsContext.Provider>
+        </TunnelsJotaiProvider>
+      </ShareModeContext.Provider>
     </UIAppStateContext.Provider>
   );
 };
