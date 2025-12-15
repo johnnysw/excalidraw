@@ -42,9 +42,9 @@ const HIGHLIGHTER_COLORS = [
 
 // Stroke width options
 const STROKE_WIDTHS = [
-    { value: 1, name: "细" },
-    { value: 2, name: "中" },
-    { value: 3, name: "粗" },
+    { value: 0.5, name: "细" },
+    { value: 1, name: "中" },
+    { value: 1.5, name: "粗" },
 ];
 
 // Highlighter opacity range (20-80%)
@@ -64,8 +64,8 @@ const Presentation = () => {
     const [showHighlighterColors, setShowHighlighterColors] = useState(false);
     const [currentPenColor, setCurrentPenColor] = useState("#1e1e1e");
     const [currentHighlighterColor, setCurrentHighlighterColor] = useState("#ffd43b");
-    const [currentPenWidth, setCurrentPenWidth] = useState(1);
-    const [currentHighlighterWidth, setCurrentHighlighterWidth] = useState(1);
+    const [currentPenWidth, setCurrentPenWidth] = useState(0.5);
+    const [currentHighlighterWidth, setCurrentHighlighterWidth] = useState(0.5);
     const [currentHighlighterOpacity, setCurrentHighlighterOpacity] = useState(50);
 
     // Store original settings to restore on exit
