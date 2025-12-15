@@ -171,5 +171,46 @@
         border: none;
       }
     }
+
+    .sidebar-more-trigger {
+      position: relative;
+      display: flex;
+      align-items: center;
+
+      .dropdown-menu {
+        z-index: 1000;
+      }
+
+      .dropdown-menu-button {
+        height: var(--lg-button-size);
+        width: var(--lg-button-size);
+        padding: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        background: transparent;
+        border-radius: var(--border-radius-md);
+        cursor: pointer;
+        color: var(--icon-fill-color);
+
+        &:hover {
+          color: var(--color-primary);
+        }
+
+        &[data-state="active"] {
+          background: var(--color-primary);
+          color: var(--color-icon-white);
+
+          &:hover {
+            background: var(--color-primary-darker);
+          }
+        }
+      }
+
+      .dropdown-menu-container {
+        position: static;
+      }
+    }
   }
 }

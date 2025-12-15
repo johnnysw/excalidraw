@@ -62,10 +62,21 @@ const PresentationMenuContent: React.FC = () => {
     const app = useApp();
     const elements = useExcalidrawElements();
     const setAppState = useExcalidrawSetAppState();
-    const slideNotes = useMemo(() => {
-        const notes = (app.state as any).slideNotes;
-        return notes && typeof notes === "object" ? notes as Record<string, string> : {};
-    }, [app.state]);
+
+    const getFrameSlideNoteHtml = useCallback((frameId: string) => {
+        const frame = elements.find((el) => isFrameLikeElement(el) && el.id === frameId && !el.isDeleted) as any;
+        const html = frame?.customData?.slideNoteHtml;
+        return typeof html === "string" ? html : "";
+    }, [elements]);
+
+    const hasFrameSlideNote = useCallback((frameId: string) => {
+        const raw = getFrameSlideNoteHtml(frameId).trim();
+        if (!raw) return false;
+        const normalized = raw
+            .replace(/\s+/g, "")
+            .toLowerCase();
+        return normalized !== "<div><br></div>" && normalized !== "<br>" && normalized !== "<br/>";
+    }, [getFrameSlideNoteHtml]);
 
     const [slides, setSlides] = useState<SlideItem[]>([]);
     const [slideOrder, setSlideOrder] = useState<string[]>(() => {
@@ -496,12 +507,12 @@ const PresentationMenuContent: React.FC = () => {
         const event = new CustomEvent("excalidraw:editSlideNote", {
             detail: {
                 frameId: slideId,
-                note: slideNotes?.[slideId] || "",
+                note: getFrameSlideNoteHtml(slideId),
             },
             bubbles: true,
         });
         document.dispatchEvent(event);
-    }, [slideNotes]);
+    }, [getFrameSlideNoteHtml]);
 
     // Start presentation
     const startPresentation = useCallback(() => {
@@ -714,12 +725,12 @@ const PresentationMenuContent: React.FC = () => {
                                         e.stopPropagation();
                                         handleEditNote(slide.id);
                                     }}
-                                    title={slideNotes?.[slide.id] ? "查看/编辑注释" : "添加注释"}
+                                    title={hasFrameSlideNote(slide.id) ? "查看/编辑注释" : "添加注释"}
                                 >
                                     <span className="PresentationMenu__note-icon" aria-hidden>
                                         {Comment01Icon}
                                         <span
-                                            className={slideNotes?.[slide.id] ? "has-note-dot" : "no-note-dot"}
+                                            className={hasFrameSlideNote(slide.id) ? "has-note-dot" : "no-note-dot"}
                                             aria-hidden
                                         />
                                     </span>

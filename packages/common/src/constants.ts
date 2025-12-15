@@ -431,6 +431,7 @@ export const ANIMATION_SIDEBAR_TAB = "animation";
 export const LIBRARY_SIDEBAR_TAB = "library";
 export const CANVAS_SEARCH_TAB = "search";
 export const PRESENTATION_SIDEBAR_TAB = "presentation";
+export const SHARE_SIDEBAR_TAB = "share";
 
 export const DEFAULT_SIDEBAR = {
   name: "default",

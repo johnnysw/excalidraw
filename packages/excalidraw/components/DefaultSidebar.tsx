@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { useState } from "react";
 
 import {
   CANVAS_SEARCH_TAB,
@@ -8,6 +9,7 @@ import {
   PRESENTATION_SIDEBAR_TAB,
   PROPERTIES_SIDEBAR_TAB,
   ANIMATION_SIDEBAR_TAB,
+  SHARE_SIDEBAR_TAB,
 } from "@excalidraw/common";
 
 import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
@@ -21,7 +23,8 @@ import { useExcalidrawSetAppState } from "./App";
 import { SearchMenu } from "./SearchMenu";
 import { Sidebar } from "./Sidebar/Sidebar";
 import { withInternalFallback } from "./hoc/withInternalFallback";
-import { searchIcon, PropertiesIcon, AnimationIcon } from "./icons";
+import { searchIcon, PropertiesIcon, AnimationIcon, ShareIcon, DotsHorizontalIcon } from "./icons";
+import DropdownMenu from "./dropdownMenu/DropdownMenu";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
 import { LibraryMenu } from "./LibraryMenu";
@@ -29,6 +32,7 @@ import { LibraryIcon, PlaySquareIcon } from "./icons";
 import { PresentationMenu } from "./PresentationMenu";
 import { PropertiesMenu } from "./PropertiesMenu";
 import { AnimationMenu } from "./AnimationMenu";
+import { ShareMenu } from "./ShareMenu";
 
 const DefaultSidebarTrigger = withInternalFallback(
   "DefaultSidebarTrigger",
@@ -78,8 +82,18 @@ export const DefaultSidebar = Object.assign(
     >) => {
       const appState = useUIAppState();
       const setAppState = useExcalidrawSetAppState();
+      const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
       const { DefaultSidebarTabTriggersTunnel } = useTunnels();
+
+      const moreTabItems = [
+        { tab: LIBRARY_SIDEBAR_TAB, title: "素材库", icon: LibraryIcon },
+        { tab: SHARE_SIDEBAR_TAB, title: "分享", icon: ShareIcon },
+      ];
+
+      const isMoreTabActive = moreTabItems.some(
+        (item) => appState.openSidebar?.tab === item.tab
+      );
 
       const isForceDocked = appState.openSidebar?.tab === CANVAS_SEARCH_TAB;
 
@@ -125,9 +139,38 @@ export const DefaultSidebar = Object.assign(
                 <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB} title="搜索">
                   {searchIcon}
                 </Sidebar.TabTrigger>
-                <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB} title="素材库">
-                  {LibraryIcon}
-                </Sidebar.TabTrigger>
+                <div className="sidebar-more-trigger">
+                  <DropdownMenu open={moreMenuOpen}>
+                    <DropdownMenu.Trigger
+                      onToggle={() => setMoreMenuOpen(!moreMenuOpen)}
+                      className={clsx("sidebar-tab-trigger", {
+                        "sidebar-tab-trigger--active": isMoreTabActive,
+                      })}
+                      data-state={isMoreTabActive ? "active" : "inactive"}
+                    >
+                      {DotsHorizontalIcon}
+                    </DropdownMenu.Trigger>
+                    <DropdownMenu.Content>
+                      {moreTabItems.map((item) => (
+                        <DropdownMenu.Item
+                          key={item.tab}
+                          icon={item.icon}
+                          onSelect={() => {
+                            setAppState({
+                              openSidebar: {
+                                name: DEFAULT_SIDEBAR.name,
+                                tab: item.tab,
+                              },
+                            });
+                            setMoreMenuOpen(false);
+                          }}
+                        >
+                          {item.title}
+                        </DropdownMenu.Item>
+                      ))}
+                    </DropdownMenu.Content>
+                  </DropdownMenu>
+                </div>
                 <DefaultSidebarTabTriggersTunnel.Out />
               </Sidebar.TabTriggers>
             </Sidebar.Header>
@@ -145,6 +188,9 @@ export const DefaultSidebar = Object.assign(
             </Sidebar.Tab>
             <Sidebar.Tab tab={CANVAS_SEARCH_TAB}>
               <SearchMenu />
+            </Sidebar.Tab>
+            <Sidebar.Tab tab={SHARE_SIDEBAR_TAB}>
+              <ShareMenu />
             </Sidebar.Tab>
             {children}
           </Sidebar.Tabs>

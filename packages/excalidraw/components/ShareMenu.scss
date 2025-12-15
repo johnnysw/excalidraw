@@ -1,0 +1,25 @@
+.excalidraw {
+  .ShareMenu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 1rem;
+
+    &__content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: var(--text-primary-color);
+    }
+
+    &__hint {
+      font-size: 0.875rem;
+      color: var(--text-secondary-color, #9ca3af);
+      margin-top: 0.5rem;
+    }
+  }
+}

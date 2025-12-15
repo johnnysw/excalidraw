@@ -2045,9 +2045,22 @@ class App extends React.Component<AppProps, AppState> {
     const firstSelectedElement = selectedElements[0];
 
     const slideOrder = (this.state as any).slideOrder as string[] | undefined;
-    const slideNotes = (this.state as any).slideNotes as
-      | Record<string, string>
-      | undefined;
+
+    const getFrameSlideNoteHtml = (frame: any): string => {
+      const html = frame?.customData?.slideNoteHtml;
+      return typeof html === "string" ? html : "";
+    };
+
+    const hasFrameSlideNote = (frame: any): boolean => {
+      const raw = getFrameSlideNoteHtml(frame).trim();
+      if (!raw) return false;
+      const normalized = raw.replace(/\s+/g, "").toLowerCase();
+      return (
+        normalized !== "<div><br></div>" &&
+        normalized !== "<br>" &&
+        normalized !== "<br/>"
+      );
+    };
 
     const getPresentationFrames = () => {
       const allFrames = this.scene
@@ -2355,7 +2368,7 @@ class App extends React.Component<AppProps, AppState> {
                               />
                               <ElementCanvasButton
                                 title={
-                                  slideNotes?.[firstSelectedElement.id]
+                                  hasFrameSlideNote(firstSelectedElement)
                                     ? "查看/编辑注释"
                                     : "添加注释"
                                 }
@@ -2364,7 +2377,7 @@ class App extends React.Component<AppProps, AppState> {
                                     {Comment01Icon}
                                     <span
                                       className={
-                                        slideNotes?.[firstSelectedElement.id]
+                                        hasFrameSlideNote(firstSelectedElement)
                                           ? "has-note-dot"
                                           : "no-note-dot"
                                       }
@@ -2374,15 +2387,14 @@ class App extends React.Component<AppProps, AppState> {
                                 }
                                 checked={false}
                                 onChange={() => {
+                                  const noteHtml =
+                                    getFrameSlideNoteHtml(firstSelectedElement);
                                   const event = new CustomEvent(
                                     "excalidraw:editSlideNote",
                                     {
                                       detail: {
                                         frameId: firstSelectedElement.id,
-                                        note:
-                                          slideNotes?.[
-                                            firstSelectedElement.id
-                                          ] || "",
+                                        note: noteHtml,
                                       },
                                       bubbles: true,
                                     },

@@ -114,6 +114,14 @@ export const PropertiesIcon = createIcon(
   tablerIconProps,
 );
 
+// hugeicons: share-08 (for share panel)
+export const ShareIcon = createIcon(
+  <g strokeWidth="1.5">
+    <path fill="none" stroke="currentColor" d="M21 6.5a3 3 0 1 1-6 0a3 3 0 0 1 6 0ZM9 12a3 3 0 1 1-6 0a3 3 0 0 1 6 0Zm12 5.5a3 3 0 1 1-6 0a3 3 0 0 1 6 0ZM8.729 10.75l6.5-3m-6.5 5.5l6.5 3" />
+  </g>,
+  tablerIconProps,
+);
+
 // tabler-icons: sparkles (for animation panel)
 export const AnimationIcon = createIcon(
   <g strokeWidth="1.25">
