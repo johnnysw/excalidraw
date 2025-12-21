@@ -107,7 +107,7 @@ export const DefaultSidebar = Object.assign(
       }, [allowedTabs, appState.openSidebar?.tab, setAppState]);
 
       const moreTabItems = [
-        { tab: LIBRARY_SIDEBAR_TAB, title: "素材库", icon: LibraryIcon },
+        { tab: CANVAS_SEARCH_TAB, title: "搜索", icon: searchIcon },
         { tab: SHARE_SIDEBAR_TAB, title: "分享", icon: ShareIcon },
       ];
 
@@ -162,9 +162,9 @@ export const DefaultSidebar = Object.assign(
                     {PlaySquareIcon}
                   </Sidebar.TabTrigger>
                 )}
-                {isTabAllowed(CANVAS_SEARCH_TAB) && (
-                  <Sidebar.TabTrigger tab={CANVAS_SEARCH_TAB} title="搜索">
-                    {searchIcon}
+                {isTabAllowed(LIBRARY_SIDEBAR_TAB) && (
+                  <Sidebar.TabTrigger tab={LIBRARY_SIDEBAR_TAB} title="素材库">
+                    {LibraryIcon}
                   </Sidebar.TabTrigger>
                 )}
                 {/* 分享模式下隐藏“更多”菜单 */}

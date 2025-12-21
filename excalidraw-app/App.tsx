@@ -118,10 +118,10 @@ import {
 import { loadFilesFromFirebase } from "./data/firebase";
 import {
   LibraryIndexedDBAdapter,
-  LibraryLocalStorageMigrationAdapter,
   LocalData,
   localStorageQuotaExceededAtom,
 } from "./data/LocalData";
+import { LibraryAPIAdapter } from "./data/LibraryAPIAdapter";
 import { isBrowserStorageStateNewer } from "./data/tabSync";
 import { ShareDialog, shareDialogStateAtom } from "./share/ShareDialog";
 import CollabError, { collabErrorIndicatorAtom } from "./collab/CollabError";
@@ -139,7 +139,6 @@ import { ExcalidrawPlusIframeExport } from "./ExcalidrawPlusIframeExport";
 import "./index.scss";
 
 import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";
-import { AppSidebar } from "./components/AppSidebar";
 
 // RichText 工具
 import { RichTextEditorOverlay, useRichTextTool } from "./richtext";
@@ -404,9 +403,11 @@ const ExcalidrawWrapper = () => {
 
   useHandleLibrary({
     excalidrawAPI,
-    adapter: LibraryIndexedDBAdapter,
-    // TODO maybe remove this in several months (shipped: 24-03-11)
-    migrationAdapter: LibraryLocalStorageMigrationAdapter,
+    // 使用 API adapter 进行后端存储，支持按用户身份区分素材库
+    // 后端根据服务类型自动区分 ownerType（admin-backend=teacher, client-backend=member）
+    adapter: LibraryAPIAdapter,
+    // 从 IndexedDB 迁移旧数据（如有）
+    migrationAdapter: LibraryIndexedDBAdapter,
   });
 
   const [, forceRefresh] = useState(false);
@@ -979,7 +980,6 @@ const ExcalidrawWrapper = () => {
           }}
         />
 
-        <AppSidebar />
 
         {errorMessage && (
           <ErrorDialog onClose={() => setErrorMessage("")}>
