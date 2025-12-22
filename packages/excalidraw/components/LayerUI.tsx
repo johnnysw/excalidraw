@@ -24,6 +24,7 @@ import { isHandToolActive } from "../appState";
 import { TunnelsContext, useInitializeTunnels } from "../context/tunnels";
 import { UIAppStateContext } from "../context/ui-appState";
 import { ShareModeContext } from "../context/share-mode";
+import { RoleContext } from "../context/role";
 import { useAtom, useAtomValue } from "../editor-jotai";
 
 import { t } from "../i18n";
@@ -80,6 +81,7 @@ import type {
 } from "../types";
 
 interface LayerUIProps {
+  role: ExcalidrawProps["role"];
   actionManager: ActionManager;
   appState: UIAppState;
   files: BinaryFiles;
@@ -106,22 +108,26 @@ interface LayerUIProps {
 
 const DefaultMainMenu: React.FC<{
   UIOptions: AppProps["UIOptions"];
-}> = ({ UIOptions }) => {
+  role: ExcalidrawProps["role"];
+}> = ({ UIOptions, role }) => {
+  // 学生端（member）只显示：在画布中查找、帮助、画布背景
+  const isMember = role === "member";
+
   return (
     <MainMenu __fallback>
-      <MainMenu.DefaultItems.LoadScene />
-      <MainMenu.DefaultItems.SaveToActiveFile />
+      {!isMember && <MainMenu.DefaultItems.LoadScene />}
+      {!isMember && <MainMenu.DefaultItems.SaveToActiveFile />}
       {/* FIXME we should to test for this inside the item itself */}
-      {UIOptions.canvasActions.export && <MainMenu.DefaultItems.Export />}
+      {!isMember && UIOptions.canvasActions.export && <MainMenu.DefaultItems.Export />}
       {/* FIXME we should to test for this inside the item itself */}
-      {UIOptions.canvasActions.saveAsImage && (
+      {!isMember && UIOptions.canvasActions.saveAsImage && (
         <MainMenu.DefaultItems.SaveAsImage />
       )}
       <MainMenu.DefaultItems.SearchMenu />
       <MainMenu.DefaultItems.Help />
-      <MainMenu.DefaultItems.ClearCanvas />
-      <MainMenu.Separator />
-      <MainMenu.DefaultItems.ToggleTheme />
+      {!isMember && <MainMenu.DefaultItems.ClearCanvas />}
+      {!isMember && <MainMenu.Separator />}
+      {!isMember && <MainMenu.DefaultItems.ToggleTheme />}
       <MainMenu.DefaultItems.ChangeCanvasBackground />
     </MainMenu>
   );
@@ -137,6 +143,7 @@ const DefaultOverwriteConfirmDialog = () => {
 };
 
 const LayerUI = ({
+  role,
   actionManager,
   appState,
   files,
@@ -469,7 +476,7 @@ const LayerUI = ({
       {/* render component fallbacks. Can be rendered anywhere as they'll be
           tunneled away. We only render tunneled components that actually
         have defaults when host do not render anything. */}
-      <DefaultMainMenu UIOptions={UIOptions} />
+      <DefaultMainMenu UIOptions={UIOptions} role={role} />
       <DefaultSidebar.Trigger
         __fallback
         icon={sidebarRightIcon}
@@ -680,13 +687,15 @@ const LayerUI = ({
 
   return (
     <UIAppStateContext.Provider value={appState}>
-      <ShareModeContext.Provider value={shareModePermissions}>
-        <TunnelsJotaiProvider>
-          <TunnelsContext.Provider value={tunnels}>
-            {layerUIJSX}
-          </TunnelsContext.Provider>
-        </TunnelsJotaiProvider>
-      </ShareModeContext.Provider>
+      <RoleContext.Provider value={role}>
+        <ShareModeContext.Provider value={shareModePermissions}>
+          <TunnelsJotaiProvider>
+            <TunnelsContext.Provider value={tunnels}>
+              {layerUIJSX}
+            </TunnelsContext.Provider>
+          </TunnelsJotaiProvider>
+        </ShareModeContext.Provider>
+      </RoleContext.Provider>
     </UIAppStateContext.Provider>
   );
 };

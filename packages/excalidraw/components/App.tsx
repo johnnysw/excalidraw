@@ -2278,6 +2278,7 @@ class App extends React.Component<AppProps, AppState> {
                       >
                         {this.state.presentationMode && <Presentation />}
                         <LayerUI
+                          role={this.props.role}
                           canvas={this.canvas}
                           appState={this.state}
                           files={this.files}

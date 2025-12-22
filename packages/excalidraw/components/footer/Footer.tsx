@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { actionShortcuts } from "../../actions";
 import { useTunnels } from "../../context/tunnels";
 import { useShareMode } from "../../context/share-mode";
+import { useRole } from "../../context/role";
 import { ExitZenModeButton, UndoRedoActions, ZoomActions } from "../Actions";
 import { HelpButton } from "../HelpButton";
 import { Section } from "../Section";
@@ -30,11 +31,11 @@ const Footer = ({
   const { FooterCenterTunnel, WelcomeScreenHelpHintTunnel } = useTunnels();
   const [menuOpen, setMenuOpen] = useState(false);
   const shareModePermissions = useShareMode();
+  const role = useRole();
 
   // 分享模式下的演示按钮配置
   const presentationConfig = shareModePermissions?.footer?.presentation;
   const showPresentationInViewMode = presentationConfig?.visible ?? false;
-  const allowedViews = presentationConfig?.allowedViews;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -140,8 +141,8 @@ const Footer = ({
                     { key: "viewer" as const, viewType: "normal" as const, label: "普通视图", icon: Presentation05Icon },
                     { key: "presenter" as const, viewType: "presenter" as const, label: "演讲者视图", icon: PresenterModeIcon },
                   ]
-                    // 分享模式下根据 allowedViews 过滤菜单项
-                    .filter((item) => !allowedViews || allowedViews.includes(item.viewType))
+                    // 学生端隐藏演讲者视图
+                    .filter((item) => role !== "member" || item.viewType !== "presenter")
                     .map((item, index, arr) => (
                     <button
                       key={item.key}

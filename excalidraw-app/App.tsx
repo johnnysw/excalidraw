@@ -831,6 +831,7 @@ const ExcalidrawWrapper = () => {
       })}
     >
       <Excalidraw
+        role="teacher"
         excalidrawAPI={excalidrawRefCallback}
         onChange={onChange}
         initialData={initialStatePromiseRef.current.promise}

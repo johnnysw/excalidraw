@@ -565,6 +565,13 @@ export type OnUserFollowedPayload = {
 };
 
 /**
+ * 角色类型
+ * teacher: 教师端（完整功能）
+ * member: 学生端（受限功能，如隐藏演讲者视图）
+ */
+export type RoleType = "teacher" | "member";
+
+/**
  * 分享模式权限配置
  * 用于控制分享模式下的 UI 显示和功能权限
  */
@@ -589,6 +596,8 @@ export type ShareModePermissions = {
 };
 
 export interface ExcalidrawProps {
+  /** 角色标识（必填）：teacher=教师端，member=学生端 */
+  role: RoleType;
   onChange?: (
     elements: readonly OrderedExcalidrawElement[],
     appState: AppState,

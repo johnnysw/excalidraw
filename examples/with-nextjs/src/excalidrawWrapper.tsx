@@ -14,7 +14,7 @@ const ExcalidrawWrapper: React.FC = () => {
         useCustom={(api: any, args?: any[]) => {}}
         excalidrawLib={excalidrawLib}
       >
-        <Excalidraw />
+        <Excalidraw role="teacher" />
       </App>
     </>
   );
