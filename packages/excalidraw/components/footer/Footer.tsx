@@ -36,6 +36,10 @@ const Footer = ({
   // 分享模式下的演示按钮配置
   const presentationConfig = shareModePermissions?.footer?.presentation;
   const showPresentationInViewMode = presentationConfig?.visible ?? false;
+  const shouldShowPresentationButton =
+    presentationConfig?.visible === false
+      ? false
+      : !appState.viewModeEnabled || showPresentationInViewMode;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -96,7 +100,7 @@ const Footer = ({
       >
         <div style={{ position: "relative", display: "flex", gap: "8px" }}>
           {/* 分享模式下：即使 viewModeEnabled 也可以显示演示按钮 */}
-          {(!appState.viewModeEnabled || showPresentationInViewMode) && (
+          {shouldShowPresentationButton && (
             <div style={{ position: "relative" }}>
               <button
                 ref={triggerRef}

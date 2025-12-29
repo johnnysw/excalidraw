@@ -1321,7 +1321,13 @@ const _renderInteractiveScene = ({
     !appState.newElement &&
     !appState.selectedLinearElement?.isEditing
   ) {
-    const showBoundingBox = hasBoundingBox(
+    const shouldHideQuestionSelection = selectedElements.some(
+      (el: any) => el?.customData?.type === "practice-question",
+    );
+
+    const showBoundingBox =
+      !shouldHideQuestionSelection &&
+      hasBoundingBox(
       selectedElements,
       appState,
       editorInterface,
@@ -1492,7 +1498,8 @@ const _renderInteractiveScene = ({
     } else if (
       selectedElements.length > 1 &&
       !appState.isRotating &&
-      !selectedElements.some((el) => el.locked)
+      !selectedElements.some((el) => el.locked) &&
+      !shouldHideQuestionSelection
     ) {
       const dashedLinePadding =
         (DEFAULT_TRANSFORM_HANDLE_SPACING * 2) / appState.zoom.value;

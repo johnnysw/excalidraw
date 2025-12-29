@@ -171,6 +171,11 @@ const LayerUI = ({
   const isCompactStylesPanel = stylesPanelMode === "compact";
   const tunnels = useInitializeTunnels();
 
+  const isMainMenuVisible = shareModePermissions?.mainMenu?.visible ?? true;
+  const isSidebarVisible = shareModePermissions?.sidebar?.visible ?? true;
+
+  const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
+
   const spacing = isCompactStylesPanel
     ? {
       menuTopGap: 4,
@@ -188,6 +193,23 @@ const LayerUI = ({
       islandPadding: 1,
       collabMarginLeft: 8,
     };
+
+  const renderSidebars = () => {
+    if (!isSidebarVisible) return null;
+    return (
+      <DefaultSidebar
+        __fallback
+        onDock={(docked) => {
+          trackEvent(
+            "sidebar",
+            docked ? "dock" : "undock",
+            "default-sidebar",
+          );
+        }}
+        tab={DEFAULT_SIDEBAR.defaultTab}
+      />
+    );
+  };
 
   const TunnelsJotaiProvider = tunnels.tunnelsJotai.Provider;
 
@@ -236,7 +258,7 @@ const LayerUI = ({
     <div style={{ position: "relative" }}>
       {/* wrapping to Fragment stops React from occasionally complaining
                 about identical Keys */}
-      <tunnels.MainMenuTunnel.Out />
+      {isMainMenuVisible && <tunnels.MainMenuTunnel.Out />}
       {renderWelcomeScreen && <tunnels.WelcomeScreenMenuHintTunnel.Out />}
     </div>
   );
@@ -430,6 +452,7 @@ const LayerUI = ({
             {!appState.viewModeEnabled &&
               appState.openDialog?.name !== "elementLinkSelector" &&
               // hide button when sidebar docked
+              isSidebarVisible &&
               (!isSidebarDocked ||
                 appState.openSidebar?.name !== DEFAULT_SIDEBAR.name) && (
                 <tunnels.DefaultSidebarTriggerTunnel.Out />
@@ -449,24 +472,6 @@ const LayerUI = ({
     );
   };
 
-  const renderSidebars = () => {
-    return (
-      <DefaultSidebar
-        __fallback
-        onDock={(docked) => {
-          trackEvent(
-            "sidebar",
-            `toggleDock (${docked ? "dock" : "undock"})`,
-            `(${editorInterface.formFactor === "phone" ? "mobile" : "desktop"
-            })`,
-          );
-        }}
-      />
-    );
-  };
-
-  const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
-
   const layerUIJSX = appState.presentationMode ? null : (
     <>
       {/* ------------------------- tunneled UI ---------------------------- */}
@@ -476,23 +481,14 @@ const LayerUI = ({
       {/* render component fallbacks. Can be rendered anywhere as they'll be
           tunneled away. We only render tunneled components that actually
         have defaults when host do not render anything. */}
-      <DefaultMainMenu UIOptions={UIOptions} role={role} />
-      <DefaultSidebar.Trigger
-        __fallback
-        icon={sidebarRightIcon}
-        title={capitalizeString(t("toolBar.library"))}
-        onToggle={(open) => {
-          if (open) {
-            trackEvent(
-              "sidebar",
-              `${DEFAULT_SIDEBAR.name} (open)`,
-              `button (${editorInterface.formFactor === "phone" ? "mobile" : "desktop"
-              })`,
-            );
-          }
-        }}
-        tab={DEFAULT_SIDEBAR.defaultTab}
-      />
+      {isMainMenuVisible && <DefaultMainMenu UIOptions={UIOptions} role={role} />}
+      {isSidebarVisible && (
+        <DefaultSidebar.Trigger
+          __fallback
+          icon={sidebarRightIcon}
+          title={capitalizeString(t("toolBar.library"))}
+        />
+      )}
       <DefaultOverwriteConfirmDialog />
       {appState.openDialog?.name === "ttd" && <TTDDialog __fallback />}
       {/* ------------------------------------------------------------------ */}

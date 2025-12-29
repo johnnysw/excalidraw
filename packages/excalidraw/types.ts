@@ -580,8 +580,15 @@ export type ShareModePermissions = {
   enabled?: boolean;
   /** 侧边栏权限配置 */
   sidebar?: {
+    /** 是否显示侧边栏（DefaultSidebar） */
+    visible?: boolean;
     /** 允许显示的 tab 列表（如 [CANVAS_SEARCH_TAB]） */
     allowedTabs?: string[];
+  };
+  /** 主菜单权限配置 */
+  mainMenu?: {
+    /** 是否显示左上角主菜单（MainMenu） */
+    visible?: boolean;
   };
   /** Footer 权限配置 */
   footer?: {
