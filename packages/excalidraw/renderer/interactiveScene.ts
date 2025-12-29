@@ -1590,7 +1590,12 @@ const _renderInteractiveScene = ({
     }
   });
 
-  renderSnaps(context, appState);
+  const shouldHidePracticeSnaps = selectedElements.some(
+    (el: any) => el?.customData?.type === "practice-question",
+  );
+  if (!shouldHidePracticeSnaps) {
+    renderSnaps(context, appState);
+  }
 
   context.restore();
 

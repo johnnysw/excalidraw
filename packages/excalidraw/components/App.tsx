@@ -7272,6 +7272,12 @@ class App extends React.Component<AppProps, AppState> {
         // if using cmd/ctrl, we're not dragging
         !event[KEYS.CTRL_OR_CMD]
       ) {
+        const shouldDisableMoveCursorForPractice =
+          (hitElement as any)?.customData?.type === "practice-question" ||
+          selectedElements.some(
+            (el: any) => el?.customData?.type === "practice-question",
+          );
+
         if (
           (hitElement ||
             this.isHittingCommonBoundingBoxOfSelectedElements(
@@ -7304,7 +7310,11 @@ class App extends React.Component<AppProps, AppState> {
               this.state.activeTool.type !== "lasso" ||
               selectedElements.length > 0
             ) {
-              setCursor(this.interactiveCanvas, CURSOR_TYPE.MOVE);
+              if (shouldDisableMoveCursorForPractice) {
+                setCursor(this.interactiveCanvas, CURSOR_TYPE.AUTO);
+              } else {
+                setCursor(this.interactiveCanvas, CURSOR_TYPE.MOVE);
+              }
             }
             if (this.state.activeEmbeddable?.state === "hover") {
               this.setState({ activeEmbeddable: null });
