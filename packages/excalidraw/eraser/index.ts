@@ -105,6 +105,9 @@ export class EraserTrail extends AnimatedTrail {
       "question",
       "richTextNode",
       "questionTagBadge",
+      "practice-question",
+      "mindmap",
+      "paper",
     ]);
     // Frame 类型也不可被擦除
     const nonErasableElementTypes = new Set([
