@@ -4,6 +4,10 @@ import { isFrameLikeElement } from "@excalidraw/element";
 import { exportToCanvas } from "../scene/export";
 import { PlayIcon, PresenterModeIcon, Presentation05Icon, Comment01Icon, save } from "./icons";
 import "./PresentationMenu.scss";
+import clsx from "clsx";
+import { useTunnels } from "../context/tunnels";
+import { useShareMode } from "../context/share-mode";
+import { useRole } from "../context/role";
 
 import type { ExcalidrawFrameLikeElement, ExcalidrawElement } from "@excalidraw/element/types";
 
@@ -62,6 +66,12 @@ const PresentationMenuContent: React.FC = () => {
     const app = useApp();
     const elements = useExcalidrawElements();
     const setAppState = useExcalidrawSetAppState();
+    const shareModePermissions = useShareMode();
+    const role = useRole();
+
+    const allowedViews = shareModePermissions?.footer?.presentation?.allowedViews;
+    const canShowPresenterView =
+        role !== "member" && (!allowedViews || allowedViews.includes("presenter"));
 
     const getFrameSlideNoteHtml = useCallback((frameId: string) => {
         const frame = elements.find((el) => isFrameLikeElement(el) && el.id === frameId && !el.isDeleted) as any;
@@ -709,16 +719,18 @@ const PresentationMenuContent: React.FC = () => {
                                 >
                                     {Presentation05Icon}
                                 </button>
-                                <button
-                                    className="PresentationMenu__play-btn"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        openPresenterViewFromSlide(slide.id);
-                                    }}
-                                    title="演讲者视图"
-                                >
-                                    {PresenterModeIcon}
-                                </button>
+                                {canShowPresenterView && (
+                                    <button
+                                        className="PresentationMenu__play-btn"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            openPresenterViewFromSlide(slide.id);
+                                        }}
+                                        title="演讲者视图"
+                                    >
+                                        {PresenterModeIcon}
+                                    </button>
+                                )}
                                 <button
                                     className="PresentationMenu__note-btn"
                                     onClick={(e) => {

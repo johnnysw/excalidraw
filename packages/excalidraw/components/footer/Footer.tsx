@@ -36,6 +36,7 @@ const Footer = ({
   // 分享模式下的演示按钮配置
   const presentationConfig = shareModePermissions?.footer?.presentation;
   const showPresentationInViewMode = presentationConfig?.visible ?? false;
+  const allowedViews = presentationConfig?.allowedViews;
   const shouldShowPresentationButton =
     presentationConfig?.visible === false
       ? false
@@ -147,6 +148,8 @@ const Footer = ({
                   ]
                     // 学生端隐藏演讲者视图
                     .filter((item) => role !== "member" || item.viewType !== "presenter")
+                    // 分享/受控场景：根据 allowedViews 控制可见项
+                    .filter((item) => !allowedViews || allowedViews.includes(item.viewType))
                     .map((item, index, arr) => (
                     <button
                       key={item.key}
