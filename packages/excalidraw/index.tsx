@@ -311,3 +311,14 @@ export { getDataURL } from "./data/blob";
 export { isElementLink } from "@excalidraw/element";
 
 export { setCustomTextMetricsProvider } from "@excalidraw/element";
+
+export {
+  AnswerStatusContext,
+  useAnswerStatus,
+} from "./context/answer-status";
+export type {
+  AnswerStatusConfig,
+  SelectedQuestionInfo,
+  MemberAnswerStatus,
+  QuestionAnswerStatusResponse,
+} from "./context/answer-status";

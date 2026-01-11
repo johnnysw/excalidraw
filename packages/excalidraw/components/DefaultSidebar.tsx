@@ -10,6 +10,7 @@ import {
   PROPERTIES_SIDEBAR_TAB,
   ANIMATION_SIDEBAR_TAB,
   SHARE_SIDEBAR_TAB,
+  ANSWER_STATUS_SIDEBAR_TAB,
 } from "@excalidraw/common";
 
 import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
@@ -24,7 +25,7 @@ import { useExcalidrawSetAppState } from "./App";
 import { SearchMenu } from "./SearchMenu";
 import { Sidebar } from "./Sidebar/Sidebar";
 import { withInternalFallback } from "./hoc/withInternalFallback";
-import { searchIcon, PropertiesIcon, AnimationIcon, ShareIcon, DotsHorizontalIcon } from "./icons";
+import { searchIcon, PropertiesIcon, AnimationIcon, ShareIcon, DotsHorizontalIcon, usersIcon } from "./icons";
 import DropdownMenu from "./dropdownMenu/DropdownMenu";
 
 import type { SidebarProps, SidebarTriggerProps } from "./Sidebar/common";
@@ -34,6 +35,7 @@ import { PresentationMenu } from "./PresentationMenu";
 import { PropertiesMenu } from "./PropertiesMenu";
 import { AnimationMenu } from "./AnimationMenu";
 import { ShareMenu } from "./ShareMenu";
+import { AnswerStatusMenu } from "./AnswerStatusMenu";
 
 const DefaultSidebarTrigger = withInternalFallback(
   "DefaultSidebarTrigger",
@@ -109,6 +111,7 @@ export const DefaultSidebar = Object.assign(
       const moreTabItems = [
         { tab: CANVAS_SEARCH_TAB, title: "搜索", icon: searchIcon },
         { tab: SHARE_SIDEBAR_TAB, title: "分享", icon: ShareIcon },
+        { tab: ANSWER_STATUS_SIDEBAR_TAB, title: "答题情况", icon: usersIcon },
       ];
 
       const isMoreTabActive = moreTabItems.some(
@@ -233,6 +236,11 @@ export const DefaultSidebar = Object.assign(
             {isTabAllowed(SHARE_SIDEBAR_TAB) && (
               <Sidebar.Tab tab={SHARE_SIDEBAR_TAB}>
                 <ShareMenu />
+              </Sidebar.Tab>
+            )}
+            {isTabAllowed(ANSWER_STATUS_SIDEBAR_TAB) && (
+              <Sidebar.Tab tab={ANSWER_STATUS_SIDEBAR_TAB}>
+                <AnswerStatusMenu />
               </Sidebar.Tab>
             )}
             {children}

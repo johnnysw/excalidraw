@@ -1,0 +1,454 @@
+.AnswerStatusMenu {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  overflow: hidden;
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  &__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f172a; // slate-900
+  }
+
+  &__refresh-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0; // slate-200
+    background: #ffffff;
+    color: #475569; // slate-600
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: #f8fafc; // slate-50
+      border-color: #cbd5e1; // slate-300
+      color: #0f172a; // slate-900
+    }
+
+    &:active {
+      transform: translateY(0.5px);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    // iconify 图标默认按 font-size 渲染
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  &__empty,
+  &__error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #64748b; // slate-500
+    text-align: center;
+  }
+
+  &__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    color: #64748b; // slate-500
+    text-align: center;
+  }
+
+  &__empty-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+    opacity: 0.5;
+  }
+
+  &__hint {
+    font-size: 12px;
+    color: #94a3b8; // slate-400
+    margin-top: 4px;
+  }
+
+  &__spinner {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #e2e8f0; // slate-200
+    border-top-color: #475569; // slate-600
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-bottom: 12px;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  &__retry-btn {
+    margin-top: 12px;
+    padding: 6px 16px;
+    border: 1px solid #cbd5e1; // slate-300
+    border-radius: 8px;
+    background: #ffffff;
+    color: #475569; // slate-600
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background: #f8fafc; // slate-50
+      border-color: #94a3b8; // slate-400
+    }
+  }
+
+  // 统计区域 - 两行布局，更宽松
+  &__summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    margin-bottom: 16px;
+    padding: 8px;
+    background: #f8fafc; // slate-50
+    border: 1px solid #e2e8f0; // slate-200
+    border-radius: 12px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    position: relative;
+
+    // 两行之间的横向分隔线（充满整行）
+    &::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      right: 8px;
+      top: 50%;
+      height: 1px;
+      background: #e2e8f0; // slate-200
+    }
+  }
+
+  &__summary-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 10px 6px;
+    background: transparent;
+    position: relative;
+
+    // 右侧分隔线（第 1、2、4 列显示，第 3、5 不显示）
+    &:not(:nth-child(3n))::after {
+      content: '';
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 1px;
+      height: 28px;
+      background: #e2e8f0; // slate-200
+    }
+
+    &--correct {
+      .AnswerStatusMenu__summary-value {
+        color: #16a34a; // green-600
+      }
+    }
+
+    &--wrong {
+      .AnswerStatusMenu__summary-value {
+        color: #dc2626; // red-600
+      }
+    }
+
+    &--rate {
+      .AnswerStatusMenu__summary-value {
+        color: #16a34a; // green-600
+      }
+    }
+
+    &--unanswered {
+      .AnswerStatusMenu__summary-value {
+        color: #94a3b8; // slate-400
+      }
+    }
+  }
+
+  &__summary-label {
+    font-size: 11px;
+    color: #64748b; // slate-500
+    margin-bottom: 2px;
+    font-weight: 400;
+  }
+
+  &__summary-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #0f172a; // slate-900
+    line-height: 1.2;
+  }
+
+  &__correct-answer-hint {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    background: #f0fdf4; // green-50
+    border-radius: 8px;
+    font-size: 14px;
+    color: #166534; // green-800
+    border: 1px solid #bbf7d0; // green-200
+
+    .value {
+      font-weight: 700;
+      color: #16a34a; // green-600
+      font-size: 18px;
+    }
+  }
+
+  &__grid {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  &__card {
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0; // slate-200
+    overflow: hidden;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+
+    &--correct {
+      border-color: #86efac; // green-300
+      background: linear-gradient(to bottom, #f0fdf4, #ffffff); // green-50 to white
+
+      .AnswerStatusMenu__card-header {
+        background: transparent;
+        border-bottom: 1px solid #dcfce7; // green-100
+      }
+
+      .AnswerStatusMenu__card-option {
+        color: #15803d; // green-700
+      }
+
+      .AnswerStatusMenu__student-tag {
+        background: #dcfce7; // green-100
+        color: #166534; // green-800
+        border: none;
+      }
+    }
+
+    &--wrong {
+      &:hover {
+        border-color: #cbd5e1; // slate-300
+      }
+
+      .AnswerStatusMenu__card-header {
+        background: transparent;
+        border-bottom: 1px solid #f1f5f9; // slate-100
+      }
+
+      .AnswerStatusMenu__card-option {
+        color: #334155; // slate-700
+      }
+
+      .AnswerStatusMenu__student-tag {
+        background: #f1f5f9; // slate-100
+        color: #475569; // slate-600
+        border: none;
+      }
+    }
+  }
+
+  &__card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+  }
+
+  &__card-option {
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  &__card-badge {
+    font-size: 10px;
+    padding: 2px 8px;
+    background: #16a34a; // green-600
+    color: white;
+    border-radius: 10px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  &__card-count {
+    font-size: 13px;
+    color: #64748b; // slate-500
+    font-weight: 500;
+  }
+
+  &__card-body {
+    padding: 12px 14px 14px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  &__student-tag {
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 6px;
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-weight: 500;
+    transition: all 0.15s ease;
+  }
+}
+
+// Dark mode support
+.excalidraw.theme--dark {
+  .AnswerStatusMenu {
+    &__title {
+      color: #f1f5f9; // slate-100
+    }
+
+    &__refresh-btn {
+      background: #1e293b; // slate-800
+      border-color: #334155; // slate-700
+      color: #e2e8f0; // slate-200
+
+      &:hover {
+        background: #334155; // slate-700
+        border-color: #475569; // slate-600
+        color: #ffffff;
+      }
+    }
+
+    &__summary {
+      background: #1e293b; // slate-800
+      border: 1px solid #334155; // slate-700
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    }
+
+    &__empty,
+    &__error {
+      color: #94a3b8; // slate-400
+    }
+
+    &__loading {
+      color: #94a3b8; // slate-400
+    }
+
+    &__hint {
+      color: #64748b; // slate-500
+    }
+
+    &__spinner {
+      border-color: #334155; // slate-700
+      border-top-color: #94a3b8; // slate-400
+    }
+
+    &__retry-btn {
+      background: #1e293b; // slate-800
+      border-color: #334155; // slate-700
+      color: #e2e8f0; // slate-200
+
+      &:hover {
+        background: #334155; // slate-700
+        border-color: #475569; // slate-600
+      }
+    }
+
+    &__summary-item {
+      &:not(:last-child)::after {
+        background: #334155; // slate-700
+      }
+    }
+
+    &__summary-label {
+      color: #94a3b8; // slate-400
+    }
+
+    &__summary-value {
+      color: #f1f5f9; // slate-100
+    }
+
+    &__correct-answer-hint {
+      background: rgba(22, 163, 74, 0.15);
+      border-color: rgba(34, 197, 94, 0.3);
+      color: #86efac; // green-300
+
+      .value {
+        color: #4ade80; // green-400
+      }
+    }
+
+    &__card {
+      background: #1e293b; // slate-800
+      border-color: #334155; // slate-700
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+
+      &--correct {
+        background: linear-gradient(to bottom, rgba(22, 163, 74, 0.15), #1e293b);
+        border-color: rgba(34, 197, 94, 0.4);
+
+        .AnswerStatusMenu__card-header {
+          border-bottom-color: rgba(34, 197, 94, 0.2);
+        }
+
+        .AnswerStatusMenu__card-option {
+          color: #4ade80; // green-400
+        }
+
+        .AnswerStatusMenu__student-tag {
+          background: rgba(22, 163, 74, 0.25);
+          color: #86efac; // green-300
+        }
+      }
+
+      &--wrong {
+        .AnswerStatusMenu__card-header {
+          border-bottom-color: #334155; // slate-700
+        }
+
+        .AnswerStatusMenu__card-option {
+          color: #e2e8f0; // slate-200
+        }
+
+        .AnswerStatusMenu__student-tag {
+          background: #334155; // slate-700
+          color: #cbd5e1; // slate-300
+        }
+      }
+    }
+
+    &__card-count {
+      color: #94a3b8; // slate-400
+    }
+  }
+}
