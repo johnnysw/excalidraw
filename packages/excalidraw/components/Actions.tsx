@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 
 import {
@@ -1069,6 +1069,108 @@ export const MobileShapeActions = ({
   );
 };
 
+export const SelectionTool = ({
+  app,
+  appState,
+  setAppState,
+  isCompactStylesPanel,
+}: {
+  app: AppClassProperties;
+  appState: UIAppState;
+  setAppState: React.Component<any, AppState>["setState"];
+  isCompactStylesPanel: boolean;
+}) => {
+  const activeTool = appState.activeTool;
+  const SELECTION_TOOLS = [
+    {
+      type: "selection",
+      icon: SelectionIcon,
+      title: capitalizeString(t("toolBar.selection")),
+    },
+    {
+      type: "lasso",
+      icon: LassoIcon,
+      title: capitalizeString(t("toolBar.lasso")),
+    },
+  ] as const;
+
+  if (isCompactStylesPanel) {
+    return (
+      <ToolPopover
+        key={"selection-popover"}
+        app={app}
+        options={SELECTION_TOOLS}
+        activeTool={activeTool}
+        defaultOption={app.state.preferredSelectionTool.type}
+        namePrefix="selectionType"
+        title={capitalizeString(t("toolBar.selection"))}
+        data-testid="toolbar-selection"
+        onToolChange={(type: string) => {
+          if (type === "selection" || type === "lasso") {
+            app.setActiveTool({ type });
+            setAppState({
+              preferredSelectionTool: { type, initialized: true },
+            });
+          }
+        }}
+        displayedOption={
+          SELECTION_TOOLS.find(
+            (tool) => tool.type === app.state.preferredSelectionTool.type,
+          ) || SELECTION_TOOLS[0]
+        }
+        fillable={activeTool.type === "selection"}
+      />
+    );
+  }
+
+  const value = "selection";
+  const label = t(`toolBar.${value}`);
+  const selectionToolDef = getToolbarTools(app).find(
+    (tool) => tool.value === "selection",
+  );
+  const key = selectionToolDef?.key;
+  const numericKey = selectionToolDef?.numericKey;
+
+  const letter =
+    key && capitalizeString(typeof key === "string" ? key : key[0]);
+  const shortcut = letter
+    ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+    : `${numericKey}`;
+
+  return (
+    <ToolButton
+      className={clsx("Shape", { fillable: true })}
+      key={value}
+      type="radio"
+      icon={SelectionIcon}
+      checked={activeTool.type === "selection" || activeTool.type === "lasso"}
+      name="editor-current-shape"
+      title={`${capitalizeString(label)} — ${shortcut}`}
+      keyBindingLabel={numericKey || letter}
+      aria-label={capitalizeString(label)}
+      aria-keyshortcuts={shortcut}
+      data-testid={`toolbar-${value}`}
+      onPointerDown={({ pointerType }) => {
+        if (!app.state.penDetected && pointerType === "pen") {
+          app.togglePenMode(true);
+        }
+
+        if (app.state.activeTool.type === "selection") {
+          app.setActiveTool({ type: "lasso" });
+        } else {
+          app.setActiveTool({ type: "selection" });
+        }
+      }}
+      onChange={({ pointerType }) => {
+        if (app.state.activeTool.type !== value) {
+          trackEvent("toolbar", value, "ui");
+        }
+        app.setActiveTool({ type: "selection" });
+      }}
+    />
+  );
+};
+
 export const ShapesSwitcher = ({
   activeTool,
   setAppState,
@@ -1098,13 +1200,6 @@ export const ShapesSwitcher = ({
     },
   ] as const;
 
-  const frameToolSelected = activeTool.type === "frame";
-  const laserToolSelected = activeTool.type === "laser";
-  const lassoToolSelected =
-    isFullStylesPanel &&
-    activeTool.type === "lasso" &&
-    app.state.preferredSelectionTool.type !== "lasso";
-
   const embeddableToolSelected = activeTool.type === "embeddable";
 
   const { TTDDialogTriggerTunnel } = useTunnels();
@@ -1113,6 +1208,16 @@ export const ShapesSwitcher = ({
     <>
       {getToolbarTools(app).map(
         ({ value, icon, key, numericKey, fillable }, index) => {
+          // Filter out tools rendered separately in LayerUI
+          if (
+            value === "freedraw" ||
+            value === "selection" ||
+            value === "lasso" ||
+            value === "eraser" ||
+            value === "text"
+          ) {
+            return null;
+          }
           if (
             UIOptions.tools?.[
               value as Extract<
@@ -1127,13 +1232,15 @@ export const ShapesSwitcher = ({
           const label = t(`toolBar.${value}`);
           const letter =
             key && capitalizeString(typeof key === "string" ? key : key[0]);
-          const shortcut = letter
-            ? `${letter} ${t("helpDialog.or")} ${numericKey}`
-            : `${numericKey}`;
+          const shortcut =
+            letter && numericKey
+              ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+              : letter || numericKey;
+
           // when in compact styles panel mode (tablet)
           // use a ToolPopover for selection/lasso toggle as well
           if (
-            (value === "selection" || value === "lasso") &&
+            ((value as string) === "selection" || (value as string) === "lasso") &&
             isCompactStylesPanel
           ) {
             return (
@@ -1166,44 +1273,133 @@ export const ShapesSwitcher = ({
           }
 
           return (
-            <ToolButton
-              className={clsx("Shape", { fillable })}
-              key={value}
-              type="radio"
-              icon={icon}
-              checked={activeTool.type === value}
-              name="editor-current-shape"
-              title={`${capitalizeString(label)} — ${shortcut}`}
-              keyBindingLabel={numericKey || letter}
-              aria-label={capitalizeString(label)}
-              aria-keyshortcuts={shortcut}
-              data-testid={`toolbar-${value}`}
-              onPointerDown={({ pointerType }) => {
-                if (!app.state.penDetected && pointerType === "pen") {
-                  app.togglePenMode(true);
+            <Fragment key={value}>
+              <ToolButton
+                className={clsx("Shape", { fillable })}
+                type="radio"
+                icon={icon}
+                checked={activeTool.type === value}
+                name="editor-current-shape"
+                title={
+                  shortcut
+                    ? `${capitalizeString(label)} — ${shortcut}`
+                    : capitalizeString(label)
                 }
-
-                if (value === "selection") {
-                  if (app.state.activeTool.type === "selection") {
-                    app.setActiveTool({ type: "lasso" });
-                  } else {
-                    app.setActiveTool({ type: "selection" });
+                keyBindingLabel={numericKey || letter}
+                aria-label={capitalizeString(label)}
+                aria-keyshortcuts={shortcut || undefined}
+                data-testid={`toolbar-${value}`}
+                onPointerDown={({ pointerType }) => {
+                  if (!app.state.penDetected && pointerType === "pen") {
+                    app.togglePenMode(true);
                   }
-                }
-              }}
-              onChange={({ pointerType }) => {
-                if (app.state.activeTool.type !== value) {
-                  trackEvent("toolbar", value, "ui");
-                }
-                if (value === "image") {
-                  app.setActiveTool({
-                    type: value,
-                  });
-                } else {
-                  app.setActiveTool({ type: value });
-                }
-              }}
-            />
+
+                  if ((value as string) === "selection") {
+                    if (app.state.activeTool.type === "selection") {
+                      app.setActiveTool({ type: "lasso" });
+                    } else {
+                      app.setActiveTool({ type: "selection" });
+                    }
+                  }
+                }}
+                onChange={({ pointerType }) => {
+                  if (app.state.activeTool.type !== value) {
+                    trackEvent("toolbar", value, "ui");
+                  }
+                  if (value === "image") {
+                    app.setActiveTool({
+                      type: value,
+                    });
+                  } else {
+                    app.setActiveTool({ type: value });
+                  }
+                }}
+              />
+              {(value as string) === "richText" && (
+                <>
+                  <ToolButton
+                    className="Shape"
+                    type="radio"
+                    icon={frameToolIcon}
+                    checked={activeTool.type === "frame"}
+                    name="editor-current-shape"
+                    title={`${capitalizeString(t("toolBar.frame"))} — ${KEYS.F.toLocaleUpperCase()}`}
+                    keyBindingLabel={KEYS.F.toLocaleUpperCase()}
+                    aria-label={capitalizeString(t("toolBar.frame"))}
+                    aria-keyshortcuts={KEYS.F.toLocaleUpperCase()}
+                    data-testid="toolbar-frame"
+                    onPointerDown={({ pointerType }) => {
+                      if (!app.state.penDetected && pointerType === "pen") {
+                        app.togglePenMode(true);
+                      }
+                    }}
+                    onChange={() => {
+                      if (app.state.activeTool.type !== "frame") {
+                        trackEvent("toolbar", "frame", "ui");
+                      }
+                      app.setActiveTool({ type: "frame" });
+                    }}
+                  />
+
+                  {isFullStylesPanel &&
+                    (UIOptions.tools as any)?.lasso !== false && (
+                    <ToolButton
+                      className="Shape"
+                      type="radio"
+                      icon={LassoIcon}
+                      checked={activeTool.type === "lasso"}
+                      name="editor-current-shape"
+                      title={capitalizeString(t("toolBar.lasso"))}
+                      aria-label={capitalizeString(t("toolBar.lasso"))}
+                      data-testid="toolbar-lasso"
+                      onPointerDown={({ pointerType }) => {
+                        if (!app.state.penDetected && pointerType === "pen") {
+                          app.togglePenMode(true);
+                        }
+                      }}
+                      onChange={() => {
+                        if (app.state.activeTool.type !== "lasso") {
+                          trackEvent("toolbar", "lasso", "ui");
+                        }
+                        app.setActiveTool({ type: "lasso" });
+                        setAppState({
+                          preferredSelectionTool: {
+                            type: "lasso",
+                            initialized: true,
+                          },
+                        });
+                      }}
+                    />
+                  )}
+
+                  {(UIOptions.tools as any)?.laser !== false && (
+                    <ToolButton
+                      className="Shape"
+                      type="radio"
+                      icon={laserPointerToolIcon}
+                      checked={activeTool.type === "laser"}
+                      name="editor-current-shape"
+                      title={`${capitalizeString(t("toolBar.laser"))} — ${KEYS.K.toLocaleUpperCase()}`}
+                      keyBindingLabel={KEYS.K.toLocaleUpperCase()}
+                      aria-label={capitalizeString(t("toolBar.laser"))}
+                      aria-keyshortcuts={KEYS.K.toLocaleUpperCase()}
+                      data-testid="toolbar-laser"
+                      onPointerDown={({ pointerType }) => {
+                        if (!app.state.penDetected && pointerType === "pen") {
+                          app.togglePenMode(true);
+                        }
+                      }}
+                      onChange={() => {
+                        if (app.state.activeTool.type !== "laser") {
+                          trackEvent("toolbar", "laser", "ui");
+                        }
+                        app.setActiveTool({ type: "laser" });
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </Fragment>
           );
         },
       )}
@@ -1213,13 +1409,7 @@ export const ShapesSwitcher = ({
         <DropdownMenu.Trigger
           className={clsx("App-toolbar__extra-tools-trigger", {
             "App-toolbar__extra-tools-trigger--selected":
-              frameToolSelected ||
-              embeddableToolSelected ||
-              lassoToolSelected ||
-              // in collab we're already highlighting the laser button
-              // outside toolbar, so let's not highlight extra-tools button
-              // on top of it
-              (laserToolSelected && !app.props.isCollaborating),
+              embeddableToolSelected,
           })}
           onToggle={() => {
             setIsExtraToolsMenuOpen(!isExtraToolsMenuOpen);
@@ -1227,30 +1417,13 @@ export const ShapesSwitcher = ({
           }}
           title={t("toolBar.extraTools")}
         >
-          {frameToolSelected
-            ? frameToolIcon
-            : embeddableToolSelected
-            ? EmbedIcon
-            : laserToolSelected && !app.props.isCollaborating
-            ? laserPointerToolIcon
-            : lassoToolSelected
-            ? LassoIcon
-            : extraToolsIcon}
+          {embeddableToolSelected ? EmbedIcon : extraToolsIcon}
         </DropdownMenu.Trigger>
         <DropdownMenu.Content
           onClickOutside={() => setIsExtraToolsMenuOpen(false)}
           onSelect={() => setIsExtraToolsMenuOpen(false)}
           className="App-toolbar__extra-tools-dropdown"
         >
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "frame" })}
-            icon={frameToolIcon}
-            shortcut={KEYS.F.toLocaleUpperCase()}
-            data-testid="toolbar-frame"
-            selected={frameToolSelected}
-          >
-            {t("toolBar.frame")}
-          </DropdownMenu.Item>
           <DropdownMenu.Item
             onSelect={() => app.setActiveTool({ type: "embeddable" })}
             icon={EmbedIcon}
@@ -1259,25 +1432,6 @@ export const ShapesSwitcher = ({
           >
             {t("toolBar.embeddable")}
           </DropdownMenu.Item>
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "laser" })}
-            icon={laserPointerToolIcon}
-            data-testid="toolbar-laser"
-            selected={laserToolSelected}
-            shortcut={KEYS.K.toLocaleUpperCase()}
-          >
-            {t("toolBar.laser")}
-          </DropdownMenu.Item>
-          {isFullStylesPanel && (
-            <DropdownMenu.Item
-              onSelect={() => app.setActiveTool({ type: "lasso" })}
-              icon={LassoIcon}
-              data-testid="toolbar-lasso"
-              selected={lassoToolSelected}
-            >
-              {t("toolBar.lasso")}
-            </DropdownMenu.Item>
-          )}
           <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
             Generate
           </div>

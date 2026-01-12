@@ -1,6 +1,7 @@
 import clsx from "clsx";
 
 import { KEYS } from "@excalidraw/common";
+import { t } from "../i18n";
 
 import { ToolButton } from "./ToolButton";
 import { handIcon } from "./icons";
@@ -23,10 +24,10 @@ export const HandButton = (props: LockIconProps) => {
       icon={handIcon}
       name="editor-current-shape"
       checked={props.checked}
-      title={`${props.title} — H`}
-      keyBindingLabel={!props.isMobile ? KEYS.H.toLocaleUpperCase() : undefined}
-      aria-label={`${props.title} — H`}
-      aria-keyshortcuts={KEYS.H}
+      title={`${props.title} — ${KEYS.H} ${t("helpDialog.or")} ${KEYS["2"]}`}
+      keyBindingLabel={!props.isMobile ? KEYS["2"] : undefined}
+      aria-label={`${props.title} — ${KEYS["2"]}`}
+      aria-keyshortcuts={KEYS["2"]}
       data-testid={`toolbar-hand`}
       onChange={() => props.onChange?.()}
     />

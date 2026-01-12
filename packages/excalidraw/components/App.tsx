@@ -9552,12 +9552,28 @@ class App extends React.Component<AppProps, AppState> {
       }
 
       if (isEraserActive(this.state)) {
-        this.handleEraser(event, pointerCoords);
+        const nativeEvent = (event as any).nativeEvent || event;
+        const events = nativeEvent.getCoalescedEvents?.() || [];
+        const coalescedEvents =
+          events.length > 0 ? events : [nativeEvent];
+
+        for (const evt of coalescedEvents) {
+          const pointerCoords = viewportCoordsToSceneCoords(evt, this.state);
+          this.handleEraser(evt, pointerCoords);
+        }
         return;
       }
 
       if (this.state.activeTool.type === "laser") {
-        this.laserTrails.addPointToPath(pointerCoords.x, pointerCoords.y);
+        const nativeEvent = (event as any).nativeEvent || event;
+        const events = nativeEvent.getCoalescedEvents?.() || [];
+        const coalescedEvents =
+          events.length > 0 ? events : [nativeEvent];
+
+        for (const evt of coalescedEvents) {
+          const pointerCoords = viewportCoordsToSceneCoords(evt, this.state);
+          this.laserTrails.addPointToPath(pointerCoords.x, pointerCoords.y);
+        }
       }
 
       const [gridX, gridY] = getGridPoint(
@@ -10107,11 +10123,19 @@ class App extends React.Component<AppProps, AppState> {
           this.maybeDragNewGenericElement(pointerDownState, event);
           this.lassoTrail.endPath();
         } else {
-          this.lassoTrail.addPointToPath(
-            pointerCoords.x,
-            pointerCoords.y,
-            event.shiftKey,
-          );
+          const nativeEvent = (event as any).nativeEvent || event;
+          const events = nativeEvent.getCoalescedEvents?.() || [];
+          const coalescedEvents =
+            events.length > 0 ? events : [nativeEvent];
+
+          for (const evt of coalescedEvents) {
+            const pointerCoords = viewportCoordsToSceneCoords(evt, this.state);
+            this.lassoTrail.addPointToPath(
+              pointerCoords.x,
+              pointerCoords.y,
+              evt.shiftKey,
+            );
+          }
         }
       } else {
         // It is very important to read this.state within each move event,
@@ -10123,23 +10147,39 @@ class App extends React.Component<AppProps, AppState> {
         }
 
         if (newElement.type === "freedraw") {
-          const points = newElement.points;
-          const dx = pointerCoords.x - newElement.x;
-          const dy = pointerCoords.y - newElement.y;
+          const nativeEvent = (event as any).nativeEvent || event;
+          const events = nativeEvent.getCoalescedEvents?.() || [];
+          const coalescedEvents =
+            events.length > 0 ? events : [nativeEvent];
 
-          const lastPoint = points.length > 0 && points[points.length - 1];
-          const discardPoint =
-            lastPoint && lastPoint[0] === dx && lastPoint[1] === dy;
+          let points = newElement.points;
+          let pressures = newElement.pressures;
 
-          if (!discardPoint) {
-            const pressures = newElement.simulatePressure
-              ? newElement.pressures
-              : [...newElement.pressures, event.pressure];
+          coalescedEvents.forEach((evt) => {
+            const pointerCoords = viewportCoordsToSceneCoords(
+              evt,
+              this.state,
+            );
+            const dx = pointerCoords.x - newElement.x;
+            const dy = pointerCoords.y - newElement.y;
 
+            const lastPoint = points.length > 0 && points[points.length - 1];
+            const discardPoint =
+              lastPoint && lastPoint[0] === dx && lastPoint[1] === dy;
+
+            if (!discardPoint) {
+              points = [...points, pointFrom<LocalPoint>(dx, dy)];
+              if (!newElement.simulatePressure) {
+                pressures = [...pressures, evt.pressure];
+              }
+            }
+          });
+
+          if (points.length !== newElement.points.length) {
             this.scene.mutateElement(
               newElement,
               {
-                points: [...points, pointFrom<LocalPoint>(dx, dy)],
+                points,
                 pressures,
               },
               {

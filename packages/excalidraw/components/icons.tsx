@@ -443,19 +443,14 @@ export const TextIcon = createIcon(
 
 // RichText icon: 上方文字 A + 横线，下方图片，正方形 20x20
 export const RichTextIcon = createIcon(
-  <g strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path stroke="none" d="M0 0h24v24H0z" fill="none" />
-    {/* 上半部分：左侧字母 A */}
-    <path d="M4 11L6.5 4h1L10 11" fill="none" />
-    <path d="M5 9h4" fill="none" />
-    {/* 上半部分：右侧两条横线代表文本 */}
-    <line x1="12" y1="5.5" x2="20" y2="5.5" />
-    <line x1="12" y1="9.5" x2="18" y2="9.5" />
-    {/* 下半部分：图片框 */}
-    <rect x="4" y="13" width="16" height="8" rx="1.5" fill="none" />
-    {/* 图片中的小山 */}
-    <path d="M4 19l4-3.5 3 2.5 3-4 6 5" fill="none" />
-  </g>,
+  <path
+    fill="none"
+    stroke="currentColor"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    strokeWidth="1.5"
+    d="M3 3.5h6m-6 6h6m-6 6h18m-18 6h18M13.586 9.914c.586.586 1.528.586 3.414.586s2.828 0 3.414-.586S21 8.386 21 6.5s0-2.828-.586-3.414S18.886 2.5 17 2.5s-2.828 0-3.414.586S13 4.614 13 6.5s0 2.828.586 3.414"
+  />,
   tablerIconProps,
 );
 

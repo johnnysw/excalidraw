@@ -142,12 +142,12 @@ describe("regression tests", () => {
   });
 
   for (const [keys, shape, shouldSelect] of [
-    [`2${KEYS.R}`, "rectangle", true],
-    [`3${KEYS.D}`, "diamond", true],
-    [`4${KEYS.O}`, "ellipse", true],
-    [`5${KEYS.A}`, "arrow", true],
-    [`6${KEYS.L}`, "line", true],
-    [`7${KEYS.P}`, "freedraw", false],
+    [`6${KEYS.R}`, "rectangle", true],
+    [`7${KEYS.D}`, "diamond", true],
+    [`8${KEYS.O}`, "ellipse", true],
+    [`9${KEYS.A}`, "arrow", true],
+    [`0${KEYS.L}`, "line", true],
+    [`3${KEYS.P}`, "freedraw", false],
   ] as [string, ExcalidrawElement["type"], boolean][]) {
     for (const key of keys) {
       it(`key ${key} selects ${shape} tool`, () => {

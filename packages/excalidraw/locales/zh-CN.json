@@ -316,7 +316,8 @@
     "hand": "抓手（平移工具）",
     "extraTools": "更多工具",
     "mermaidToExcalidraw": "Mermaid 至 Excalidraw",
-    "convertElementType": "切换形状种类"
+    "convertElementType": "切换形状种类",
+    "richText": "插入富文本"
   },
   "element": {
     "rectangle": "矩形",

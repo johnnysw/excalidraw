@@ -5,6 +5,7 @@ import {
   CLASSES,
   DEFAULT_SIDEBAR,
   TOOL_TYPE,
+  KEYS,
   arrayToMap,
   capitalizeString,
   isShallowEqual,
@@ -34,6 +35,7 @@ import {
   SelectedShapeActions,
   ShapesSwitcher,
   CompactShapeActions,
+  SelectionTool,
 } from "./Actions";
 import { LoadingMessage } from "./LoadingMessage";
 import { LockButton } from "./LockButton";
@@ -49,7 +51,7 @@ import MainMenu from "./main-menu/MainMenu";
 import { ActiveConfirmDialog } from "./ActiveConfirmDialog";
 import { useEditorInterface, useStylesPanelMode } from "./App";
 import { OverwriteConfirmDialog } from "./OverwriteConfirm/OverwriteConfirm";
-import { sidebarRightIcon, PlayIcon } from "./icons";
+import { sidebarRightIcon, PlayIcon, FreedrawIcon, EraserIcon, TextIcon, frameToolIcon } from "./icons";
 import { DefaultSidebar } from "./DefaultSidebar";
 import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
@@ -59,6 +61,8 @@ import { EyeDropper, activeEyeDropperAtom } from "./EyeDropper";
 import { FixedSideContainer } from "./FixedSideContainer";
 import { HandButton } from "./HandButton";
 import { HelpDialog } from "./HelpDialog";
+import { ToolButton } from "./ToolButton";
+import { getToolbarTools } from "./shapes";
 import { HintViewer } from "./HintViewer";
 import { ImageExportDialog } from "./ImageExportDialog";
 import { Island } from "./Island";
@@ -206,7 +210,6 @@ const LayerUI = ({
             "default-sidebar",
           );
         }}
-        tab={DEFAULT_SIDEBAR.defaultTab}
       />
     );
   };
@@ -389,13 +392,150 @@ const LayerUI = ({
 
                             <div className="App-toolbar__divider" />
 
+                            <SelectionTool
+                              app={app}
+                              appState={appState}
+                              setAppState={setAppState}
+                              isCompactStylesPanel={isCompactStylesPanel}
+                            />
+
                             <HandButton
                               checked={isHandToolActive(appState)}
                               onChange={() => onHandToolToggle()}
                               title={t("toolBar.hand")}
-                              isMobile
                             />
 
+                            {(() => {
+                              const freedrawTool = getToolbarTools(app).find(
+                                (tool) => tool.value === "freedraw",
+                              );
+                              if (!freedrawTool) {
+                                return null;
+                              }
+                              const { icon, key, numericKey } = freedrawTool;
+                              const label = t("toolBar.freedraw");
+                              const letter =
+                                key &&
+                                capitalizeString(
+                                  typeof key === "string" ? key : key[0],
+                                );
+                              const shortcut = letter
+                                ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+                                : `${numericKey}`;
+                              return (
+                                <ToolButton
+                                  className="Shape"
+                                  type="radio"
+                                  icon={icon}
+                                  checked={appState.activeTool.type === "freedraw"}
+                                  name="editor-current-shape"
+                                  title={`${capitalizeString(label)} — ${shortcut}`}
+                                  keyBindingLabel={numericKey || letter}
+                                  aria-label={capitalizeString(label)}
+                                  aria-keyshortcuts={shortcut}
+                                  data-testid="toolbar-freedraw"
+                                  onPointerDown={({ pointerType }) => {
+                                    if (!app.state.penDetected && pointerType === "pen") {
+                                      app.togglePenMode(true);
+                                    }
+                                  }}
+                                  onChange={() => {
+                                    if (appState.activeTool.type !== "freedraw") {
+                                      trackEvent("toolbar", "freedraw", "ui");
+                                    }
+                                    app.setActiveTool({ type: "freedraw" });
+                                  }}
+                                />
+                              );
+                            })()}
+
+                            {(() => {
+                              const eraserTool = getToolbarTools(app).find(
+                                (tool) => tool.value === "eraser",
+                              );
+                              if (!eraserTool) {
+                                return null;
+                              }
+                              const { icon, key, numericKey } = eraserTool;
+                              const label = t("toolBar.eraser");
+                              const letter =
+                                key &&
+                                capitalizeString(
+                                  typeof key === "string" ? key : key[0],
+                                );
+                              const shortcut = letter
+                                ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+                                : `${numericKey}`;
+                              return (
+                                <ToolButton
+                                  className="Shape"
+                                  type="radio"
+                                  icon={icon}
+                                  checked={appState.activeTool.type === "eraser"}
+                                  name="editor-current-shape"
+                                  title={`${capitalizeString(label)} — ${shortcut}`}
+                                  keyBindingLabel={numericKey || letter}
+                                  aria-label={capitalizeString(label)}
+                                  aria-keyshortcuts={shortcut}
+                                  data-testid="toolbar-eraser"
+                                  onPointerDown={({ pointerType }) => {
+                                    if (!app.state.penDetected && pointerType === "pen") {
+                                      app.togglePenMode(true);
+                                    }
+                                  }}
+                                  onChange={() => {
+                                    if (appState.activeTool.type !== "eraser") {
+                                      trackEvent("toolbar", "eraser", "ui");
+                                    }
+                                    app.setActiveTool({ type: "eraser" });
+                                  }}
+                                />
+                              );
+                            })()}
+
+                            {(() => {
+                              const textTool = getToolbarTools(app).find(
+                                (tool) => tool.value === "text",
+                              );
+                              if (!textTool) {
+                                return null;
+                              }
+                              const { icon, key, numericKey } = textTool;
+                              const label = t("toolBar.text");
+                              const letter =
+                                key &&
+                                capitalizeString(
+                                  typeof key === "string" ? key : key[0],
+                                );
+                              const shortcut = letter
+                                ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+                                : `${numericKey}`;
+                              return (
+                                <ToolButton
+                                  className="Shape"
+                                  type="radio"
+                                  icon={icon}
+                                  checked={appState.activeTool.type === "text"}
+                                  name="editor-current-shape"
+                                  title={`${capitalizeString(label)} — ${shortcut}`}
+                                  keyBindingLabel={numericKey || letter}
+                                  aria-label={capitalizeString(label)}
+                                  aria-keyshortcuts={shortcut}
+                                  data-testid="toolbar-text"
+                                  onPointerDown={({ pointerType }) => {
+                                    if (!app.state.penDetected && pointerType === "pen") {
+                                      app.togglePenMode(true);
+                                    }
+                                  }}
+                                  onChange={() => {
+                                    if (appState.activeTool.type !== "text") {
+                                      trackEvent("toolbar", "text", "ui");
+                                    }
+                                    app.setActiveTool({ type: "text" });
+                                  }}
+                                />
+                              );
+                            })()}
                             <ShapesSwitcher
                               setAppState={setAppState}
                               activeTool={appState.activeTool}

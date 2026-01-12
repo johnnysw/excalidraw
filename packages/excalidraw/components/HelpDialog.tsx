@@ -101,44 +101,44 @@ export const HelpDialog = ({ onClose }: { onClose?: () => void }) => {
             className="HelpDialog__island--tools"
             caption={t("helpDialog.tools")}
           >
-            <Shortcut label={t("toolBar.hand")} shortcuts={[KEYS.H]} />
             <Shortcut
               label={t("toolBar.selection")}
               shortcuts={[KEYS.V, KEYS["1"]]}
             />
-            <Shortcut
-              label={t("toolBar.rectangle")}
-              shortcuts={[KEYS.R, KEYS["2"]]}
-            />
-            <Shortcut
-              label={t("toolBar.diamond")}
-              shortcuts={[KEYS.D, KEYS["3"]]}
-            />
-            <Shortcut
-              label={t("toolBar.ellipse")}
-              shortcuts={[KEYS.O, KEYS["4"]]}
-            />
-            <Shortcut
-              label={t("toolBar.arrow")}
-              shortcuts={[KEYS.A, KEYS["5"]]}
-            />
-            <Shortcut
-              label={t("toolBar.line")}
-              shortcuts={[KEYS.L, KEYS["6"]]}
-            />
+            <Shortcut label={t("toolBar.hand")} shortcuts={[KEYS.H, KEYS["2"]]} />
             <Shortcut
               label={t("toolBar.freedraw")}
-              shortcuts={[KEYS.P, KEYS["7"]]}
+              shortcuts={[KEYS.P, KEYS["3"]]}
+            />
+            <Shortcut
+              label={t("toolBar.eraser")}
+              shortcuts={[KEYS.E, KEYS["4"]]}
             />
             <Shortcut
               label={t("toolBar.text")}
-              shortcuts={[KEYS.T, KEYS["8"]]}
+              shortcuts={[KEYS.T, KEYS["5"]]}
             />
-            <Shortcut label={t("toolBar.image")} shortcuts={[KEYS["9"]]} />
             <Shortcut
-              label={t("toolBar.eraser")}
-              shortcuts={[KEYS.E, KEYS["0"]]}
+              label={t("toolBar.rectangle")}
+              shortcuts={[KEYS.R, KEYS["6"]]}
             />
+            <Shortcut
+              label={t("toolBar.diamond")}
+              shortcuts={[KEYS.D, KEYS["7"]]}
+            />
+            <Shortcut
+              label={t("toolBar.ellipse")}
+              shortcuts={[KEYS.O, KEYS["8"]]}
+            />
+            <Shortcut
+              label={t("toolBar.arrow")}
+              shortcuts={[KEYS.A, KEYS["9"]]}
+            />
+            <Shortcut
+              label={t("toolBar.line")}
+              shortcuts={[KEYS.L, KEYS["0"]]}
+            />
+            <Shortcut label={t("toolBar.image")} shortcuts={[]} />
             <Shortcut label={t("toolBar.frame")} shortcuts={[KEYS.F]} />
             <Shortcut label={t("toolBar.laser")} shortcuts={[KEYS.K]} />
             <Shortcut
