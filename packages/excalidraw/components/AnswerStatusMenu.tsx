@@ -26,6 +26,21 @@ export const AnswerStatusMenu: React.FC = () => {
   const selectedQuestion = config?.selectedQuestion;
   const fetchQuestionAnswerStatus = config?.fetchQuestionAnswerStatus;
   const teachingContext = config?.teachingContext;
+  const classes = config?.classes ?? [];
+  const classesLoading = config?.classesLoading ?? false;
+  const selectedClassId = config?.selectedClassId ?? null;
+  const onSelectClassId = config?.onSelectClassId;
+
+  const handleAssignTask = useCallback(() => {
+    const event = new CustomEvent("excalidraw:assignTask", {
+      detail: {
+        source: "answer-status",
+        teachingContext: teachingContext || null,
+      },
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+  }, [teachingContext]);
 
   // 用于追踪上一次自动请求的 questionId，避免重复请求
   const lastAutoFetchedQuestionIdRef = useRef<string | null>(null);
@@ -33,10 +48,12 @@ export const AnswerStatusMenu: React.FC = () => {
   const fetchFnRef = useRef(fetchQuestionAnswerStatus);
   fetchFnRef.current = fetchQuestionAnswerStatus;
 
+  const hasClassSelection = classes.length === 0 || selectedClassId !== null;
   const canRefresh =
     !!selectedQuestion?.questionId &&
     !!fetchQuestionAnswerStatus &&
-    (!!teachingContext?.moduleId || !!teachingContext?.taskId);
+    !!teachingContext?.taskId &&
+    hasClassSelection;
 
   // 手动刷新按钮调用
   const handleRefresh = useCallback(async () => {
@@ -71,7 +88,7 @@ export const AnswerStatusMenu: React.FC = () => {
     }
 
     // 检查是否可以自动请求
-    const hasContext = !!teachingContext?.moduleId || !!teachingContext?.taskId;
+    const hasContext = !!teachingContext?.taskId;
     if (!fetchFn || !hasContext) {
       // 缺少上下文或 API：清空数据，不自动请求
       lastAutoFetchedQuestionIdRef.current = null;
@@ -79,9 +96,12 @@ export const AnswerStatusMenu: React.FC = () => {
       return;
     }
 
-    // 同一题目只自动拉取一次（避免 StrictMode 双触发 & 刷新后不重复触发）
-    if (lastAutoFetchedQuestionIdRef.current === questionId) return;
-    lastAutoFetchedQuestionIdRef.current = questionId;
+    const classKey = selectedClassId ?? "all";
+    const questionKey = `${questionId}-${classKey}`;
+
+    // 同一题目在同一班级下只自动拉取一次（避免 StrictMode 双触发 & 刷新后不重复触发）
+    if (lastAutoFetchedQuestionIdRef.current === questionKey) return;
+    lastAutoFetchedQuestionIdRef.current = questionKey;
 
     // 自动拉取
     setState({ loading: true, error: null, data: null });
@@ -96,7 +116,7 @@ export const AnswerStatusMenu: React.FC = () => {
           data: null,
         });
       });
-  }, [selectedQuestion?.questionId, teachingContext?.moduleId, teachingContext?.taskId]);
+  }, [selectedQuestion?.questionId, teachingContext?.taskId, selectedClassId]);
 
   const header = (
     <div className="AnswerStatusMenu__header">
@@ -117,6 +137,35 @@ export const AnswerStatusMenu: React.FC = () => {
     </div>
   );
 
+  const classSwitcher = (
+    <div className="AnswerStatusMenu__class-switcher">
+      <span className="AnswerStatusMenu__class-label">班级</span>
+      <div className="AnswerStatusMenu__class-control">
+        {classesLoading ? (
+          <span className="AnswerStatusMenu__class-loading">加载中...</span>
+        ) : (
+          <select
+            className="AnswerStatusMenu__class-select"
+            value={selectedClassId ?? ""}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!onSelectClassId) return;
+              onSelectClassId(value ? Number(value) : null);
+            }}
+            disabled={classes.length === 0}
+          >
+            {classes.length === 0 && <option value="">暂无班级</option>}
+            {classes.map((cls) => (
+              <option key={cls.id} value={cls.id}>
+                {cls.name}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
+  );
+
   // 渲染空状态
   if (!config) {
     return (
@@ -133,6 +182,7 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
+        {classSwitcher}
         <div className="AnswerStatusMenu__empty">
           <div className="AnswerStatusMenu__empty-icon" aria-hidden="true">
             <Icon icon="hugeicons:clipboard" />
@@ -147,16 +197,26 @@ export const AnswerStatusMenu: React.FC = () => {
   }
 
   // 已选中题目，但缺少授课上下文/未注入 API（避免触发后端 422）
-  if (!fetchQuestionAnswerStatus || (!teachingContext?.moduleId && !teachingContext?.taskId)) {
+  if (!fetchQuestionAnswerStatus || !teachingContext?.taskId) {
     return (
       <div className="AnswerStatusMenu">
         {header}
+        {classSwitcher}
         <div className="AnswerStatusMenu__empty">
           <div className="AnswerStatusMenu__empty-icon">🎓</div>
           <p>缺少授课上下文</p>
           <p className="AnswerStatusMenu__hint">
-            请通过「开始授课」进入画布，或确保已传入 task_id / module_id
+            请通过「开始授课」进入画布，或确保已传入 task_id
           </p>
+          {!teachingContext?.taskId && (
+            <button
+              type="button"
+              className="AnswerStatusMenu__assign-btn"
+              onClick={handleAssignTask}
+            >
+              布置任务
+            </button>
+          )}
         </div>
       </div>
     );
@@ -167,6 +227,7 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
+        {classSwitcher}
         <div className="AnswerStatusMenu__loading">
           <div className="AnswerStatusMenu__spinner" />
           <p>加载中...</p>
@@ -180,6 +241,7 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
+        {classSwitcher}
         <div className="AnswerStatusMenu__error">
           <p>{state.error}</p>
           <button
@@ -199,6 +261,7 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
+        {classSwitcher}
         <div className="AnswerStatusMenu__empty">
           <p>暂无答题数据</p>
         </div>
@@ -232,16 +295,29 @@ export const AnswerStatusMenu: React.FC = () => {
     return acc;
   }, {} as Record<string, MemberAnswerStatus[]>);
 
-  // 排序选项：优先显示正确选项，其他按字母顺序
-  const sortedOptions = Object.keys(groupedAnswers).sort((a, b) => {
+  const defaultOptions = ["A", "B", "C", "D"];
+  const optionSet = new Set([
+    ...defaultOptions,
+    data.correctOption,
+    ...Object.keys(groupedAnswers),
+  ]);
+
+  // 排序选项：优先显示正确选项，其他按默认顺序/字母顺序
+  const sortedOptions = Array.from(optionSet).sort((a, b) => {
     if (a === data.correctOption) return -1;
     if (b === data.correctOption) return 1;
+    const aIndex = defaultOptions.indexOf(a);
+    const bIndex = defaultOptions.indexOf(b);
+    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+    if (aIndex !== -1) return -1;
+    if (bIndex !== -1) return 1;
     return a.localeCompare(b);
   });
 
   return (
     <div className="AnswerStatusMenu">
       {header}
+      {classSwitcher}
       {/* 统计概览 */}
       <div className="AnswerStatusMenu__summary">
         <div className="AnswerStatusMenu__summary-item">
@@ -281,7 +357,7 @@ export const AnswerStatusMenu: React.FC = () => {
       <div className="AnswerStatusMenu__grid">
         {sortedOptions.map((option) => {
           const isCorrect = option === data.correctOption;
-          const members = groupedAnswers[option];
+          const members = groupedAnswers[option] ?? [];
 
           return (
             <div

@@ -19,6 +19,12 @@ export interface QuestionAnswerStatusResponse {
   members: MemberAnswerStatus[];
 }
 
+export interface TeachingClassInfo {
+  id: number;
+  name: string;
+  studentCount?: number;
+}
+
 export interface AnswerStatusConfig {
   /** 当前选中的题目节点信息 */
   selectedQuestion: SelectedQuestionInfo | null;
@@ -26,6 +32,14 @@ export interface AnswerStatusConfig {
   fetchQuestionAnswerStatus?: (
     questionId: string
   ) => Promise<QuestionAnswerStatusResponse>;
+  /** 老师班级列表 */
+  classes?: TeachingClassInfo[];
+  /** 班级列表加载状态 */
+  classesLoading?: boolean;
+  /** 当前选中的班级 ID */
+  selectedClassId?: number | null;
+  /** 切换班级回调 */
+  onSelectClassId?: (classId: number | null) => void;
   /** 授课上下文 */
   teachingContext?: {
     moduleId?: number;
