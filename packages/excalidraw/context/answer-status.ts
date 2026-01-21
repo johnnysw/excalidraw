@@ -25,6 +25,14 @@ export interface TeachingClassInfo {
   studentCount?: number;
 }
 
+export interface TeachingContext {
+  coursewareId?: number;
+  moduleId?: number;
+  paperId?: number;
+  taskId?: number;
+  classId?: number;
+}
+
 export interface AnswerStatusConfig {
   /** 当前选中的题目节点信息 */
   selectedQuestion: SelectedQuestionInfo | null;
@@ -41,11 +49,7 @@ export interface AnswerStatusConfig {
   /** 切换班级回调 */
   onSelectClassId?: (classId: number | null) => void;
   /** 授课上下文 */
-  teachingContext?: {
-    moduleId?: number;
-    taskId?: number;
-    classId?: number;
-  };
+  teachingContext?: TeachingContext;
 }
 
 export const AnswerStatusContext = React.createContext<
