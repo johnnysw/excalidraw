@@ -130,6 +130,21 @@ export const AnswerStatusMenu: React.FC = () => {
     }
   }, [coursewareId, historyState.data, historyState.loading, fetchTaskHistory]);
 
+  // 新建课件布置任务后，确保任务历史补拉（用于任务对象/历史展示）
+  useEffect(() => {
+    if (!coursewareId || !teachingContext?.taskId) return;
+    if (historyState.loading) return;
+
+    const list = Array.isArray(historyState.data)
+      ? historyState.data
+      : historyState.data?.list ?? [];
+    const hasTask = list.some((item) => Number(item.id) === Number(teachingContext.taskId));
+
+    if (!historyState.data || !hasTask) {
+      fetchTaskHistory();
+    }
+  }, [coursewareId, teachingContext?.taskId, historyState.data, historyState.loading, fetchTaskHistory]);
+
   // 用于追踪上一次自动请求的 questionId，避免重复请求
   const lastAutoFetchedQuestionIdRef = useRef<string | null>(null);
   // 保存最新的 fetchQuestionAnswerStatus 引用，避免它变化导致 effect 重跑
@@ -141,22 +156,21 @@ export const AnswerStatusMenu: React.FC = () => {
     : historyState.data?.list ?? [];
   const derivedTaskId = teachingContext?.taskId ?? historyList[0]?.id ?? null;
   const derivedModuleId = teachingContext?.moduleId ?? historyList[0]?.moduleId ?? null;
-  const hasTeachingContext = !!(derivedTaskId || derivedModuleId);
+  const hasTeachingContext = !!derivedTaskId;
   const canRefresh =
     !!selectedQuestion?.questionId &&
     hasTeachingContext;
 
   const fetchAnswerStatus = useCallback(async (questionId: string) => {
     const fetchFn = fetchFnRef.current;
-    if (fetchFn && (teachingContext?.taskId || teachingContext?.moduleId)) {
+    if (fetchFn && teachingContext?.taskId) {
       return fetchFn(questionId);
     }
 
-    if (!derivedTaskId && !derivedModuleId) return null;
+    if (!derivedTaskId) return null;
 
     const params = new URLSearchParams({ question_id: questionId });
-    if (derivedTaskId) params.set('task_id', String(derivedTaskId));
-    if (derivedModuleId) params.set('module_id', String(derivedModuleId));
+    params.set('task_id', String(derivedTaskId));
 
     const response = await fetch(`/api/tasks/question-answer-status?${params.toString()}`);
     const result = await response.json();
@@ -164,7 +178,7 @@ export const AnswerStatusMenu: React.FC = () => {
       throw new Error(result?.message || '获取答题情况失败');
     }
     return result?.data ?? null;
-  }, [derivedTaskId, derivedModuleId, teachingContext?.taskId, teachingContext?.moduleId]);
+  }, [derivedTaskId, teachingContext?.taskId]);
 
   const handleAssignTask = useCallback(() => {
     const nextTeachingContext = {
@@ -199,18 +213,10 @@ export const AnswerStatusMenu: React.FC = () => {
         data: null,
       });
     }
-  }, [selectedQuestion?.questionId]);
+  }, [selectedQuestion?.questionId, fetchAnswerStatus]);
 
   // 题目切换时自动拉取
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'production') {
-      console.debug('[AnswerStatusMenu] teachingContext', {
-        taskId: teachingContext?.taskId,
-        moduleId: teachingContext?.moduleId,
-        coursewareId: teachingContext?.coursewareId,
-        selectedQuestionId: selectedQuestion?.questionId,
-      });
-    }
     const questionId = selectedQuestion?.questionId;
     // 未选题：清空，并允许下次选中同题再次自动拉取
     if (!questionId) {
@@ -228,7 +234,7 @@ export const AnswerStatusMenu: React.FC = () => {
       return;
     }
 
-    const questionKey = questionId;
+    const questionKey = `${derivedTaskId}:${questionId}`;
 
     // 同一题目在同一班级下只自动拉取一次（避免 StrictMode 双触发 & 刷新后不重复触发）
     if (lastAutoFetchedQuestionIdRef.current === questionKey) return;
@@ -247,7 +253,7 @@ export const AnswerStatusMenu: React.FC = () => {
           data: null,
         });
       });
-  }, [selectedQuestion?.questionId, teachingContext?.taskId, teachingContext?.moduleId, historyState.data]);
+  }, [selectedQuestion?.questionId, derivedTaskId, fetchAnswerStatus]);
 
   const header = (
     <div className="AnswerStatusMenu__header">
