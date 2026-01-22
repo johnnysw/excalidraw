@@ -89,37 +89,24 @@ export const AnswerStatusMenu: React.FC = () => {
 
   const selectedQuestion = config?.selectedQuestion;
   const fetchQuestionAnswerStatus = config?.fetchQuestionAnswerStatus;
+  const fetchTaskHistoryByCourseware = config?.fetchTaskHistoryByCourseware;
   const teachingContext = config?.teachingContext;
   const coursewareId = teachingContext?.coursewareId;
   const taskId = teachingContext?.taskId;
 
-  const handleAssignTask = useCallback(() => {
-    const event = new CustomEvent("excalidraw:assignTask", {
-      detail: {
-        source: "answer-status",
-        teachingContext: teachingContext || null,
-        coursewareId: teachingContext?.coursewareId,
-      },
-      bubbles: true,
-    });
-    document.dispatchEvent(event);
-  }, [teachingContext]);
-
   // 获取任务历史
   const fetchTaskHistory = useCallback(async () => {
     if (!coursewareId) return;
+    if (!fetchTaskHistoryByCourseware) {
+      setHistoryState({ loading: false, error: '缺少任务历史接口配置', data: null });
+      return;
+    }
 
     setHistoryState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const response = await fetch(
-        `/api/tasks/practice/history-by-courseware?courseware_id=${coursewareId}&page=1&page_size=50`
-      );
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result?.message || '获取任务历史失败');
-      }
-      const list = result?.data?.list ?? result?.list ?? [];
+      const result = await fetchTaskHistoryByCourseware(coursewareId, 1, 50);
+      const list = result?.list ?? [];
       setHistoryState({ loading: false, error: null, data: list });
     } catch (err) {
       setHistoryState({
@@ -128,20 +115,13 @@ export const AnswerStatusMenu: React.FC = () => {
         data: null,
       });
     }
-  }, [coursewareId]);
+  }, [coursewareId, fetchTaskHistoryByCourseware]);
 
   // 课件变更时重置任务历史
   useEffect(() => {
     setHistoryState({ loading: false, error: null, data: null });
   }, [coursewareId]);
 
-  // 任务建立后刷新历史并切换到答题情况
-  useEffect(() => {
-    if (taskId) {
-      setActiveTab('answer');
-      fetchTaskHistory();
-    }
-  }, [taskId, fetchTaskHistory]);
 
   // 初次加载即拉取任务历史（用于判断是否有任务关联）
   useEffect(() => {
@@ -185,6 +165,22 @@ export const AnswerStatusMenu: React.FC = () => {
     }
     return result?.data ?? null;
   }, [derivedTaskId, derivedModuleId, teachingContext?.taskId, teachingContext?.moduleId]);
+
+  const handleAssignTask = useCallback(() => {
+    const nextTeachingContext = {
+      ...(teachingContext || null),
+      moduleId: teachingContext?.moduleId ?? derivedModuleId ?? undefined,
+    };
+    const event = new CustomEvent("excalidraw:assignTask", {
+      detail: {
+        source: "answer-status",
+        teachingContext: nextTeachingContext,
+        coursewareId,
+      },
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+  }, [coursewareId, derivedModuleId, teachingContext]);
 
   // 手动刷新按钮调用
   const handleRefresh = useCallback(async () => {
@@ -275,21 +271,23 @@ export const AnswerStatusMenu: React.FC = () => {
           任务历史
         </button>
       </div>
-      {activeTab === 'answer' && (
-        <button
-          type="button"
-          className="AnswerStatusMenu__refresh-btn"
-          title={state.loading ? "刷新中..." : "刷新"}
-          aria-label="刷新"
-          disabled={!canRefresh || state.loading}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRefresh();
-          }}
-        >
-          <Icon icon="hugeicons:reload" />
-        </button>
-      )}
+      <div className="AnswerStatusMenu__actions">
+        {activeTab === 'answer' && (
+          <button
+            type="button"
+            className="AnswerStatusMenu__refresh-btn"
+            title={state.loading ? "刷新中..." : "刷新"}
+            aria-label="刷新"
+            disabled={!canRefresh || state.loading}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRefresh();
+            }}
+          >
+            <Icon icon="hugeicons:reload" />
+          </button>
+        )}
+      </div>
     </div>
   );
 
@@ -300,7 +298,21 @@ export const AnswerStatusMenu: React.FC = () => {
 
   const taskTargets = (
     <div className="AnswerStatusMenu__task-targets">
-      <span className="AnswerStatusMenu__task-label">任务对象</span>
+      <div className="AnswerStatusMenu__task-label-row">
+        <span className="AnswerStatusMenu__task-label">任务对象</span>
+        <button
+          type="button"
+          className="AnswerStatusMenu__assign-icon-btn"
+          title="布置任务"
+          aria-label="布置任务"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleAssignTask();
+          }}
+        >
+          <Icon icon="hugeicons:task-add-01" />
+        </button>
+      </div>
       <div className="AnswerStatusMenu__task-classes">
         {targetClasses.length > 0 ? (
           targetClasses.map((cls) => (

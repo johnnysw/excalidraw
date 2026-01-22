@@ -13,6 +13,12 @@
     margin-bottom: 12px;
   }
 
+  &__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
   // 简洁下划线式标签：无外框、无描边、无阴影，仅文字 + 选中下划线
   &__tabs {
     display: inline-flex;
@@ -52,6 +58,13 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  &__task-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
   }
 
   &__task-label {
@@ -128,6 +141,38 @@
     }
 
     // iconify 图标默认按 font-size 渲染
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  &__assign-icon-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0; // slate-200
+    background: #ffffff;
+    color: #475569; // slate-600
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover {
+      background: #f8fafc; // slate-50
+      border-color: #cbd5e1; // slate-300
+      color: #0f172a; // slate-900
+    }
+
+    &:active {
+      transform: translateY(0.5px);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
     font-size: 16px;
     line-height: 1;
   }
@@ -563,6 +608,18 @@
     }
 
     &__refresh-btn {
+      background: #1e293b; // slate-800
+      border-color: #334155; // slate-700
+      color: #e2e8f0; // slate-200
+
+      &:hover {
+        background: #334155; // slate-700
+        border-color: #475569; // slate-600
+        color: #ffffff;
+      }
+    }
+
+    &__assign-icon-btn {
       background: #1e293b; // slate-800
       border-color: #334155; // slate-700
       color: #e2e8f0; // slate-200

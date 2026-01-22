@@ -39,6 +39,12 @@ export interface AnswerStatusConfig {
   fetchQuestionAnswerStatus?: (
     questionId: string
   ) => Promise<QuestionAnswerStatusResponse>;
+  /** 获取课件任务历史 */
+  fetchTaskHistoryByCourseware?: (
+    coursewareId: number,
+    page?: number,
+    pageSize?: number
+  ) => Promise<{ list: any[] }>;
   /** 授课上下文 */
   teachingContext?: TeachingContext;
 }
