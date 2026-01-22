@@ -8,108 +8,89 @@
   &__header {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-between; // 标签在左、刷新在右，避免刷新独占整行
+    gap: 8px;
     margin-bottom: 12px;
   }
 
+  // 简洁下划线式标签：无外框、无描边、无阴影，仅文字 + 选中下划线
   &__tabs {
     display: inline-flex;
-    gap: 4px;
-    padding: 4px;
-    background: #f1f5f9;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    align-items: center;
+    gap: 16px;
   }
 
   &__tab {
-    padding: 6px 12px;
-    font-size: 12px;
-    font-weight: 600;
+    padding: 4px 0;
+    font-size: 13px;
+    font-weight: 500;
     color: #64748b;
-    background: transparent;
+    background: none;
     border: none;
-    border-radius: 8px;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: color 0.2s ease, border-color 0.2s ease;
 
     &:hover {
-      color: #0f172a;
-      background: #e2e8f0;
+      color: #334155;
     }
   }
 
   &__tab--active {
     color: #0f172a;
-    background: #ffffff;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
-    border: 1px solid #e2e8f0;
+    font-weight: 600;
+    border-bottom-color: #334155;
+    background: none;
   }
 
-  &__answer-toolbar {
+  &__task-targets {
+    flex-shrink: 0;
+    margin-top: auto; // 吸底：有剩余高度时贴底部
+    padding-top: 12px;
+    border-top: 1px solid #e2e8f0; // slate-200
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    margin-bottom: 12px;
-
-    .AnswerStatusMenu__class-switcher {
-      flex: 1;
-      margin-bottom: 0;
-    }
-  }
-
-  &__class-switcher {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     gap: 8px;
-    padding: 8px 10px;
-    margin-bottom: 12px;
-    background: #f8fafc; // slate-50
-    border: 1px solid #e2e8f0; // slate-200
-    border-radius: 10px;
   }
 
-  &__class-label {
-    font-size: 12px;
+  &__task-label {
+    font-size: 11px;
     color: #64748b; // slate-500
-    font-weight: 500;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
   }
 
-  &__class-control {
+  &__task-classes {
     display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  &__task-class-tag {
+    display: inline-flex;
     align-items: center;
-    min-width: 0;
-  }
-
-  &__class-loading {
-    font-size: 12px;
-    color: #94a3b8; // slate-400
-  }
-
-  &__class-select {
-    min-width: 0;
-    max-width: 200px;
-    padding: 6px 10px;
-    border: 1px solid #cbd5e1; // slate-300
-    border-radius: 8px;
-    background: #ffffff;
-    color: #334155; // slate-700
+    padding: 4px 10px;
     font-size: 12px;
     font-weight: 500;
-    outline: none;
-    cursor: pointer;
-    transition: all 0.15s ease;
+    color: #334155; // slate-700
+    background: #f1f5f9; // slate-100
+    border: 1px solid #e2e8f0; // slate-200
+    border-radius: 8px;
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      border-color: #94a3b8; // slate-400
+      background: #e2e8f0; // slate-200
+      border-color: #cbd5e1; // slate-300
     }
+  }
 
-    &:disabled {
-      background: #f1f5f9; // slate-100
-      color: #94a3b8; // slate-400
-      cursor: not-allowed;
-    }
+  &__task-empty {
+    font-size: 12px;
+    color: #94a3b8; // slate-400
+    font-style: italic;
   }
 
   &__title {
@@ -227,11 +208,74 @@
     cursor: pointer;
     font-size: 13px;
     transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
 
     &:hover {
       background: #f8fafc; // slate-50
       border-color: #94a3b8; // slate-400
     }
+
+    // iconify 图标默认按 font-size 渲染
+    svg {
+      font-size: 16px;
+      line-height: 1;
+    }
+  }
+
+  // 任务历史列表：Minimal & Direct，简洁卡片
+  &__history-list {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 8px;
+  }
+
+  &__history-item {
+    padding: 10px 12px;
+    background: #f8fafc; // slate-50
+    border: 1px solid #e2e8f0; // slate-200
+    border-radius: 10px;
+    transition: border-color 0.2s ease;
+
+    &:hover {
+      border-color: #cbd5e1; // slate-300
+    }
+  }
+
+  &__history-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #0f172a; // slate-900
+    margin-bottom: 4px;
+    line-height: 1.35;
+  }
+
+  &__history-meta {
+    font-size: 11px;
+    color: #64748b; // slate-500
+    line-height: 1.4;
+    margin-bottom: 6px;
+  }
+
+  &__history-classes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  &__history-class-tag {
+    font-size: 11px;
+    padding: 2px 8px;
+    font-weight: 500;
+    color: #475569; // slate-600
+    background: #f1f5f9; // slate-100
+    border: 1px solid #e2e8f0; // slate-200
+    border-radius: 6px;
+    white-space: nowrap;
   }
 
   // 统计区域 - 两行布局，更宽松
@@ -240,7 +284,7 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 0;
     margin-bottom: 16px;
-    padding: 8px;
+    padding: 4px 8px; // 上下 4px，左右 8px，节省垂直空间
     background: #f8fafc; // slate-50
     border: 1px solid #e2e8f0; // slate-200
     border-radius: 12px;
@@ -263,7 +307,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 10px 6px;
+    padding: 6px; // 由 10px 6px 缩小为 6px，节省垂直空间
     background: transparent;
     position: relative;
 
@@ -299,7 +343,7 @@
 
     &--unanswered {
       .AnswerStatusMenu__summary-value {
-        color: #94a3b8; // slate-400
+        color: #0f172a; // slate-900，与默认值保持一致
       }
     }
   }
@@ -307,7 +351,7 @@
   &__summary-label {
     font-size: 11px;
     color: #64748b; // slate-500
-    margin-bottom: 2px;
+    margin-bottom: 1px; // 标题与数值间距略减
     font-weight: 400;
   }
 
@@ -400,29 +444,29 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
+    padding: 6px 12px; // 由 10px 14px 缩小，节省标签栏垂直高度
   }
 
   &__card-option {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   &__card-badge {
     font-size: 10px;
-    padding: 2px 8px;
+    padding: 2px 6px;
     background: #16a34a; // green-600
     color: white;
-    border-radius: 10px;
+    border-radius: 8px;
     font-weight: 500;
     letter-spacing: 0.02em;
   }
 
   &__card-count {
-    font-size: 13px;
+    font-size: 12px;
     color: #64748b; // slate-500
     font-weight: 500;
   }
@@ -450,32 +494,50 @@
 // Dark mode support
 .excalidraw.theme--dark {
   .AnswerStatusMenu {
-    &__class-switcher {
+    &__task-targets {
+      border-top-color: #334155; // slate-700
+    }
+
+    &__task-label {
+      color: #94a3b8; // slate-400
+    }
+
+    &__task-class-tag {
       background: #1e293b; // slate-800
-      border-color: #334155; // slate-700
-    }
-
-    &__class-label {
-      color: #94a3b8; // slate-400
-    }
-
-    &__class-loading {
-      color: #94a3b8; // slate-400
-    }
-
-    &__class-select {
-      background: #0f172a; // slate-900
       border-color: #334155; // slate-700
       color: #e2e8f0; // slate-200
 
       &:hover {
+        background: #334155; // slate-700
         border-color: #475569; // slate-600
       }
+    }
 
-      &:disabled {
-        background: #1e293b; // slate-800
-        color: #64748b; // slate-500
+    &__task-empty {
+      color: #64748b; // slate-500
+    }
+
+    &__history-item {
+      background: #1e293b; // slate-800
+      border-color: #334155; // slate-700
+
+      &:hover {
+        border-color: #475569; // slate-600
       }
+    }
+
+    &__history-title {
+      color: #f1f5f9; // slate-100
+    }
+
+    &__history-meta {
+      color: #94a3b8; // slate-400
+    }
+
+    &__history-class-tag {
+      background: #334155; // slate-700
+      border-color: #475569; // slate-600
+      color: #cbd5e1; // slate-300
     }
 
     &__title {
@@ -483,23 +545,21 @@
     }
 
     &__tabs {
-      background: #1e293b;
-      border-color: #334155;
+      background: transparent;
     }
 
     &__tab {
       color: #94a3b8;
 
       &:hover {
-        color: #f1f5f9;
-        background: #334155;
+        color: #e2e8f0;
       }
     }
 
     &__tab--active {
-      background: #0f172a;
       color: #f1f5f9;
-      border-color: #334155;
+      border-bottom-color: #94a3b8;
+      background: none;
     }
 
     &__refresh-btn {

@@ -18,18 +18,57 @@ interface AnswerStatusState {
 interface TaskHistoryItem {
   id: number;
   title: string;
-  status: number;
-  taskDate: string | null;
+  description?: string | null;
+  status?: number;
+  taskMode?: string;
+  moduleId?: number;
+  taskDate?: string | null;
+  timePeriod?: string | null; // 'morning' | 'afternoon' | 'evening'
+  dueAt?: string | null;
   targets: {
     classes: Array<{ id: number; name: string }>;
     members: Array<{ id: number; nickname?: string; username?: string }>;
   };
 }
 
+// 任务历史：日期、时段、截止时间 格式化（ui-ux-pro-max：locale-aware，简洁）
+function formatTaskDate(s: string | null | undefined): string {
+  if (!s) return "";
+  const parts = s.split("-");
+  const m = parts[1],
+    d = parts[2];
+  if (!m || !d) return s;
+  return `${parseInt(m, 10)}月${parseInt(d, 10)}日`;
+}
+
+function formatDueAt(
+  dueAt: string | null | undefined,
+  taskDate: string | null | undefined
+): string {
+  if (!dueAt) return "";
+  const d = new Date(dueAt.replace(" ", "T"));
+  if (Number.isNaN(d.getTime())) return "";
+  const day = `${d.getMonth() + 1}月${d.getDate()}日`;
+  const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const dueDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  if (taskDate && dueDay === taskDate) return `截止 ${time}`;
+  return `截止 ${day} ${time}`;
+}
+
+const TIME_PERIOD_LABEL: Record<string, string> = {
+  morning: "上午",
+  afternoon: "下午",
+  evening: "晚上",
+};
+
+function timePeriodLabel(p: string | null | undefined): string {
+  return (p && TIME_PERIOD_LABEL[p]) || "";
+}
+
 interface TaskHistoryState {
   loading: boolean;
   error: string | null;
-  data: TaskHistoryItem[] | null;
+  data: TaskHistoryItem[] | { list: TaskHistoryItem[] } | null;
 }
 
 type TabType = 'answer' | 'history';
@@ -51,10 +90,6 @@ export const AnswerStatusMenu: React.FC = () => {
   const selectedQuestion = config?.selectedQuestion;
   const fetchQuestionAnswerStatus = config?.fetchQuestionAnswerStatus;
   const teachingContext = config?.teachingContext;
-  const classes = config?.classes ?? [];
-  const classesLoading = config?.classesLoading ?? false;
-  const selectedClassId = config?.selectedClassId ?? null;
-  const onSelectClassId = config?.onSelectClassId;
   const coursewareId = teachingContext?.coursewareId;
   const taskId = teachingContext?.taskId;
 
@@ -121,23 +156,45 @@ export const AnswerStatusMenu: React.FC = () => {
   const fetchFnRef = useRef(fetchQuestionAnswerStatus);
   fetchFnRef.current = fetchQuestionAnswerStatus;
 
-  const hasClassSelection = classes.length === 0 || selectedClassId !== null;
+  const historyList = Array.isArray(historyState.data)
+    ? historyState.data
+    : historyState.data?.list ?? [];
+  const derivedTaskId = teachingContext?.taskId ?? historyList[0]?.id ?? null;
+  const derivedModuleId = teachingContext?.moduleId ?? historyList[0]?.moduleId ?? null;
+  const hasTeachingContext = !!(derivedTaskId || derivedModuleId);
   const canRefresh =
     !!selectedQuestion?.questionId &&
-    !!fetchQuestionAnswerStatus &&
-    !!teachingContext?.taskId &&
-    hasClassSelection;
+    hasTeachingContext;
+
+  const fetchAnswerStatus = useCallback(async (questionId: string) => {
+    const fetchFn = fetchFnRef.current;
+    if (fetchFn && (teachingContext?.taskId || teachingContext?.moduleId)) {
+      return fetchFn(questionId);
+    }
+
+    if (!derivedTaskId && !derivedModuleId) return null;
+
+    const params = new URLSearchParams({ question_id: questionId });
+    if (derivedTaskId) params.set('task_id', String(derivedTaskId));
+    if (derivedModuleId) params.set('module_id', String(derivedModuleId));
+
+    const response = await fetch(`/api/tasks/question-answer-status?${params.toString()}`);
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result?.message || '获取答题情况失败');
+    }
+    return result?.data ?? null;
+  }, [derivedTaskId, derivedModuleId, teachingContext?.taskId, teachingContext?.moduleId]);
 
   // 手动刷新按钮调用
   const handleRefresh = useCallback(async () => {
     const questionId = selectedQuestion?.questionId;
-    const fetchFn = fetchFnRef.current;
-    if (!questionId || !fetchFn) return;
+    if (!questionId) return;
 
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     try {
-      const data = await fetchFn(questionId);
+      const data = await fetchAnswerStatus(questionId);
       setState({ loading: false, error: null, data });
     } catch (err) {
       setState({
@@ -150,9 +207,15 @@ export const AnswerStatusMenu: React.FC = () => {
 
   // 题目切换时自动拉取
   useEffect(() => {
+    if (process.env.NODE_ENV !== 'production') {
+      console.debug('[AnswerStatusMenu] teachingContext', {
+        taskId: teachingContext?.taskId,
+        moduleId: teachingContext?.moduleId,
+        coursewareId: teachingContext?.coursewareId,
+        selectedQuestionId: selectedQuestion?.questionId,
+      });
+    }
     const questionId = selectedQuestion?.questionId;
-    const fetchFn = fetchFnRef.current;
-
     // 未选题：清空，并允许下次选中同题再次自动拉取
     if (!questionId) {
       lastAutoFetchedQuestionIdRef.current = null;
@@ -161,16 +224,15 @@ export const AnswerStatusMenu: React.FC = () => {
     }
 
     // 检查是否可以自动请求
-    const hasContext = !!teachingContext?.taskId;
-    if (!fetchFn || !hasContext) {
+    const hasContext = hasTeachingContext;
+    if (!hasContext) {
       // 缺少上下文或 API：清空数据，不自动请求
       lastAutoFetchedQuestionIdRef.current = null;
       setState({ loading: false, error: null, data: null });
       return;
     }
 
-    const classKey = selectedClassId ?? "all";
-    const questionKey = `${questionId}-${classKey}`;
+    const questionKey = questionId;
 
     // 同一题目在同一班级下只自动拉取一次（避免 StrictMode 双触发 & 刷新后不重复触发）
     if (lastAutoFetchedQuestionIdRef.current === questionKey) return;
@@ -178,7 +240,7 @@ export const AnswerStatusMenu: React.FC = () => {
 
     // 自动拉取
     setState({ loading: true, error: null, data: null });
-    fetchFn(questionId)
+    fetchAnswerStatus(questionId)
       .then((data) => {
         setState({ loading: false, error: null, data });
       })
@@ -189,7 +251,7 @@ export const AnswerStatusMenu: React.FC = () => {
           data: null,
         });
       });
-  }, [selectedQuestion?.questionId, teachingContext?.taskId, selectedClassId]);
+  }, [selectedQuestion?.questionId, teachingContext?.taskId, teachingContext?.moduleId, historyState.data]);
 
   const header = (
     <div className="AnswerStatusMenu__header">
@@ -213,50 +275,43 @@ export const AnswerStatusMenu: React.FC = () => {
           任务历史
         </button>
       </div>
+      {activeTab === 'answer' && (
+        <button
+          type="button"
+          className="AnswerStatusMenu__refresh-btn"
+          title={state.loading ? "刷新中..." : "刷新"}
+          aria-label="刷新"
+          disabled={!canRefresh || state.loading}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleRefresh();
+          }}
+        >
+          <Icon icon="hugeicons:reload" />
+        </button>
+      )}
     </div>
   );
 
-  const answerToolbar = (
-    <div className="AnswerStatusMenu__answer-toolbar">
-      <div className="AnswerStatusMenu__class-switcher">
-        <span className="AnswerStatusMenu__class-label">班级</span>
-        <div className="AnswerStatusMenu__class-control">
-          {classesLoading ? (
-            <span className="AnswerStatusMenu__class-loading">加载中...</span>
-          ) : (
-            <select
-              className="AnswerStatusMenu__class-select"
-              value={selectedClassId ?? ""}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (!onSelectClassId) return;
-                onSelectClassId(value ? Number(value) : null);
-              }}
-              disabled={classes.length === 0}
-            >
-              {classes.length === 0 && <option value="">暂无班级</option>}
-              {classes.map((cls) => (
-                <option key={cls.id} value={cls.id}>
-                  {cls.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
+  const taskFromHistory =
+    historyList.find((task) => Number(task.id) === Number(taskId)) ?? null;
+  const taskForTargets = taskFromHistory ?? historyList[0] ?? null;
+  const targetClasses = taskForTargets?.targets?.classes ?? [];
+
+  const taskTargets = (
+    <div className="AnswerStatusMenu__task-targets">
+      <span className="AnswerStatusMenu__task-label">任务对象</span>
+      <div className="AnswerStatusMenu__task-classes">
+        {targetClasses.length > 0 ? (
+          targetClasses.map((cls) => (
+            <span key={cls.id} className="AnswerStatusMenu__task-class-tag">
+              {cls.name}
+            </span>
+          ))
+        ) : (
+          <span className="AnswerStatusMenu__task-empty">—</span>
+        )}
       </div>
-      <button
-        type="button"
-        className="AnswerStatusMenu__refresh-btn"
-        title={state.loading ? "刷新中..." : "刷新"}
-        aria-label="刷新"
-        disabled={!canRefresh || state.loading}
-        onClick={(e) => {
-          e.stopPropagation();
-          handleRefresh();
-        }}
-      >
-        <Icon icon="hugeicons:reload" />
-      </button>
     </div>
   );
 
@@ -273,14 +328,16 @@ export const AnswerStatusMenu: React.FC = () => {
   }
 
   const hasHistoryLoaded = historyState.data !== null;
-  const hasHistoryTasks = (historyState.data?.length ?? 0) > 0;
+  const hasHistoryTasks = historyList.length > 0;
 
   // 未关联课件或任务列表为空时，仅展示任务历史空态（不展示 tabs/刷新）
   if (!coursewareId || (!taskId && hasHistoryLoaded && !hasHistoryTasks)) {
     return (
       <div className="AnswerStatusMenu">
         <div className="AnswerStatusMenu__empty">
-          <div className="AnswerStatusMenu__empty-icon">📋</div>
+          <div className="AnswerStatusMenu__empty-icon" aria-hidden="true">
+            <Icon icon="hugeicons:task-daily-01" />
+          </div>
           <p>该课件尚未关联任何任务</p>
           <p className="AnswerStatusMenu__hint">
             点击下方按钮为该课件布置任务
@@ -290,6 +347,7 @@ export const AnswerStatusMenu: React.FC = () => {
             className="AnswerStatusMenu__assign-btn"
             onClick={handleAssignTask}
           >
+            <Icon icon="hugeicons:task-add-01" />
             布置任务
           </button>
         </div>
@@ -343,13 +401,15 @@ export const AnswerStatusMenu: React.FC = () => {
     }
 
     // 任务历史列表
-    const tasks = historyState.data || [];
+    const tasks = historyList;
     if (tasks.length === 0) {
       return (
         <div className="AnswerStatusMenu">
           {header}
           <div className="AnswerStatusMenu__empty">
-            <div className="AnswerStatusMenu__empty-icon">📋</div>
+            <div className="AnswerStatusMenu__empty-icon" aria-hidden="true">
+              <Icon icon="hugeicons:task-daily-01" />
+            </div>
             <p>该课件尚未关联任何任务</p>
             <p className="AnswerStatusMenu__hint">
               点击下方按钮为该课件布置任务
@@ -370,18 +430,41 @@ export const AnswerStatusMenu: React.FC = () => {
       <div className="AnswerStatusMenu">
         {header}
         <div className="AnswerStatusMenu__history-list">
-          {tasks.map((task) => (
-            <div key={task.id} className="AnswerStatusMenu__history-item">
-              <div className="AnswerStatusMenu__history-title">{task.title}</div>
-              <div className="AnswerStatusMenu__history-classes">
-                {task.targets.classes.map((cls) => (
-                  <span key={cls.id} className="AnswerStatusMenu__class-tag">
-                    {cls.name}
-                  </span>
-                ))}
+          {tasks.map((task) => {
+            const metaParts: string[] = [];
+            if (task.taskDate) metaParts.push(formatTaskDate(task.taskDate));
+            const tp = timePeriodLabel(task.timePeriod);
+            if (tp) metaParts.push(tp);
+            if (task.dueAt)
+              metaParts.push(formatDueAt(task.dueAt, task.taskDate));
+            const metaText = metaParts.join(" · ");
+            const classes = task.targets?.classes ?? [];
+
+            return (
+              <div key={task.id} className="AnswerStatusMenu__history-item">
+                <div className="AnswerStatusMenu__history-title">
+                  {task.title}
+                </div>
+                {metaText && (
+                  <div className="AnswerStatusMenu__history-meta">
+                    {metaText}
+                  </div>
+                )}
+                {classes.length > 0 && (
+                  <div className="AnswerStatusMenu__history-classes">
+                    {classes.map((cls) => (
+                      <span
+                        key={cls.id}
+                        className="AnswerStatusMenu__history-class-tag"
+                      >
+                        {cls.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
@@ -392,42 +475,16 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
-        {answerToolbar}
         <div className="AnswerStatusMenu__empty">
           <div className="AnswerStatusMenu__empty-icon" aria-hidden="true">
-            <Icon icon="hugeicons:clipboard" />
+            <Icon icon="hugeicons:task-daily-01" />
           </div>
           <p>请在画布上选择一道题目</p>
           <p className="AnswerStatusMenu__hint">
             点击题目节点后，这里将显示学员的答题情况
           </p>
         </div>
-      </div>
-    );
-  }
-
-  // 已选中题目，但缺少授课上下文/未注入 API（避免触发后端 422）
-  if (!fetchQuestionAnswerStatus || !teachingContext?.taskId) {
-    return (
-      <div className="AnswerStatusMenu">
-        {header}
-        {answerToolbar}
-        <div className="AnswerStatusMenu__empty">
-          <div className="AnswerStatusMenu__empty-icon">🎓</div>
-          <p>缺少授课上下文</p>
-          <p className="AnswerStatusMenu__hint">
-            请通过「开始授课」进入画布，或确保已传入 task_id
-          </p>
-          {!teachingContext?.taskId && (
-            <button
-              type="button"
-              className="AnswerStatusMenu__assign-btn"
-              onClick={handleAssignTask}
-            >
-              布置任务
-            </button>
-          )}
-        </div>
+        {taskTargets}
       </div>
     );
   }
@@ -437,11 +494,11 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
-        {answerToolbar}
         <div className="AnswerStatusMenu__loading">
           <div className="AnswerStatusMenu__spinner" />
           <p>加载中...</p>
         </div>
+        {taskTargets}
       </div>
     );
   }
@@ -451,7 +508,6 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
-        {answerToolbar}
         <div className="AnswerStatusMenu__error">
           <p>{state.error}</p>
           <button
@@ -461,6 +517,7 @@ export const AnswerStatusMenu: React.FC = () => {
             重试
           </button>
         </div>
+        {taskTargets}
       </div>
     );
   }
@@ -471,10 +528,10 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
-        {answerToolbar}
         <div className="AnswerStatusMenu__loading">
           <p>暂无答题数据</p>
         </div>
+        {taskTargets}
       </div>
     );
   }
@@ -512,28 +569,33 @@ export const AnswerStatusMenu: React.FC = () => {
     ...Object.keys(groupedAnswers),
   ]);
 
-  // 排序选项：优先显示正确选项，其他按默认顺序/字母顺序
-  const sortedOptions = Array.from(optionSet).sort((a, b) => {
-    if (a === data.correctOption) return -1;
-    if (b === data.correctOption) return 1;
-    const aIndex = defaultOptions.indexOf(a);
-    const bIndex = defaultOptions.indexOf(b);
-    if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
-    if (aIndex !== -1) return -1;
-    if (bIndex !== -1) return 1;
-    return a.localeCompare(b);
-  });
+  // 排序选项：始终按 ABCD 顺序展示，额外选项按字母顺序追加
+  const extraOptions = Array.from(optionSet)
+    .filter((option) => !defaultOptions.includes(option))
+    .sort((a, b) => a.localeCompare(b));
+  const sortedOptions = [...defaultOptions, ...extraOptions];
 
   return (
     <div className="AnswerStatusMenu">
       {header}
-      {answerToolbar}
       {/* 统计概览 */}
       <div className="AnswerStatusMenu__summary">
         <div className="AnswerStatusMenu__summary-item">
           <span className="AnswerStatusMenu__summary-label">总人数</span>
           <span className="AnswerStatusMenu__summary-value">
             {data.totalStudents}
+          </span>
+        </div>
+        <div className="AnswerStatusMenu__summary-item">
+          <span className="AnswerStatusMenu__summary-label">已答</span>
+          <span className="AnswerStatusMenu__summary-value">
+            {answeredCount}
+          </span>
+        </div>
+        <div className="AnswerStatusMenu__summary-item AnswerStatusMenu__summary-item--unanswered">
+          <span className="AnswerStatusMenu__summary-label">未答</span>
+          <span className="AnswerStatusMenu__summary-value">
+            {unansweredCount}
           </span>
         </div>
         <div className="AnswerStatusMenu__summary-item AnswerStatusMenu__summary-item--correct">
@@ -547,12 +609,6 @@ export const AnswerStatusMenu: React.FC = () => {
         <div className="AnswerStatusMenu__summary-item AnswerStatusMenu__summary-item--rate">
           <span className="AnswerStatusMenu__summary-label">正确率</span>
           <span className="AnswerStatusMenu__summary-value">{correctRateText}</span>
-        </div>
-        <div className="AnswerStatusMenu__summary-item AnswerStatusMenu__summary-item--unanswered">
-          <span className="AnswerStatusMenu__summary-label">未答</span>
-          <span className="AnswerStatusMenu__summary-value">
-            {unansweredCount}
-          </span>
         </div>
       </div>
 
@@ -597,6 +653,7 @@ export const AnswerStatusMenu: React.FC = () => {
           );
         })}
       </div>
+      {taskTargets}
     </div>
   );
 };

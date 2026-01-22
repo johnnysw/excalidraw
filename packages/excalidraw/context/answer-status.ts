@@ -30,7 +30,6 @@ export interface TeachingContext {
   moduleId?: number;
   paperId?: number;
   taskId?: number;
-  classId?: number;
 }
 
 export interface AnswerStatusConfig {
@@ -40,14 +39,6 @@ export interface AnswerStatusConfig {
   fetchQuestionAnswerStatus?: (
     questionId: string
   ) => Promise<QuestionAnswerStatusResponse>;
-  /** 老师班级列表 */
-  classes?: TeachingClassInfo[];
-  /** 班级列表加载状态 */
-  classesLoading?: boolean;
-  /** 当前选中的班级 ID */
-  selectedClassId?: number | null;
-  /** 切换班级回调 */
-  onSelectClassId?: (classId: number | null) => void;
   /** 授课上下文 */
   teachingContext?: TeachingContext;
 }
