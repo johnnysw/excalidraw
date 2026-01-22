@@ -37,7 +37,8 @@ export interface AnswerStatusConfig {
   selectedQuestion: SelectedQuestionInfo | null;
   /** 获取题目答题状态的 API 函数 */
   fetchQuestionAnswerStatus?: (
-    questionId: string
+    questionId: string,
+    taskId?: number | null
   ) => Promise<QuestionAnswerStatusResponse>;
   /** 获取课件任务历史 */
   fetchTaskHistoryByCourseware?: (
