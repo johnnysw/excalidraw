@@ -13,6 +13,17 @@
     margin-bottom: 12px;
   }
 
+  &__history-hint-text {
+    display: inline;
+  }
+
+  &__history-hint-inline-icon {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0 3px;
+    line-height: inherit;
+  }
+
   &__actions {
     display: inline-flex;
     align-items: center;
@@ -355,7 +366,7 @@
   &__history-actions {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 10px;
     flex-shrink: 0;
   }
 
@@ -387,6 +398,11 @@
       border-color: #6965db;
       box-shadow: 0 0 0 2px rgba(105, 101, 219, 0.2);
     }
+  }
+
+  &__history-action-btn--disabled {
+    opacity: 0.5;
+    pointer-events: none;
   }
 
   &__history-meta {

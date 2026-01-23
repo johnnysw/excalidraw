@@ -9,43 +9,19 @@ import type {
 import { useTaskHistory } from "./useTaskHistory";
 import type { TaskHistoryItem } from "./useTaskHistory";
 import { useAnswerStatusData } from "./useAnswerStatusData";
+import { formatDueAt, formatTaskDate, timePeriodLabel } from "./taskHistoryUtils";
 
 import "./AnswerStatusMenu.scss";
 
-// 任务历史：日期、时段、截止时间 格式化（ui-ux-pro-max：locale-aware，简洁）
-function formatTaskDate(s: string | null | undefined): string {
-  if (!s) return "";
-  const parts = s.split("-");
-  const m = parts[1],
-    d = parts[2];
-  if (!m || !d) return s;
-  return `${parseInt(m, 10)}月${parseInt(d, 10)}日`;
-}
-
-function formatDueAt(
-  dueAt: string | null | undefined,
-  taskDate: string | null | undefined
-): string {
-  if (!dueAt) return "";
-  const d = new Date(dueAt.replace(" ", "T"));
-  if (Number.isNaN(d.getTime())) return "";
-  const day = `${d.getMonth() + 1}月${d.getDate()}日`;
-  const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-  const dueDay = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  if (taskDate && dueDay === taskDate) return `截止 ${time}`;
-  return `截止 ${day} ${time}`;
-}
-
-const TIME_PERIOD_LABEL: Record<string, string> = {
-  morning: "上午",
-  afternoon: "下午",
-  evening: "晚上",
-};
-
 const DEFAULT_OPTIONS = ["A", "B", "C", "D"];
 
-function timePeriodLabel(p: string | null | undefined): string {
-  return (p && TIME_PERIOD_LABEL[p]) || "";
+function getTaskMetaText(task: TaskHistoryItem): string {
+  const metaParts: string[] = [];
+  if (task.taskDate) metaParts.push(formatTaskDate(task.taskDate));
+  const periodLabel = timePeriodLabel(task.timePeriod);
+  if (periodLabel) metaParts.push(periodLabel);
+  if (task.dueAt) metaParts.push(formatDueAt(task.dueAt, task.taskDate));
+  return metaParts.join(" · ");
 }
 
 function useEventCallback<T extends (...args: never[]) => void>(handler: T) {
@@ -77,6 +53,126 @@ const EmptyState = React.memo(({ title, hint, icon, action }: EmptyStateProps) =
     {action}
   </div>
 ));
+
+interface HistoryItemProps {
+  task: TaskHistoryItem;
+  isSelected: boolean;
+  isPublished: boolean;
+  isUpdating: boolean;
+  displayStatus: number;
+  onSelect: (taskId: number) => void;
+  onToggleStatus: (task: TaskHistoryItem, currentStatus: number) => void;
+  onEdit: (task: TaskHistoryItem) => void;
+}
+
+const HistoryItem = React.memo(
+  ({
+    task,
+    isSelected,
+    isPublished,
+    isUpdating,
+    displayStatus,
+    onSelect,
+    onToggleStatus,
+    onEdit,
+  }: HistoryItemProps) => {
+    const metaText = getTaskMetaText(task);
+    const classes = task.targets?.classes ?? [];
+
+    return (
+      <div
+        className={clsx("AnswerStatusMenu__history-item", {
+          "AnswerStatusMenu__history-item--active": isSelected,
+          "AnswerStatusMenu__history-item--published": isPublished,
+        })}
+        aria-current={isSelected ? "true" : undefined}
+      >
+        <div className="AnswerStatusMenu__history-header">
+          <div className="AnswerStatusMenu__history-title">{task.title}</div>
+          <div className="AnswerStatusMenu__history-actions">
+            <Tooltip label="切换任务">
+              <button
+                type="button"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onSelect(task.id);
+                }}
+              >
+                <Icon icon="hugeicons:arrow-left-right" width={16} height={16} />
+              </button>
+            </Tooltip>
+            <Tooltip label={isPublished ? "取消发布" : "发布"}>
+              <button
+                type="button"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  cursor: isUpdating ? 'not-allowed' : 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: isUpdating ? 0.5 : 1,
+                }}
+                disabled={isUpdating}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleStatus(task, displayStatus);
+                }}
+                aria-label={isPublished ? "已发布" : "草稿"}
+              >
+                <Icon
+                  icon={isPublished ? "hugeicons:task-remove-01" : "hugeicons:task-done-01"}
+                  width={16}
+                  height={16}
+                />
+              </button>
+            </Tooltip>
+            <Tooltip label="编辑任务">
+              <button
+                type="button"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 0,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onEdit(task);
+                }}
+              >
+                <Icon icon="hugeicons:task-edit-01" width={16} height={16} />
+              </button>
+            </Tooltip>
+          </div>
+        </div>
+        {metaText && <div className="AnswerStatusMenu__history-meta">{metaText}</div>}
+        {classes.length > 0 && (
+          <div className="AnswerStatusMenu__history-classes">
+            {classes.map((cls) => (
+              <span key={cls.id} className="AnswerStatusMenu__history-class-tag">
+                {cls.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  },
+);
 
 interface LoadingStateProps {
   text?: string;
@@ -146,8 +242,6 @@ export const AnswerStatusMenu: React.FC = () => {
   const config = useAnswerStatus();
   const [activeTab, setActiveTab] = useState<TabType>('answer');
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
-  const [statusOverrides, setStatusOverrides] = useState<Record<number, number>>({});
-  const [statusUpdating, setStatusUpdating] = useState<Record<number, boolean>>({});
   const selectedQuestion = config?.selectedQuestion;
   const fetchQuestionAnswerStatus = config?.fetchQuestionAnswerStatus;
   const fetchTaskHistoryByCourseware = config?.fetchTaskHistoryByCourseware;
@@ -161,15 +255,21 @@ export const AnswerStatusMenu: React.FC = () => {
     defaultTaskId,
     defaultModuleId,
     fetchTaskHistory,
+    hasHistoryLoaded,
+    hasHistoryTasks,
+    targetClasses,
+    statusOverrides,
+    statusUpdating,
+    toggleTaskStatus,
   } = useTaskHistory({
     coursewareId: teachingCoursewareId ?? undefined,
     taskId: teachingTaskId ?? undefined,
+    teachingContext,
     fetchTaskHistoryByCourseware,
   });
 
   const {
     state,
-    derivedTaskId,
     canRefresh,
     refresh,
   } = useAnswerStatusData({
@@ -196,62 +296,6 @@ export const AnswerStatusMenu: React.FC = () => {
     });
     document.dispatchEvent(event);
   });
-
-  const handleToggleHistoryTaskStatus = useEventCallback((task: TaskHistoryItem, currentStatus: number) => {
-    const nextStatus = currentStatus === 1 ? 0 : 1;
-    setStatusOverrides((prev) => ({ ...prev, [task.id]: nextStatus }));
-    setStatusUpdating((prev) => ({ ...prev, [task.id]: true }));
-    const event = new CustomEvent("excalidraw:toggleTaskStatus", {
-      detail: {
-        source: "answer-status",
-        task: {
-          ...task,
-          status: nextStatus,
-          taskMode: task.taskMode ?? "practice",
-          coursewareId: task.coursewareId ?? teachingCoursewareId ?? undefined,
-        },
-        nextStatus,
-        previousStatus: currentStatus,
-        teachingContext: teachingContext || null,
-        coursewareId: task.coursewareId ?? teachingCoursewareId ?? undefined,
-      },
-      bubbles: true,
-    });
-    document.dispatchEvent(event);
-  });
-
-  useEffect(() => {
-    const handleStatusUpdated = (event: Event) => {
-      const detail = (event as CustomEvent).detail as
-        | { taskId?: number; status?: number }
-        | undefined;
-      const taskId = detail?.taskId;
-      if (!taskId) return;
-      if (typeof detail?.status === "number") {
-        setStatusOverrides((prev) => ({ ...prev, [taskId]: detail.status as number }));
-      }
-      setStatusUpdating((prev) => ({ ...prev, [taskId]: false }));
-    };
-
-    const handleStatusUpdateFailed = (event: Event) => {
-      const detail = (event as CustomEvent).detail as
-        | { taskId?: number; previousStatus?: number }
-        | undefined;
-      const taskId = detail?.taskId;
-      if (!taskId) return;
-      if (typeof detail?.previousStatus === "number") {
-        setStatusOverrides((prev) => ({ ...prev, [taskId]: detail.previousStatus as number }));
-      }
-      setStatusUpdating((prev) => ({ ...prev, [taskId]: false }));
-    };
-
-    document.addEventListener("excalidraw:taskStatusUpdated", handleStatusUpdated);
-    document.addEventListener("excalidraw:taskStatusUpdateFailed", handleStatusUpdateFailed);
-    return () => {
-      document.removeEventListener("excalidraw:taskStatusUpdated", handleStatusUpdated);
-      document.removeEventListener("excalidraw:taskStatusUpdateFailed", handleStatusUpdateFailed);
-    };
-  }, []);
 
   // 手动刷新按钮调用
   const handleRefresh = useEventCallback(() => {
@@ -361,11 +405,6 @@ export const AnswerStatusMenu: React.FC = () => {
     </div>
   );
 
-  const taskFromHistory =
-    historyList.find((task) => Number(task.id) === Number(teachingTaskId)) ?? null;
-  const taskForTargets = taskFromHistory ?? historyList[0] ?? null;
-  const targetClasses = taskForTargets?.targets?.classes ?? [];
-
   const taskTargets = useMemo(
     () => <TaskTargets classes={targetClasses} onAssign={handleAssignTask} />,
     [targetClasses, handleAssignTask],
@@ -399,29 +438,6 @@ export const AnswerStatusMenu: React.FC = () => {
     document.dispatchEvent(event);
   });
 
-  // 任务历史按钮的共享样式和事件处理
-  const historyActionButtonStyle: React.CSSProperties = {
-    background: 'transparent',
-    border: 'none',
-    padding: '4px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: '4px',
-    transition: 'all 0.2s ease',
-  };
-
-  const handleButtonMouseEnter = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-    e.currentTarget.style.transform = 'scale(1.1)';
-  };
-
-  const handleButtonMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.currentTarget.style.backgroundColor = 'transparent';
-    e.currentTarget.style.transform = 'scale(1)';
-  };
-
   // 渲染空状态
   if (!config) {
     return (
@@ -431,9 +447,6 @@ export const AnswerStatusMenu: React.FC = () => {
       </div>
     );
   }
-
-  const hasHistoryLoaded = historyState.data !== null;
-  const hasHistoryTasks = historyList.length > 0;
 
   // 未关联课件或任务列表为空时，仅展示任务历史空态（不展示 tabs/刷新）
   if (!teachingCoursewareId || (!teachingTaskId && hasHistoryLoaded && !hasHistoryTasks)) {
@@ -520,122 +533,36 @@ export const AnswerStatusMenu: React.FC = () => {
           <span className="AnswerStatusMenu__history-hint-icon" aria-hidden="true">
             <Icon icon="hugeicons:information-circle" />
           </span>
-          <span style={{ display: 'inline' }}>
+          <span className="AnswerStatusMenu__history-hint-text">
             点击卡片右上角
             <Icon
               icon="hugeicons:arrow-left-right"
               width={16}
               height={16}
-              style={{
-                display: 'inline-block',
-                verticalAlign: 'middle',
-                margin: '0 3px',
-                lineHeight: 'inherit'
-              }}
+              className="AnswerStatusMenu__history-hint-inline-icon"
             />
             按钮可以切换任务，查看该任务的答题情况
           </span>
         </p>
         <div className="AnswerStatusMenu__history-list">
           {tasks.map((task) => {
-            const metaParts: string[] = [];
-            if (task.taskDate) metaParts.push(formatTaskDate(task.taskDate));
-            const tp = timePeriodLabel(task.timePeriod);
-            if (tp) metaParts.push(tp);
-            if (task.dueAt)
-              metaParts.push(formatDueAt(task.dueAt, task.taskDate));
-            const metaText = metaParts.join(" · ");
-            const classes = task.targets?.classes ?? [];
             const isSelected = Number(task.id) === Number(teachingTaskId);
             const displayStatus = statusOverrides[task.id] ?? task.status ?? 0;
             const isPublished = displayStatus === 1;
             const isUpdating = !!statusUpdating[task.id];
 
             return (
-              <div
+              <HistoryItem
                 key={task.id}
-                className={clsx("AnswerStatusMenu__history-item", {
-                  "AnswerStatusMenu__history-item--active": isSelected,
-                  "AnswerStatusMenu__history-item--published": isPublished,
-                })}
-                aria-current={isSelected ? "true" : undefined}
-              >
-                <div className="AnswerStatusMenu__history-header">
-                  <div className="AnswerStatusMenu__history-title">
-                    {task.title}
-                  </div>
-                  <div className="AnswerStatusMenu__history-actions" style={{ display: 'flex', gap: '2px' }}>
-                    <Tooltip label="切换任务">
-                      <button
-                        type="button"
-                        style={historyActionButtonStyle}
-                        onMouseEnter={handleButtonMouseEnter}
-                        onMouseLeave={handleButtonMouseLeave}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleSelectHistoryTask(task.id);
-                        }}
-                      >
-                        <Icon icon="hugeicons:arrow-left-right" width={16} height={16} />
-                      </button>
-                    </Tooltip>
-                    <Tooltip label={isPublished ? "取消发布" : "发布"}>
-                      <button
-                        type="button"
-                        style={{
-                          ...historyActionButtonStyle,
-                          opacity: isUpdating ? 0.5 : 1,
-                          pointerEvents: isUpdating ? 'none' : 'auto',
-                        }}
-                        onMouseEnter={handleButtonMouseEnter}
-                        onMouseLeave={handleButtonMouseLeave}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleToggleHistoryTaskStatus(task, displayStatus);
-                        }}
-                        aria-label={isPublished ? "已发布" : "草稿"}
-                      >
-                        <Icon
-                          icon={isPublished ? "hugeicons:task-remove-01" : "hugeicons:task-done-01"}
-                          width={16}
-                          height={16}
-                        />
-                      </button>
-                    </Tooltip>
-                    <Tooltip label="编辑任务">
-                      <button
-                        type="button"
-                        style={historyActionButtonStyle}
-                        onMouseEnter={handleButtonMouseEnter}
-                        onMouseLeave={handleButtonMouseLeave}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleEditHistoryTask(task);
-                        }}
-                      >
-                        <Icon icon="hugeicons:task-edit-01" width={16} height={16} />
-                      </button>
-                    </Tooltip>
-                  </div>
-                </div>
-                {metaText && (
-                  <div className="AnswerStatusMenu__history-meta">
-                    {metaText}
-                  </div>
-                )}
-                {classes.length > 0 && (
-                  <div className="AnswerStatusMenu__history-classes">
-                    {classes.map((cls) => (
-                      <span
-                        key={cls.id}
-                        className="AnswerStatusMenu__history-class-tag"
-                      >
-                        {cls.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+                task={task}
+                isSelected={isSelected}
+                isPublished={isPublished}
+                isUpdating={isUpdating}
+                displayStatus={displayStatus}
+                onSelect={handleSelectHistoryTask}
+                onToggleStatus={toggleTaskStatus}
+                onEdit={handleEditHistoryTask}
+              />
             );
           })}
         </div>
