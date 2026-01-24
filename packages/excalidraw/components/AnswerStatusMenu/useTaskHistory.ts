@@ -164,6 +164,19 @@ export const useTaskHistory = ({
   }, [coursewareId, hasHistoryLoaded, historyState.loading, fetchTaskHistory]);
 
   useEffect(() => {
+    const handleTaskUpdated = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { taskId?: number } | undefined;
+      if (!detail?.taskId) return;
+      fetchTaskHistory();
+    };
+
+    document.addEventListener('excalidraw:taskUpdated', handleTaskUpdated);
+    return () => {
+      document.removeEventListener('excalidraw:taskUpdated', handleTaskUpdated);
+    };
+  }, [fetchTaskHistory]);
+
+  useEffect(() => {
     if (!coursewareId || !taskId) return;
     if (historyState.loading) return;
 
