@@ -279,17 +279,15 @@ export const AnswerStatusMenu: React.FC = () => {
     fetchQuestionAnswerStatus,
   });
 
-  const derivedModuleId = teachingModuleId ?? defaultModuleId ?? null;
-
   const handleAssignTask = useEventCallback(() => {
-    const nextTeachingContext = {
-      ...(teachingContext || null),
-      moduleId: teachingContext?.moduleId ?? derivedModuleId ?? undefined,
-    };
     const event = new CustomEvent("excalidraw:assignTask", {
       detail: {
         source: "answer-status",
-        teachingContext: nextTeachingContext,
+        teachingContext: {
+          ...(teachingContext || null),
+          moduleId: undefined,
+          paperId: undefined,
+        },
         coursewareId: teachingCoursewareId ?? undefined,
       },
       bubbles: true,
@@ -416,20 +414,19 @@ export const AnswerStatusMenu: React.FC = () => {
   });
 
   const handleEditHistoryTask = useEventCallback((task: TaskHistoryItem) => {
-    const moduleId = task.moduleId ?? derivedModuleId ?? undefined;
     const event = new CustomEvent("excalidraw:editTask", {
       detail: {
         source: "answer-status",
         task: {
           ...task,
-          moduleId,
           coursewareId: task.coursewareId ?? teachingCoursewareId ?? undefined,
           status: task.status ?? 0,
           taskMode: task.taskMode ?? "practice",
         },
         teachingContext: {
           ...(teachingContext || null),
-          moduleId,
+          moduleId: undefined,
+          paperId: undefined,
         },
         coursewareId: task.coursewareId ?? teachingCoursewareId ?? undefined,
       },
