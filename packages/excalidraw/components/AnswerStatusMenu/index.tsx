@@ -5,6 +5,7 @@ import { Tooltip } from "../Tooltip";
 import { useAnswerStatus } from "../../context/answer-status";
 import type {
   MemberAnswerStatus,
+  SelectedQuestionInfo,
 } from "../../context/answer-status";
 import { useTaskHistory } from "./useTaskHistory";
 import type { TaskHistoryItem } from "./useTaskHistory";
@@ -238,14 +239,31 @@ const TaskTargets = React.memo(({ classes, onAssign }: TaskTargetsProps) => (
 
 type TabType = 'answer' | 'history';
 
-export const AnswerStatusMenu: React.FC = () => {
+interface AnswerStatusMenuProps {
+  /** 隐藏任务历史 Tab */
+  hideHistoryTab?: boolean;
+  /** 隐藏任务对象与布置任务入口 */
+  hideTaskTargets?: boolean;
+  /** 隐藏“请选择题目”提示 */
+  hideSelectionHint?: boolean;
+  /** 外部指定题目（演讲者视图根据当前播放题目自动传入） */
+  selectedQuestionOverride?: SelectedQuestionInfo | null;
+}
+
+export const AnswerStatusMenu: React.FC<AnswerStatusMenuProps> = ({
+  hideHistoryTab = false,
+  hideTaskTargets = false,
+  hideSelectionHint = false,
+  selectedQuestionOverride,
+}) => {
   const config = useAnswerStatus();
   const [activeTab, setActiveTab] = useState<TabType>('answer');
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null);
-  const selectedQuestion = config?.selectedQuestion;
+  const selectedQuestion = selectedQuestionOverride ?? config?.selectedQuestion;
   const fetchQuestionAnswerStatus = config?.fetchQuestionAnswerStatus;
   const fetchTaskHistoryByCourseware = config?.fetchTaskHistoryByCourseware;
   const teachingContext = config?.teachingContext;
+  const effectiveActiveTab = hideHistoryTab ? 'answer' : activeTab;
   const teachingTaskId = selectedTaskId ?? teachingContext?.taskId ?? null;
   const teachingModuleId = teachingContext?.moduleId ?? null;
   const teachingCoursewareId = teachingContext?.coursewareId ?? null;
@@ -367,24 +385,26 @@ export const AnswerStatusMenu: React.FC = () => {
         <button
           type="button"
           className={clsx("AnswerStatusMenu__tab", {
-            "AnswerStatusMenu__tab--active": activeTab === 'answer',
+            "AnswerStatusMenu__tab--active": effectiveActiveTab === 'answer',
           })}
           onClick={() => setActiveTab('answer')}
         >
           答题情况
         </button>
-        <button
-          type="button"
-          className={clsx("AnswerStatusMenu__tab", {
-            "AnswerStatusMenu__tab--active": activeTab === 'history',
-          })}
-          onClick={() => setActiveTab('history')}
-        >
-          任务历史
-        </button>
+        {!hideHistoryTab && (
+          <button
+            type="button"
+            className={clsx("AnswerStatusMenu__tab", {
+              "AnswerStatusMenu__tab--active": effectiveActiveTab === 'history',
+            })}
+            onClick={() => setActiveTab('history')}
+          >
+            任务历史
+          </button>
+        )}
       </div>
       <div className="AnswerStatusMenu__actions">
-        {activeTab === 'answer' && (
+        {effectiveActiveTab === 'answer' && (
           <button
             type="button"
             className="AnswerStatusMenu__refresh-btn"
@@ -404,8 +424,8 @@ export const AnswerStatusMenu: React.FC = () => {
   );
 
   const taskTargets = useMemo(
-    () => <TaskTargets classes={targetClasses} onAssign={handleAssignTask} />,
-    [targetClasses, handleAssignTask],
+    () => (hideTaskTargets ? null : <TaskTargets classes={targetClasses} onAssign={handleAssignTask} />),
+    [targetClasses, handleAssignTask, hideTaskTargets],
   );
 
   const handleSelectHistoryTask = useEventCallback((taskId: number) => {
@@ -447,21 +467,31 @@ export const AnswerStatusMenu: React.FC = () => {
 
   // 未关联课件或任务列表为空时，仅展示任务历史空态（不展示 tabs/刷新）
   if (!teachingCoursewareId || (!teachingTaskId && hasHistoryLoaded && !hasHistoryTasks)) {
+    if (hideHistoryTab && hideTaskTargets) {
+      return (
+        <div className="AnswerStatusMenu">
+          <EmptyState title="暂无答题数据" />
+        </div>
+      );
+    }
+
     return (
       <div className="AnswerStatusMenu">
         <EmptyState
           title="该课件尚未关联任何任务"
-          hint="点击下方按钮为该课件布置任务"
+          hint={hideTaskTargets ? undefined : "点击下方按钮为该课件布置任务"}
           icon={<Icon icon="hugeicons:task-daily-01" />}
           action={
-            <button
-              type="button"
-              className="AnswerStatusMenu__assign-btn"
-              onClick={handleAssignTask}
-            >
-              <Icon icon="hugeicons:task-add-01" />
-              布置任务
-            </button>
+            hideTaskTargets ? undefined : (
+              <button
+                type="button"
+                className="AnswerStatusMenu__assign-btn"
+                onClick={handleAssignTask}
+              >
+                <Icon icon="hugeicons:task-add-01" />
+                布置任务
+              </button>
+            )
           }
         />
       </div>
@@ -478,7 +508,7 @@ export const AnswerStatusMenu: React.FC = () => {
   }
 
   // 任务历史 Tab
-  if (activeTab === 'history') {
+  if (effectiveActiveTab === 'history') {
     // 加载中
     if (historyState.loading) {
       return (
@@ -507,17 +537,19 @@ export const AnswerStatusMenu: React.FC = () => {
           {header}
           <EmptyState
             title="该课件尚未关联任何任务"
-            hint="点击下方按钮为该课件布置任务"
+            hint={hideTaskTargets ? undefined : "点击下方按钮为该课件布置任务"}
             icon={<Icon icon="hugeicons:task-daily-01" />}
-            action={(
-              <button
-                type="button"
-                className="AnswerStatusMenu__assign-btn"
-                onClick={handleAssignTask}
-              >
-                布置任务
-              </button>
-            )}
+            action={
+              hideTaskTargets ? undefined : (
+                <button
+                  type="button"
+                  className="AnswerStatusMenu__assign-btn"
+                  onClick={handleAssignTask}
+                >
+                  布置任务
+                </button>
+              )
+            }
           />
         </div>
       );
@@ -572,11 +604,15 @@ export const AnswerStatusMenu: React.FC = () => {
     return (
       <div className="AnswerStatusMenu">
         {header}
-        <EmptyState
-          title="请在画布上选择一道题目"
-          hint="点击题目节点后，这里将显示学员的答题情况"
-          icon={<Icon icon="hugeicons:task-daily-01" />}
-        />
+        {hideSelectionHint ? (
+          <LoadingState text="暂无题目" showSpinner={false} />
+        ) : (
+          <EmptyState
+            title="请在画布上选择一道题目"
+            hint="点击题目节点后，这里将显示学员的答题情况"
+            icon={<Icon icon="hugeicons:task-daily-01" />}
+          />
+        )}
         {taskTargets}
       </div>
     );

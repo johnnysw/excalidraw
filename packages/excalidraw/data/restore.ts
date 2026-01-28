@@ -200,8 +200,9 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
 };
 
 const restoreElementWithProperties = <
-  T extends Required<Omit<ExcalidrawElement, "customData">> & {
+  T extends Required<Omit<ExcalidrawElement, "customData" | "animation">> & {
     customData?: ExcalidrawElement["customData"];
+    animation?: ExcalidrawElement["animation"];
     /** @deprecated */
     boundElementIds?: readonly ExcalidrawElement["id"][];
     /** @deprecated */
@@ -262,6 +263,10 @@ const restoreElementWithProperties = <
     link: element.link ? normalizeLink(element.link) : null,
     locked: element.locked ?? false,
   };
+
+  if (element.animation) {
+    base.animation = element.animation;
+  }
 
   if ("customData" in element || "customData" in extra) {
     base.customData =
@@ -340,7 +345,7 @@ export const restoreElement = (
         textOutlineWidth:
           (element as ExcalidrawTextElement).textOutlineWidth ??
           DEFAULT_TEXT_OUTLINE_WIDTH,
-      });
+      }) as typeof element;
 
       // if empty text, mark as deleted. We keep in array
       // for data integrity purposes (collab etc.)
@@ -356,7 +361,7 @@ export const restoreElement = (
         points: element.points,
         simulatePressure: element.simulatePressure,
         pressures: element.pressures,
-      });
+      }) as typeof element;
     }
     case "image":
       return restoreElementWithProperties(element, {
@@ -364,7 +369,7 @@ export const restoreElement = (
         fileId: element.fileId,
         scale: element.scale || [1, 1],
         crop: element.crop ?? null,
-      });
+      }) as typeof element;
     case "line":
     // @ts-ignore LEGACY type
     // eslint-disable-next-line no-fallthrough
@@ -399,7 +404,7 @@ export const restoreElement = (
           }
           : {}),
         ...getSizeFromPoints(points),
-      });
+      }) as typeof element;
     case "arrow": {
       const { startArrowhead = null, endArrowhead = "arrow" } = element;
       const x: number | undefined = element.x;
@@ -460,12 +465,12 @@ export const restoreElement = (
     case "diamond":
     case "iframe":
     case "embeddable":
-      return restoreElementWithProperties(element, {});
+      return restoreElementWithProperties(element, {}) as typeof element;
     case "magicframe":
     case "frame":
       return restoreElementWithProperties(element, {
         name: element.name ?? null,
-      });
+      }) as typeof element;
 
     // Don't use default case so as to catch a missing an element type case.
     // We also don't want to throw, but instead return void so we filter
