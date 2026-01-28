@@ -140,9 +140,6 @@ import "./index.scss";
 
 import { ExcalidrawPlusPromoBanner } from "./components/ExcalidrawPlusPromoBanner";
 
-// RichText 工具
-import { RichTextEditorOverlay, useRichTextTool } from "./richtext";
-
 import type { CollabAPI } from "./collab/Collab";
 
 polyfill();
@@ -374,14 +371,6 @@ const ExcalidrawWrapper = () => {
   const [excalidrawAPI, excalidrawRefCallback] =
     useCallbackRefState<ExcalidrawImperativeAPI>();
 
-  // RichText 工具
-  const {
-    editorState: richTextEditorState,
-    closeEditor: closeRichTextEditor,
-    handleSubmit: handleRichTextSubmit,
-    handlePointerDown: handleRichTextPointerDown,
-  } = useRichTextTool({ excalidrawAPI });
-
   const handlePointerDown = useCallback(
     (activeTool: any, pointerDownState: any) => {
       console.log(
@@ -389,9 +378,8 @@ const ExcalidrawWrapper = () => {
         activeTool?.type,
         pointerDownState?.origin,
       );
-      handleRichTextPointerDown(activeTool, pointerDownState);
     },
-    [handleRichTextPointerDown],
+    [],
   );
 
   const [, setShareDialogState] = useAtom(shareDialogStateAtom);
@@ -1186,14 +1174,6 @@ const ExcalidrawWrapper = () => {
         )}
       </Excalidraw>
 
-      {/* RichText 编辑器 Overlay */}
-      <RichTextEditorOverlay
-        isOpen={richTextEditorState.isOpen}
-        initialHtml={richTextEditorState.initialHtml}
-        nodeId={richTextEditorState.nodeId}
-        onSubmit={handleRichTextSubmit}
-        onCancel={closeRichTextEditor}
-      />
     </div>
   );
 };
