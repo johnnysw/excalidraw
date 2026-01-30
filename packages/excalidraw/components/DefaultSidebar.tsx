@@ -18,6 +18,7 @@ import type { MarkOptional, Merge } from "@excalidraw/common/utility-types";
 import { useTunnels } from "../context/tunnels";
 import { useUIAppState } from "../context/ui-appState";
 import { useShareMode } from "../context/share-mode";
+import { useRole } from "../context/role";
 
 import "../components/dropdownMenu/DropdownMenu.scss";
 
@@ -87,6 +88,8 @@ export const DefaultSidebar = Object.assign(
       const setAppState = useExcalidrawSetAppState();
       const [moreMenuOpen, setMoreMenuOpen] = useState(false);
       const shareModePermissions = useShareMode();
+      const role = useRole();
+      const isMember = role === "member";
 
       const { DefaultSidebarTabTriggersTunnel } = useTunnels();
 
@@ -108,11 +111,12 @@ export const DefaultSidebar = Object.assign(
         }
       }, [allowedTabs, appState.openSidebar?.tab, setAppState]);
 
+      // 学生端（member）隐藏"答题情况"标签
       const moreTabItems = [
         { tab: CANVAS_SEARCH_TAB, title: "搜索", icon: searchIcon },
         { tab: SHARE_SIDEBAR_TAB, title: "分享", icon: ShareIcon },
         { tab: ANSWER_STATUS_SIDEBAR_TAB, title: "答题情况", icon: usersIcon },
-      ];
+      ].filter((item) => !isMember || item.tab !== ANSWER_STATUS_SIDEBAR_TAB);
 
       const isMoreTabActive = moreTabItems.some(
         (item) => appState.openSidebar?.tab === item.tab
@@ -238,7 +242,8 @@ export const DefaultSidebar = Object.assign(
                 <ShareMenu />
               </Sidebar.Tab>
             )}
-            {isTabAllowed(ANSWER_STATUS_SIDEBAR_TAB) && (
+            {/* 学生端（member）隐藏"答题情况"Tab */}
+            {!isMember && isTabAllowed(ANSWER_STATUS_SIDEBAR_TAB) && (
               <Sidebar.Tab tab={ANSWER_STATUS_SIDEBAR_TAB}>
                 <AnswerStatusMenu />
               </Sidebar.Tab>
