@@ -334,6 +334,12 @@ const PresentationMenuContent: React.FC = () => {
                     SLIDE_THUMBNAIL_CACHE.set(frame.id, { thumbnail, key });
                     return thumbnail;
                 } catch (error) {
+                    // SecurityError occurs when the canvas contains cross-origin images
+                    // that were loaded without CORS headers. This is expected and we
+                    // silently return null to show a placeholder instead.
+                    if (error instanceof DOMException && error.name === "SecurityError") {
+                        return null;
+                    }
                     console.error("Failed to generate thumbnail:", error);
                     return null;
                 } finally {
