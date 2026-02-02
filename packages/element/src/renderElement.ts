@@ -928,8 +928,20 @@ export const renderElement = (
         );
         context.fillStyle = "rgba(0, 0, 200, 0.04)";
 
-        context.lineWidth = FRAME_STYLE.strokeWidth / appState.zoom.value;
+        const strokeWidth = FRAME_STYLE.strokeWidth;
+        const strokeStyle = element.strokeStyle ?? FRAME_STYLE.strokeStyle;
+        context.lineWidth = strokeWidth / appState.zoom.value;
         context.strokeStyle = FRAME_STYLE.strokeColor;
+
+        const dashArray =
+          strokeStyle === "dashed"
+            ? [8, 10]
+            : strokeStyle === "dotted"
+            ? [1.5, 8]
+            : null;
+        context.setLineDash(
+          dashArray ? dashArray.map((value) => value / appState.zoom.value) : [],
+        );
 
         // TODO change later to only affect AI frames
         if (isMagicFrameElement(element)) {

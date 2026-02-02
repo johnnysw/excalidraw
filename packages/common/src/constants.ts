@@ -184,9 +184,9 @@ export const THEME = {
 } as const;
 
 export const FRAME_STYLE = {
-  strokeColor: "#bbb" as ExcalidrawElement["strokeColor"],
-  strokeWidth: 2 as ExcalidrawElement["strokeWidth"],
-  strokeStyle: "solid" as ExcalidrawElement["strokeStyle"],
+  strokeColor: "#d6d6d6" as ExcalidrawElement["strokeColor"],
+  strokeWidth: 1 as ExcalidrawElement["strokeWidth"],
+  strokeStyle: "dashed" as ExcalidrawElement["strokeStyle"],
   fillStyle: "solid" as ExcalidrawElement["fillStyle"],
   roughness: 0 as ExcalidrawElement["roughness"],
   roundness: null as ExcalidrawElement["roundness"],

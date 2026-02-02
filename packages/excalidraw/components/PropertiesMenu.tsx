@@ -9,9 +9,15 @@ import {
   useApp,
   useExcalidrawElements,
   useExcalidrawActionManager,
+  useExcalidrawSetAppState,
 } from "./App";
 import { getSelectedElements, getTargetElements } from "../scene";
-import { isTransparent } from "@excalidraw/common";
+import {
+  COLOR_PALETTE,
+  DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
+  DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE,
+  isTransparent,
+} from "@excalidraw/common";
 import {
   hasBackground,
   hasStrokeColor,
@@ -33,6 +39,7 @@ import { alignActionsPredicate } from "../actions/actionAlign";
 import { t } from "../i18n";
 import { NumberInput } from "./NumberInput";
 import { actionChangeStrokeWidth } from "../actions/actionProperties";
+import { ColorPicker } from "./ColorPicker/ColorPicker";
 import "./PropertiesMenu.scss";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
@@ -100,10 +107,24 @@ const getStrokeColorLabel = (
   return "描边色";
 };
 
+const QUESTION_SHADOW_THEMES = [
+  { key: "lavender", label: "紫", color: "#ded2ff" },
+  { key: "pink", label: "粉", color: "#fcc2d7" },
+  { key: "blue", label: "蓝", color: "#a5d8ff" },
+  { key: "green", label: "绿", color: "#c9f6cf" },
+  { key: "yellow", label: "黄", color: "#ffec99" },
+] as const;
+const QUESTION_SHADOW_TOP_PICKS = [
+  "transparent",
+  ...QUESTION_SHADOW_THEMES.map((theme) => theme.color),
+  COLOR_PALETTE.cyan[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX],
+];
+
 export const PropertiesMenu: React.FC = () => {
   const app = useApp();
   const elements = useExcalidrawElements();
   const actionManager = useExcalidrawActionManager();
+  const setAppState = useExcalidrawSetAppState();
 
   // 获取选中的元素
   const selectedElements = getSelectedElements(elements, app.state);
@@ -150,6 +171,59 @@ export const PropertiesMenu: React.FC = () => {
   const canEditArrowType =
     toolIsArrow(app.state.activeTool.type) ||
     targetElements.some((el) => toolIsArrow(el.type));
+
+  const selectedQuestionIds = new Set(
+    targetElements
+      .filter((el) => (el as any)?.customData?.type === "question")
+      .map((el) => String((el as any)?.customData?.questionId))
+      .filter(Boolean),
+  );
+  const hasQuestionSelection = selectedQuestionIds.size > 0;
+  const shadowColors = new Set<string>();
+  if (hasQuestionSelection) {
+    elements.forEach((el) => {
+      const customData = (el as any)?.customData;
+      if (
+        customData?.type === "question" &&
+        customData?.role === "shadow" &&
+        selectedQuestionIds.has(String(customData?.questionId))
+      ) {
+        if (typeof el.backgroundColor === "string") {
+          shadowColors.add(el.backgroundColor);
+        }
+      }
+    });
+  }
+  const currentShadowColor =
+    shadowColors.size === 1 ? [...shadowColors][0] : null;
+
+  const applyShadowTheme = (color: string) => {
+    if (!hasQuestionSelection) {
+      return;
+    }
+    const matchedTheme = QUESTION_SHADOW_THEMES.find(
+      (theme) => theme.color.toLowerCase() === color.toLowerCase(),
+    );
+    const updatedElements = elements.map((el) => {
+      const customData = (el as any)?.customData;
+      if (
+        customData?.type === "question" &&
+        customData?.role === "shadow" &&
+        selectedQuestionIds.has(String(customData?.questionId))
+      ) {
+        return {
+          ...el,
+          backgroundColor: color,
+          customData: {
+            ...customData,
+            shadowTheme: matchedTheme?.key ?? "custom",
+          },
+        };
+      }
+      return el;
+    });
+    (app as any).updateScene({ elements: updatedElements });
+  };
 
   const showFillIcons =
     (hasBackground(app.state.activeTool.type) &&
@@ -210,6 +284,27 @@ export const PropertiesMenu: React.FC = () => {
           <div className="PropertiesMenu__section-title">填充色</div>
           <div className="PropertiesMenu__color-row">
             {actionManager.renderAction("changeBackgroundColor")}
+          </div>
+        </div>
+      )}
+
+      {/* 题目阴影主题 */}
+      {hasQuestionSelection && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">阴影色</div>
+          <div className="PropertiesMenu__color-row">
+            <ColorPicker
+              topPicks={QUESTION_SHADOW_TOP_PICKS}
+              palette={DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE}
+              type="questionShadow"
+              label="阴影色"
+              color={currentShadowColor}
+              onChange={applyShadowTheme}
+              elements={elements}
+              appState={app.state}
+              updateData={setAppState}
+              title="阴影色"
+            />
           </div>
         </div>
       )}

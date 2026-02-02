@@ -597,9 +597,17 @@ const renderElementToSvg = (
         rect.setAttribute("rx", FRAME_STYLE.radius.toString());
         rect.setAttribute("ry", FRAME_STYLE.radius.toString());
 
+        const strokeWidth = FRAME_STYLE.strokeWidth;
+        const strokeStyle = element.strokeStyle ?? FRAME_STYLE.strokeStyle;
+
         rect.setAttribute("fill", "none");
         rect.setAttribute("stroke", FRAME_STYLE.strokeColor);
-        rect.setAttribute("stroke-width", FRAME_STYLE.strokeWidth.toString());
+        rect.setAttribute("stroke-width", strokeWidth.toString());
+        if (strokeStyle === "dashed") {
+          rect.setAttribute("stroke-dasharray", "8 10");
+        } else if (strokeStyle === "dotted") {
+          rect.setAttribute("stroke-dasharray", "1.5 8");
+        }
 
         addToRoot(rect, element);
       }

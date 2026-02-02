@@ -375,6 +375,7 @@ export interface AppState {
   | "elementBackground"
   | "elementStroke"
   | "textOutline"
+  | "questionShadow"
   | "fontFamily"
   | "compactTextProperties"
   | "compactStrokeStyles"

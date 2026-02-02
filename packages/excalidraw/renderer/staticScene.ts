@@ -589,6 +589,35 @@ const _renderStaticScene = ({
         }
 
         if (
+          appState.presentationMode &&
+          (elementForRender as any).type === "rectangle" &&
+          (elementForRender as any).customData?.type === "question" &&
+          (elementForRender as any).customData?.role === "background" &&
+          typeof (elementForRender as any).strokeColor === "string"
+        ) {
+          const baseStroke = (elementForRender as any).strokeColor as string;
+          elementForRender = {
+            ...(elementForRender as any),
+            strokeColor: interpolateColor(baseStroke, "#ffffff", 0.7),
+            strokeStyle: "dotted",
+          };
+        }
+
+        if (
+          appState.presentationMode &&
+          (elementForRender as any).type === "rectangle" &&
+          (elementForRender as any).customData?.type === "question" &&
+          (elementForRender as any).customData?.role === "shadow" &&
+          typeof (elementForRender as any).backgroundColor === "string"
+        ) {
+          const shadowBg = (elementForRender as any).backgroundColor as string;
+          elementForRender = {
+            ...(elementForRender as any),
+            backgroundColor: interpolateColor(shadowBg, "#ffffff", 0.7),
+          };
+        }
+
+        if (
           frameId &&
           appState.frameRendering.enabled &&
           appState.frameRendering.clip

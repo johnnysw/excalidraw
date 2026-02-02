@@ -161,4 +161,5 @@ export type ColorPickerType =
   | "canvasBackground"
   | "elementBackground"
   | "elementStroke"
-  | "textOutline";
+  | "textOutline"
+  | "questionShadow";

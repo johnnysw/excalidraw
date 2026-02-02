@@ -8,7 +8,7 @@ import {
 } from "@excalidraw/element";
 import { getFrameChildren } from "@excalidraw/element";
 
-import { KEYS, updateActiveTool } from "@excalidraw/common";
+import { FRAME_STYLE, KEYS, updateActiveTool } from "@excalidraw/common";
 
 import { getElementsInGroup } from "@excalidraw/element";
 
@@ -179,6 +179,7 @@ export const actionWrapSelectionInFrame = register({
     const [x1, y1, x2, y2] = getCommonBounds(selectedElements, elementsMap);
     const PADDING = 16;
     const frame = newFrameElement({
+      ...FRAME_STYLE,
       x: x1 - PADDING,
       y: y1 - PADDING,
       width: x2 - x1 + PADDING * 2,
