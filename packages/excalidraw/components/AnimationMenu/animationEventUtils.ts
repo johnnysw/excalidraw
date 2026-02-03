@@ -23,8 +23,17 @@ type ElementWithAnimation = {
   type: string;
   isDeleted?: boolean;
   frameId?: string | null;
-  animation?: ElementAnimation;
+  animation?: ElementAnimation | ElementAnimation[];
   [key: string]: any;
+};
+
+const normalizeAnimations = (
+  animation?: ElementAnimation | ElementAnimation[],
+): ElementAnimation[] => {
+  if (!animation) {
+    return [];
+  }
+  return Array.isArray(animation) ? animation : [animation];
 };
 
 /**
@@ -41,38 +50,48 @@ export function elementsToEvents(
   elements: readonly ElementWithAnimation[],
   frameId?: string,
 ): AnimationEvent[] {
-  // 筛选有动画的元素
-  const animatedElements = elements.filter((el) => {
-    if (el.isDeleted) return false;
-    if (!el.animation || !el.animation.stepGroup) return false;
-    if (frameId && el.frameId !== frameId) return false;
-    return true;
-  });
+  // 展开动画条目（支持多动画）
+  const animatedEntries: Array<{
+    element: ElementWithAnimation;
+    animation: ElementAnimation;
+  }> = [];
+  for (const el of elements) {
+    if (el.isDeleted) continue;
+    if (frameId && el.frameId !== frameId) continue;
+    const animations = normalizeAnimations(el.animation);
+    for (const animation of animations) {
+      if (!animation || !animation.stepGroup) continue;
+      animatedEntries.push({ element: el, animation });
+    }
+  }
 
-  if (animatedElements.length === 0) {
+  if (animatedEntries.length === 0) {
     return [];
   }
 
   // 按 eventId 分组（优先），如果没有 eventId 则按 stepGroup 分组
-  const groupMap = new Map<string, ElementWithAnimation[]>();
-  for (const el of animatedElements) {
-    const animation = el.animation!;
+  const groupMap = new Map<
+    string,
+    { animation: ElementAnimation; elements: ElementWithAnimation[] }
+  >();
+  for (const entry of animatedEntries) {
+    const { element, animation } = entry;
     const groupKey = animation.eventId || `stepGroup-${animation.stepGroup}`;
     if (!groupMap.has(groupKey)) {
-      groupMap.set(groupKey, []);
+      groupMap.set(groupKey, { animation, elements: [] });
     }
-    groupMap.get(groupKey)!.push(el);
+    groupMap.get(groupKey)!.elements.push(element);
   }
 
   // 按保存的 order 排序
   const sortedGroups = Array.from(groupMap.entries()).sort((a, b) => {
-    const aOrder = a[1][0].animation!.order;
-    const bOrder = b[1][0].animation!.order;
+    const aOrder = a[1].animation.order;
+    const bOrder = b[1].animation.order;
     if (aOrder !== undefined && bOrder !== undefined) {
       return aOrder - bOrder;
     }
-    const aStepGroup = a[1][0].animation!.stepGroup;
-    const bStepGroup = b[1][0].animation!.stepGroup;
+    const aStepGroup = a[1].animation.stepGroup;
+    const bStepGroup = b[1].animation.stepGroup;
     if (aStepGroup !== bStepGroup) {
       return aStepGroup - bStepGroup;
     }
@@ -83,9 +102,8 @@ export function elementsToEvents(
   const events: AnimationEvent[] = [];
 
   for (let i = 0; i < sortedGroups.length; i++) {
-    const [groupKey, groupElements] = sortedGroups[i];
-    const firstEl = groupElements[0];
-    const animation = firstEl.animation!;
+    const [groupKey, groupInfo] = sortedGroups[i];
+    const { animation, elements: groupElements } = groupInfo;
 
     let startMode: StartMode;
     const savedStartMode = animation.startMode as StartMode | undefined;
@@ -106,7 +124,7 @@ export function elementsToEvents(
     const event: AnimationEvent = {
       id: eventId,
       order: i + 1,
-      elements: groupElements.map((el) => el.id),
+      elements: Array.from(new Set(groupElements.map((el) => el.id))),
       type: (animation.type as AnimationType) || "fadeIn",
       duration: animation.duration || 500,
       startMode,
@@ -144,18 +162,20 @@ export function eventsToElements(
   }
 
   // 建立 elementId -> event 的映射
-  const elementEventMap = new Map<string, AnimationEvent>();
+  const elementEventMap = new Map<string, AnimationEvent[]>();
   for (const event of sortedEvents) {
     for (const elementId of event.elements) {
-      elementEventMap.set(elementId, event);
+      const list = elementEventMap.get(elementId) || [];
+      list.push(event);
+      elementEventMap.set(elementId, list);
     }
   }
 
   // 更新元素
   return elements.map((el) => {
-    const event = elementEventMap.get(el.id);
+    const eventList = elementEventMap.get(el.id);
 
-    if (!event) {
+    if (!eventList || eventList.length === 0) {
       if (frameId && el.frameId !== frameId) {
         return el;
       }
@@ -168,19 +188,29 @@ export function eventsToElements(
       return el;
     }
 
-    const stepGroup = eventStepGroups.get(event.id)!;
+    const animations = eventList
+      .map((event) => {
+        const stepGroup = eventStepGroups.get(event.id)!;
+        return {
+          type: event.type,
+          duration: event.duration,
+          stepGroup,
+          trigger: event.trigger || "click",
+          startMode: event.startMode,
+          eventId: event.id,
+          order: event.order,
+          animationTarget: event.animationTarget,
+        } as ElementAnimation;
+      })
+      .sort((a, b) => {
+        const aOrder = a.order ?? a.stepGroup ?? 0;
+        const bOrder = b.order ?? b.stepGroup ?? 0;
+        return aOrder - bOrder;
+      });
+
     return {
       ...el,
-      animation: {
-        type: event.type,
-        duration: event.duration,
-        stepGroup,
-        trigger: event.trigger || "click",
-        startMode: event.startMode,
-        eventId: event.id,
-        order: event.order,
-        animationTarget: event.animationTarget,
-      },
+      animation: animations.length === 1 ? animations[0] : animations,
     };
   });
 }

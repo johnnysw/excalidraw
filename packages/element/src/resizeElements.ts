@@ -83,6 +83,19 @@ import type {
 } from "./types";
 import type { ElementUpdate } from "./mutateElement";
 
+const isQuestionElement = (element: ExcalidrawElement) =>
+  element.customData?.type === "question" ||
+  element.customData?.type === "questionTagBadge";
+
+const getQuestionRole = (element: ExcalidrawElement) =>
+  element.customData?.role as string | undefined;
+
+const isQuestionBackground = (element: ExcalidrawElement) =>
+  isQuestionElement(element) && getQuestionRole(element) === "background";
+
+const isQuestionShadow = (element: ExcalidrawElement) =>
+  isQuestionElement(element) && getQuestionRole(element) === "shadow";
+
 // Returns true when transform (resizing/rotation) happened
 export const transformElements = (
   originalElements: PointerDownState["originalElements"],
@@ -163,16 +176,30 @@ export const transformElements = (
       );
       return true;
     } else if (transformHandleType) {
+      const questionBackground = selectedElements.find((element) =>
+        isQuestionBackground(element),
+      );
+      const isQuestionGroup =
+        selectedElements.length > 0 &&
+        selectedElements.every((element) => isQuestionElement(element)) &&
+        !!questionBackground;
+      const effectiveShouldMaintainAspectRatio = isQuestionGroup
+        ? false
+        : shouldMaintainAspectRatio;
+      // Use the background element as the resize bounds for question groups.
+      const resizeBoundsElements = questionBackground
+        ? [questionBackground]
+        : selectedElements;
       const { nextWidth, nextHeight, flipByX, flipByY, originalBoundingBox } =
         getNextMultipleWidthAndHeightFromPointer(
-          selectedElements,
+          resizeBoundsElements,
           originalElements,
           elementsMap,
           transformHandleType,
           pointerX,
           pointerY,
           {
-            shouldMaintainAspectRatio,
+            shouldMaintainAspectRatio: effectiveShouldMaintainAspectRatio,
             shouldResizeFromCenter,
           },
         );
@@ -185,7 +212,7 @@ export const transformElements = (
         originalElements,
         {
           shouldResizeFromCenter,
-          shouldMaintainAspectRatio,
+          shouldMaintainAspectRatio: effectiveShouldMaintainAspectRatio,
           flipByX,
           flipByY,
           nextWidth,
@@ -1303,14 +1330,23 @@ export const resizeMultipleElements = (
       ? [midX, midY]
       : anchorsMap[handleDirection];
 
-    const keepAspectRatio =
-      shouldMaintainAspectRatio ||
-      targetElements.some(
-        (item) =>
-          item.latest.angle !== 0 ||
-          isTextElement(item.latest) ||
-          isInGroup(item.latest),
-      );
+    const isQuestionGroup =
+      targetElements.length > 0 &&
+      targetElements.every((item) => isQuestionElement(item.orig));
+    const questionBackgroundEntry = isQuestionGroup
+      ? targetElements.find((item) => isQuestionBackground(item.orig))
+      : null;
+    const useQuestionResize = isQuestionGroup && !!questionBackgroundEntry;
+
+    const keepAspectRatio = useQuestionResize
+      ? false
+      : shouldMaintainAspectRatio ||
+        targetElements.some(
+          (item) =>
+            item.latest.angle !== 0 ||
+            isTextElement(item.latest) ||
+            isInGroup(item.latest),
+        );
 
     if (keepAspectRatio) {
       scaleX = scale;
@@ -1341,6 +1377,115 @@ export const resizeMultipleElements = (
         fixedSegments?: ExcalidrawElbowArrowElement["fixedSegments"];
       };
     }[] = [];
+
+    if (useQuestionResize && questionBackgroundEntry) {
+      const bgOrig = questionBackgroundEntry.orig;
+      const bgLatest = questionBackgroundEntry.latest;
+      // Question nodes lock vertical scaling; only allow width changes.
+      const questionScaleX = scaleX;
+      const questionScaleY = 1;
+      const questionFlipFactorX = flipFactorX;
+      const questionFlipFactorY = 1;
+      const bgWidth = bgOrig.width * questionScaleX;
+      const bgHeight = bgOrig.height * questionScaleY;
+      const bgAngle = normalizeRadians(
+        (bgOrig.angle * questionFlipFactorX * questionFlipFactorY) as Radians,
+      );
+      const bgOffsetX = bgOrig.x - anchorX;
+      const bgOffsetY = bgOrig.y - anchorY;
+      const bgShiftX = flipByX ? bgWidth : 0;
+      const bgShiftY = 0;
+      const bgX =
+        anchorX + questionFlipFactorX * (bgOffsetX * questionScaleX + bgShiftX);
+      const bgY =
+        anchorY + questionFlipFactorY * (bgOffsetY * questionScaleY + bgShiftY);
+
+      elementsAndUpdates.push({
+        element: bgLatest,
+        update: {
+          x: bgX,
+          y: bgY,
+          width: bgWidth,
+          height: bgHeight,
+          angle: bgAngle,
+        },
+      });
+
+      const shadowEntries = targetElements.filter((item) =>
+        isQuestionShadow(item.orig),
+      );
+      const shadowOffsetX = shadowEntries.length
+        ? shadowEntries[0].orig.x - bgOrig.x
+        : 0;
+      const shadowOffsetY = shadowEntries.length
+        ? shadowEntries[0].orig.y - bgOrig.y
+        : 0;
+
+      for (const shadowEntry of shadowEntries) {
+        elementsAndUpdates.push({
+          element: shadowEntry.latest,
+          update: {
+            x: bgX + shadowOffsetX,
+            y: bgY + shadowOffsetY,
+            width: bgWidth,
+            height: bgHeight,
+            angle: bgAngle,
+          },
+        });
+      }
+
+      const tagEntries = targetElements.filter(
+        (item) => item.orig.customData?.type === "questionTagBadge",
+      );
+      const bgOrigRight = bgOrig.x + bgOrig.width;
+      const bgOrigTop = bgOrig.y;
+      for (const tagEntry of tagEntries) {
+        const tagOrig = tagEntry.orig;
+        const tagLatest = tagEntry.latest;
+        const offsetFromRight = (tagOrig.x ?? 0) - bgOrigRight;
+        const offsetFromTop = (tagOrig.y ?? 0) - bgOrigTop;
+        elementsAndUpdates.push({
+          element: tagLatest,
+          update: {
+            x: bgX + bgWidth + offsetFromRight,
+            y: bgY + offsetFromTop,
+            width: tagLatest.width,
+            height: tagLatest.height,
+            angle: tagLatest.angle,
+          },
+        });
+      }
+
+      const elementsToUpdate = elementsAndUpdates.map(({ element }) => element);
+      const resizedElementsMap = new Map<
+        ExcalidrawElement["id"],
+        NonDeletedExcalidrawElement
+      >(elementsAndUpdates.map(({ element }) => [element.id, element]));
+
+      for (const { element, update } of elementsAndUpdates) {
+        scene.mutateElement(element, update);
+
+        updateBoundElements(element, scene, {
+          simultaneouslyUpdated: elementsToUpdate,
+        });
+
+        if (isBindingElement(element)) {
+          if (element.startBinding) {
+            if (!resizedElementsMap.has(element.startBinding.elementId)) {
+              unbindBindingElement(element, "start", scene);
+            }
+          }
+          if (element.endBinding) {
+            if (!resizedElementsMap.has(element.endBinding.elementId)) {
+              unbindBindingElement(element, "end", scene);
+            }
+          }
+        }
+      }
+
+      scene.triggerUpdate();
+      return;
+    }
 
     for (const { orig, latest } of targetElements) {
       // bounded text elements are updated along with their container elements

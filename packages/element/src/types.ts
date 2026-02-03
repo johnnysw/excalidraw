@@ -43,6 +43,12 @@ export type ElementAnimation = {
   trigger?: 'click' | 'auto';
   /** Animation target - which elements in a decoration group should animate */
   animationTarget?: AnimationTarget;
+  /** UI event id (for animation panel) */
+  eventId?: string;
+  /** UI order (for animation panel) */
+  order?: number;
+  /** UI start mode (for animation panel) */
+  startMode?: string;
 };
 
 type VerticalAlignKeys = keyof typeof VERTICAL_ALIGN;
@@ -97,7 +103,7 @@ type _ExcalidrawElementBase = Readonly<{
   locked: boolean;
   customData?: Record<string, any>;
   /** Animation configuration for presentation mode */
-  animation?: ElementAnimation;
+  animation?: ElementAnimation | ElementAnimation[];
 }>;
 
 export type ExcalidrawSelectionElement = _ExcalidrawElementBase & {

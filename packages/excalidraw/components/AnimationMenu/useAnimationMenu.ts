@@ -326,8 +326,12 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
 
       const animation = (element as any).animation as
         | ElementAnimation
+        | ElementAnimation[]
         | undefined;
-      return animation?.stepGroup || null;
+      if (!animation) return null;
+      const animations = Array.isArray(animation) ? animation : [animation];
+      const matched = animations.find((anim) => anim.eventId === event.id);
+      return matched?.stepGroup || animations[0]?.stepGroup || null;
     },
     [events, elements],
   );

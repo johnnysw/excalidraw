@@ -68,11 +68,11 @@ export interface AnimationEvent {
 export const ANIMATION_TYPE_OPTIONS: { value: AnimationType; label: string }[] =
   [
     { value: "fadeIn", label: "淡入" },
+    { value: "textColor", label: "变色" },
     { value: "slideInLeft", label: "从左滑入" },
     { value: "slideInRight", label: "从右滑入" },
     { value: "slideInTop", label: "从上滑入" },
     { value: "slideInBottom", label: "从下滑入" },
-    { value: "textColor", label: "变色" },
   ];
 
 /** 开始方式选项 */

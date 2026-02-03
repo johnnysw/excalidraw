@@ -188,12 +188,20 @@ const Presentation = () => {
         );
     };
 
+    const normalizeAnimations = (animation: any) => {
+        if (!animation) return [];
+        return Array.isArray(animation) ? animation : [animation];
+    };
+
     const getMaxStepsForFrame = (frame: ExcalidrawFrameLikeElement) => {
         const frameElements = elements.filter(el => isElementInFrame(el, frame) && !el.isDeleted);
         let max = 0;
         for (const el of frameElements) {
-            if (el.animation && el.animation.stepGroup) {
-                max = Math.max(max, el.animation.stepGroup);
+            const animations = normalizeAnimations((el as any).animation);
+            for (const anim of animations) {
+                if (anim?.stepGroup) {
+                    max = Math.max(max, anim.stepGroup);
+                }
             }
         }
         return max;
@@ -204,8 +212,10 @@ const Presentation = () => {
         const frameElements = elements.filter(el => isElementInFrame(el, frame) && !el.isDeleted);
         // Find an element with this stepGroup and get its startMode
         for (const el of frameElements) {
-            if (el.animation && el.animation.stepGroup === step) {
-                return (el.animation as any).startMode || 'onClick';
+            const animations = normalizeAnimations((el as any).animation);
+            const matched = animations.find((anim: any) => anim?.stepGroup === step);
+            if (matched) {
+                return matched.startMode || 'onClick';
             }
         }
         return 'onClick';

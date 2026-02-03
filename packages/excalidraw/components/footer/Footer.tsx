@@ -105,25 +105,11 @@ const Footer = ({
             <div style={{ position: "relative" }}>
               <button
                 ref={triggerRef}
-                className="App-menu__left-btn"
+                className={clsx("App-menu__left-btn", "help-icon")}
                 onClick={() => setMenuOpen((open) => !open)}
                 title="演示模式"
-                style={{
-                  background: "var(--color-surface-low)",
-                  border: "1px solid var(--button-gray-1)",
-                  borderRadius: "var(--border-radius-lg)",
-                  cursor: "pointer",
-                  padding: "8px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: "36px",
-                  height: "36px",
-                }}
               >
-                <div style={{ width: "20px", height: "20px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  {PlaySquareIcon}
-                </div>
+                {PlaySquareIcon}
               </button>
 
               {menuOpen && (

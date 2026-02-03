@@ -19,6 +19,7 @@ import { getElementAbsoluteCoords } from "@excalidraw/element";
 
 import type {
   ElementsMap,
+  ElementAnimation,
   ExcalidrawFrameLikeElement,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
@@ -214,6 +215,135 @@ const renderLinkIcon = (
  * 渲染动画编号标记
  * 在有动画的元素右上角显示一个带颜色的编号圆点
  */
+const normalizeElementAnimations = (
+  animation?: ElementAnimation | ElementAnimation[],
+): ElementAnimation[] => {
+  if (!animation) {
+    return [];
+  }
+  return Array.isArray(animation) ? animation : [animation];
+};
+
+const getElementSpecificTarget = (
+  element: NonDeletedExcalidrawElement,
+): AnimationTarget | null => {
+  const customData = (element as any).customData;
+  const role = customData?.role as string | undefined;
+  if (role === "text-background") {
+    return "background";
+  }
+  if (role === "text-underline") {
+    return "underline";
+  }
+  if (role === "text-strike") {
+    return "strike";
+  }
+  return null;
+};
+
+const getFirstSpecificTargetStep = (
+  animations: ElementAnimation[],
+  element: NonDeletedExcalidrawElement,
+): number | null => {
+  const specificTarget = getElementSpecificTarget(element);
+  if (!specificTarget) {
+    return null;
+  }
+  const steps = animations
+    .filter((anim) => anim.animationTarget === specificTarget)
+    .map((anim) => anim.stepGroup)
+    .filter((step) => Number.isFinite(step));
+  if (steps.length === 0) {
+    return null;
+  }
+  return Math.min(...steps);
+};
+
+const animationAppliesToElement = (
+  animation: ElementAnimation,
+  element: NonDeletedExcalidrawElement,
+  allAnimations: ElementAnimation[],
+): boolean => {
+  const animationTarget = animation.animationTarget;
+  if (!animationTarget || animationTarget === "all") {
+    const firstSpecificStep = getFirstSpecificTargetStep(
+      allAnimations,
+      element,
+    );
+    if (
+      firstSpecificStep != null &&
+      animation.stepGroup < firstSpecificStep &&
+      getElementSpecificTarget(element)
+    ) {
+      return false;
+    }
+    return true;
+  }
+  const customData = (element as any).customData;
+  const role = customData?.role as string | undefined;
+  switch (animationTarget) {
+    case "text":
+      return element.type === "text" || role === "option" || role === "stem";
+    case "background":
+      return role === "text-background";
+    case "underline":
+      return role === "text-underline";
+    case "strike":
+      return role === "text-strike";
+    default:
+      return true;
+  }
+};
+
+const getFirstApplicableStep = (
+  animations: ElementAnimation[],
+  element: NonDeletedExcalidrawElement,
+): number | null => {
+  const steps = animations
+    .filter((anim) => anim.type !== "textColor")
+    .filter((anim) => animationAppliesToElement(anim, element, animations))
+    .map((anim) => anim.stepGroup)
+    .filter((step) => Number.isFinite(step));
+  if (steps.length === 0) {
+    return null;
+  }
+  return Math.min(...steps);
+};
+
+const getAnimationForStep = (
+  animations: ElementAnimation[],
+  step: number,
+  element: NonDeletedExcalidrawElement,
+): ElementAnimation | null => {
+  const matches = animations.filter(
+    (anim) =>
+      anim.stepGroup === step &&
+      animationAppliesToElement(anim, element, animations),
+  );
+  if (matches.length === 0) {
+    return null;
+  }
+  return matches
+    .slice()
+    .sort((a, b) => (a.order ?? a.stepGroup ?? 0) - (b.order ?? b.stepGroup ?? 0))
+    .slice(-1)[0];
+};
+
+const getEarliestTextColorAnimation = (
+  animations: ElementAnimation[],
+  element: NonDeletedExcalidrawElement,
+): ElementAnimation | null => {
+  const matches = animations
+    .filter((anim) => anim.type === "textColor")
+    .filter((anim) => animationAppliesToElement(anim, element, animations));
+  if (matches.length === 0) {
+    return null;
+  }
+  return matches
+    .slice()
+    .sort((a, b) => (a.stepGroup ?? 0) - (b.stepGroup ?? 0))[0];
+};
+
 const renderAnimationBadge = (
   element: NonDeletedExcalidrawElement,
   context: CanvasRenderingContext2D,
@@ -269,45 +399,75 @@ const renderAnimationBadge = (
     return;
   }
 
-  const animation = (element as any).animation;
-  if (!animation?.stepGroup) {
+  const animations = normalizeElementAnimations((element as any).animation);
+  if (animations.length === 0) {
     return;
   }
 
-  const stepGroup = animation.stepGroup;
+  const badgeMap = new Map<number, ElementAnimation>();
+  for (const anim of animations) {
+    if (!anim?.stepGroup) continue;
+    if (!animationAppliesToElement(anim, element, animations)) continue;
+    const existing = badgeMap.get(anim.stepGroup);
+    if (
+      !existing ||
+      (anim.order ?? anim.stepGroup ?? 0) >
+        (existing.order ?? existing.stepGroup ?? 0)
+    ) {
+      badgeMap.set(anim.stepGroup, anim);
+    }
+  }
+
+  const badgeAnimations = Array.from(badgeMap.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map((entry) => entry[1]);
+
+  if (badgeAnimations.length === 0) {
+    return;
+  }
+
   const [x1, y1, x2] = getElementAbsoluteCoords(element, elementsMap);
 
   // 计算标记位置（右上角）
   const badgeSize = 18 / appState.zoom.value;
   const badgeX = appState.scrollX + x2 - badgeSize / 2;
   const badgeY = appState.scrollY + y1 - badgeSize / 2;
+  const badgeGap = 4 / appState.zoom.value;
+  const badgeSpacing = badgeSize + badgeGap;
 
   context.save();
 
-  // 根据动画类型选择颜色
-  const animationType = animation.type || 'fadeIn';
-  let badgeColor = '#52c41a'; // 默认绿色（fadeIn）
-  if (animationType.startsWith('slideIn')) {
-    badgeColor = '#1890ff'; // 蓝色（slideIn）
+  for (let i = 0; i < badgeAnimations.length; i++) {
+    const anim = badgeAnimations[i];
+    const animType = anim.type || 'fadeIn';
+    let badgeColor = '#52c41a'; // 默认绿色（fadeIn）
+    if (animType.startsWith('slideIn')) {
+      badgeColor = '#1890ff'; // 蓝色（slideIn）
+    } else if (animType === 'textColor') {
+      badgeColor = '#f97316'; // 橙色（textColor）
+    }
+
+    const bx = badgeX - i * badgeSpacing;
+    const by = badgeY;
+
+    // 绘制圆形背景
+    context.beginPath();
+    context.arc(bx, by, badgeSize / 2, 0, Math.PI * 2);
+    context.fillStyle = badgeColor;
+    context.fill();
+
+    // 绘制白色边框
+    context.strokeStyle = '#ffffff';
+    context.lineWidth = 1.5 / appState.zoom.value;
+    context.stroke();
+
+    // 绘制编号文字
+    context.fillStyle = '#ffffff';
+    context.font = `bold ${12 / appState.zoom.value}px sans-serif`;
+    context.textAlign = 'center';
+    context.textBaseline = 'middle';
+    context.fillText(String(anim.stepGroup), bx, by);
   }
-
-  // 绘制圆形背景
-  context.beginPath();
-  context.arc(badgeX, badgeY, badgeSize / 2, 0, Math.PI * 2);
-  context.fillStyle = badgeColor;
-  context.fill();
-
-  // 绘制白色边框
-  context.strokeStyle = '#ffffff';
-  context.lineWidth = 1.5 / appState.zoom.value;
-  context.stroke();
-
-  // 绘制编号文字
-  context.fillStyle = '#ffffff';
-  context.font = `bold ${12 / appState.zoom.value}px sans-serif`;
-  context.textAlign = 'center';
-  context.textBaseline = 'middle';
-  context.fillText(String(stepGroup), badgeX, badgeY);
 
   context.restore();
 };
@@ -432,46 +592,16 @@ const _renderStaticScene = ({
       const shouldApplyAnimation = appState.presentationMode ||
         (isPlayingAnimation && element.frameId === isPlayingAnimationFrameId);
 
-      if (
-        shouldApplyAnimation &&
-        element.animation &&
-        element.animation.stepGroup > appState.presentationStep
-      ) {
-        // 文本变色动画：不需要在动画前隐藏元素，始终可见
-        if (element.animation.type === "textColor") {
-          return true;
-        }
-
-        // Check if this element should be hidden based on animationTarget
-        // If animationTarget is set and doesn't include this element, show it immediately
-        const animationTarget = element.animation.animationTarget;
-        if (animationTarget && animationTarget !== 'all') {
-          const customData = (element as any).customData;
-          const role = customData?.role as string | undefined;
-
-          // Check if this element is NOT in the animation target
-          let isInAnimationTarget = false;
-          switch (animationTarget) {
-            case 'text':
-              isInAnimationTarget = element.type === 'text' || role === 'option' || role === 'stem';
-              break;
-            case 'background':
-              isInAnimationTarget = role === 'text-background';
-              break;
-            case 'underline':
-              isInAnimationTarget = role === 'text-underline';
-              break;
-            case 'strike':
-              isInAnimationTarget = role === 'text-strike';
-              break;
-          }
-
-          // If element is NOT in animation target, show it immediately (don't hide)
-          if (!isInAnimationTarget) {
-            return true;
+      if (shouldApplyAnimation) {
+        const animations = normalizeElementAnimations(
+          (element as any).animation,
+        );
+        if (animations.length > 0) {
+          const firstStep = getFirstApplicableStep(animations, element);
+          if (firstStep != null && appState.presentationStep < firstStep) {
+            return false;
           }
         }
-        return false;
       }
       return true;
     })
@@ -499,14 +629,22 @@ const _renderStaticScene = ({
         const isPlayingAnimationFrameId = (appState as any).isPlayingAnimationFrameId;
         const shouldApplyAnimation = appState.presentationMode ||
           (isPlayingAnimation && element.frameId === isPlayingAnimationFrameId);
+        const animations = normalizeElementAnimations(
+          (element as any).animation,
+        );
+        const activeAnimation = shouldApplyAnimation
+          ? getAnimationForStep(animations, appState.presentationStep, element)
+          : null;
+        const textColorAnimation = shouldApplyAnimation
+          ? getEarliestTextColorAnimation(animations, element)
+          : null;
 
         // 文本变色动画特殊处理：在动画步骤到达之前，文字显示为黑色
         if (
           shouldApplyAnimation &&
-          element.animation &&
-          element.animation.type === 'textColor' &&
+          textColorAnimation &&
           isTextElement(element) &&
-          element.animation.stepGroup > appState.presentationStep
+          textColorAnimation.stepGroup > appState.presentationStep
         ) {
           elementForRender = {
             ...(element as any),
@@ -514,76 +652,42 @@ const _renderStaticScene = ({
           };
         }
 
-        if (
-          shouldApplyAnimation &&
-          element.animation &&
-          element.animation.stepGroup === appState.presentationStep
-        ) {
-          // Check if this element should have animation applied based on animationTarget
-          const animationTarget = element.animation.animationTarget;
-          const customData = (element as any).customData;
-          const role = customData?.role as string | undefined;
+        if (shouldApplyAnimation && activeAnimation) {
+          const progress = appState.animationProgress ?? 1;
+          const animType = activeAnimation.type || 'fadeIn';
+          const slideOffset = 100; // pixels
 
-          // Determine if animation should be applied to this specific element
-          let shouldApplyToThisElement = true;
-          if (animationTarget && animationTarget !== 'all') {
-            switch (animationTarget) {
-              case 'text':
-                // Only apply to text elements (type === 'text', or role is option/stem)
-                shouldApplyToThisElement = element.type === 'text' || role === 'option' || role === 'stem';
-                break;
-              case 'background':
-                // Only apply to background elements (role === 'text-background')
-                shouldApplyToThisElement = role === 'text-background';
-                break;
-              case 'underline':
-                // Only apply to underline elements (role === 'text-underline')
-                shouldApplyToThisElement = role === 'text-underline';
-                break;
-              case 'strike':
-                // Only apply to strike elements (role === 'text-strike')
-                shouldApplyToThisElement = role === 'text-strike';
-                break;
-            }
-          }
-
-          if (shouldApplyToThisElement) {
-            const progress = appState.animationProgress ?? 1;
-            const animType = element.animation.type || 'fadeIn';
-            const slideOffset = 100; // pixels
-
-            switch (animType) {
-              case 'fadeIn':
-                context.globalAlpha = progress;
-                break;
-              case 'slideInLeft':
-                context.translate(-slideOffset * (1 - progress), 0);
-                context.globalAlpha = progress;
-                break;
-              case 'slideInRight':
-                context.translate(slideOffset * (1 - progress), 0);
-                context.globalAlpha = progress;
-                break;
-              case 'slideInTop':
-                context.translate(0, -slideOffset * (1 - progress));
-                context.globalAlpha = progress;
-                break;
-              case 'slideInBottom':
-                context.translate(0, slideOffset * (1 - progress));
-                context.globalAlpha = progress;
-                break;
-              case 'textColor': {
-                // 文本变色动画：不改变透明度与位置，从黑色渐变到当前文本颜色
-                if (isTextElement(element)) {
-                  const targetColor = (element as any).strokeColor || '#000000';
-                  const strokeColor = interpolateColor('#000000', targetColor, progress);
-                  elementForRender = {
-                    ...(element as any),
-                    strokeColor,
-                  };
-                }
-                break;
+          switch (animType) {
+            case 'fadeIn':
+              context.globalAlpha = progress;
+              break;
+            case 'slideInLeft':
+              context.translate(-slideOffset * (1 - progress), 0);
+              context.globalAlpha = progress;
+              break;
+            case 'slideInRight':
+              context.translate(slideOffset * (1 - progress), 0);
+              context.globalAlpha = progress;
+              break;
+            case 'slideInTop':
+              context.translate(0, -slideOffset * (1 - progress));
+              context.globalAlpha = progress;
+              break;
+            case 'slideInBottom':
+              context.translate(0, slideOffset * (1 - progress));
+              context.globalAlpha = progress;
+              break;
+            case 'textColor': {
+              // 文本变色动画：不改变透明度与位置，从黑色渐变到当前文本颜色
+              if (isTextElement(element)) {
+                const targetColor = (element as any).strokeColor || '#000000';
+                const strokeColor = interpolateColor('#000000', targetColor, progress);
+                elementForRender = {
+                  ...(element as any),
+                  strokeColor,
+                };
               }
+              break;
             }
           }
         }
@@ -702,12 +806,16 @@ const _renderStaticScene = ({
       const isPlayingAnimationFrameId = (appState as any).isPlayingAnimationFrameId;
       const shouldApplyAnimation = appState.presentationMode ||
         (isPlayingAnimation && element.frameId === isPlayingAnimationFrameId);
-      if (
-        shouldApplyAnimation &&
-        element.animation &&
-        element.animation.stepGroup > appState.presentationStep
-      ) {
-        return false;
+      if (shouldApplyAnimation) {
+        const animations = normalizeElementAnimations(
+          (element as any).animation,
+        );
+        if (animations.length > 0) {
+          const firstStep = getFirstApplicableStep(animations, element);
+          if (firstStep != null && appState.presentationStep < firstStep) {
+            return false;
+          }
+        }
       }
       return true;
     })
