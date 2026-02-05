@@ -42,6 +42,7 @@ import { newElementWith } from "@excalidraw/element";
 import {
   getBoundTextElement,
   redrawTextBoundingBox,
+  measureTextWithStyleRanges,
 } from "@excalidraw/element";
 
 import {
@@ -1345,16 +1346,36 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
             value,
             editingElement.fontSize,
           );
+          const maxRangeFontSize = newTextStyleRanges.reduce(
+            (max, range) =>
+              typeof range.fontSize === "number" ? Math.max(max, range.fontSize) : max,
+            editingElement.fontSize,
+          );
+          const container = app.scene.getContainerElement(editingElement);
+          const shouldAutoResize = editingElement.autoResize && !container;
+          const styledMetrics = shouldAutoResize
+            ? measureTextWithStyleRanges(
+                editingElement.originalText,
+                editingElement.fontSize,
+                editingElement.fontFamily,
+                editingElement.lineHeight,
+                newTextStyleRanges,
+              )
+            : null;
+          const updatedEditingElement = newElementWith(editingElement, {
+            textStyleRanges:
+              newTextStyleRanges.length > 0
+                ? newTextStyleRanges
+                : undefined,
+            ...(styledMetrics
+              ? { width: styledMetrics.width, height: styledMetrics.height }
+              : {}),
+          });
 
           const next = {
             elements: elements.map((el) =>
               el.id === editingElement.id
-                ? newElementWith(el as ExcalidrawTextElement, {
-                    textStyleRanges:
-                      newTextStyleRanges.length > 0
-                        ? newTextStyleRanges
-                        : undefined,
-                  })
+                ? updatedEditingElement
                 : el,
             ),
             appState: {
@@ -1383,33 +1404,95 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
     PanelComponent: ({ elements, appState, updateData, app, data }) => {
       const { isCompact } = getStylesPanelInfo(app);
 
-      const fontSizeValue = getFormValue(
-        elements,
-        app,
-        (element) => {
-          if (isTextElement(element)) {
-            return element.fontSize;
+      // Get font size for the current text selection from textStyleRanges
+      const getSelectionFontSize = (): number | null => {
+        if (
+          appState.editingTextElement &&
+          appState.textEditorSelection
+        ) {
+          const editingElement = elements.find(
+            (el) => el.id === appState.editingTextElement?.id,
+          ) as ExcalidrawTextElement | undefined;
+
+          if (editingElement && isTextElement(editingElement)) {
+            const { start, end } = appState.textEditorSelection;
+            const baseFontSize = editingElement.fontSize;
+            const ranges = editingElement.textStyleRanges;
+
+            // If no selection (cursor position), find the font size at cursor
+            if (start === end) {
+              if (!ranges || ranges.length === 0) {
+                return baseFontSize;
+              }
+              // Find range that contains the cursor position
+              for (const range of ranges) {
+                if (start >= range.start && start < range.end) {
+                  return range.fontSize ?? baseFontSize;
+                }
+              }
+              return baseFontSize;
+            }
+
+            // If there's a selection range, check all font sizes in the range
+            if (!ranges || ranges.length === 0) {
+              return baseFontSize;
+            }
+
+            // Collect all font sizes in the selection
+            const fontSizesInSelection: Set<number> = new Set();
+            for (let i = start; i < end; i++) {
+              let charFontSize = baseFontSize;
+              for (const range of ranges) {
+                if (i >= range.start && i < range.end && range.fontSize !== undefined) {
+                  charFontSize = range.fontSize;
+                  break;
+                }
+              }
+              fontSizesInSelection.add(charFontSize);
+            }
+
+            // If all characters have the same font size, return it
+            if (fontSizesInSelection.size === 1) {
+              return fontSizesInSelection.values().next().value;
+            }
+            // Mixed font sizes
+            return null;
           }
-          const boundTextElement = getBoundTextElement(
-            element,
-            app.scene.getNonDeletedElementsMap(),
+        }
+        return null;
+      };
+
+      const selectionFontSize = getSelectionFontSize();
+
+      const fontSizeValue = selectionFontSize !== null
+        ? selectionFontSize
+        : getFormValue(
+            elements,
+            app,
+            (element) => {
+              if (isTextElement(element)) {
+                return element.fontSize;
+              }
+              const boundTextElement = getBoundTextElement(
+                element,
+                app.scene.getNonDeletedElementsMap(),
+              );
+              if (boundTextElement) {
+                return boundTextElement.fontSize;
+              }
+              return null;
+            },
+            (element) =>
+              isTextElement(element) ||
+              getBoundTextElement(
+                element,
+                app.scene.getNonDeletedElementsMap(),
+              ) !== null,
+            (hasSelection) =>
+              hasSelection
+                ? null
+                : appState.currentItemFontSize || DEFAULT_FONT_SIZE,
           );
-          if (boundTextElement) {
-            return boundTextElement.fontSize;
-          }
-          return null;
-        },
-        (element) =>
-          isTextElement(element) ||
-          getBoundTextElement(
-            element,
-            app.scene.getNonDeletedElementsMap(),
-          ) !== null,
-        (hasSelection) =>
-          hasSelection
-            ? null
-            : appState.currentItemFontSize || DEFAULT_FONT_SIZE,
-      );
 
       const numericFontSize =
         typeof fontSizeValue === "number"

@@ -4787,18 +4787,26 @@ class App extends React.Component<AppProps, AppState> {
       nextFiles[fileData.id] = fileData;
 
       if (fileData.mimeType === MIME_TYPES.svg) {
-        try {
-          const restoredDataURL = getDataURL_sync(
-            normalizeSVG(dataURLToString(fileData.dataURL)),
-            MIME_TYPES.svg,
-          );
-          if (fileData.dataURL !== restoredDataURL) {
-            // bump version so persistence layer can update the store
-            fileData.version = (fileData.version ?? 1) + 1;
-            fileData.dataURL = restoredDataURL;
+        // Only normalize SVG if dataURL is a valid base64 data URL
+        // Skip if it's a URL path (e.g., /public/uploads/...) to avoid atob errors
+        const isBase64DataURL =
+          typeof fileData.dataURL === "string" &&
+          fileData.dataURL.startsWith("data:") &&
+          fileData.dataURL.includes(";base64,");
+        if (isBase64DataURL) {
+          try {
+            const restoredDataURL = getDataURL_sync(
+              normalizeSVG(dataURLToString(fileData.dataURL)),
+              MIME_TYPES.svg,
+            );
+            if (fileData.dataURL !== restoredDataURL) {
+              // bump version so persistence layer can update the store
+              fileData.version = (fileData.version ?? 1) + 1;
+              fileData.dataURL = restoredDataURL;
+            }
+          } catch (error) {
+            console.error(error);
           }
-        } catch (error) {
-          console.error(error);
         }
       }
     }
@@ -5919,9 +5927,78 @@ class App extends React.Component<AppProps, AppState> {
         // Not sure why we include deleted elements as well hence using deleted elements map
         ...this.scene.getElementsIncludingDeleted().map((_element) => {
           if (_element.id === element.id && isTextElement(_element)) {
-            return newElementWith(_element, {
+            // Adjust textStyleRanges and richTextRanges when text changes (deletion/insertion)
+            const oldText = _element.originalText || "";
+            const delta = nextOriginalText.length - oldText.length;
+            let adjustedTextStyleRanges = _element.textStyleRanges;
+            let adjustedRichTextRanges = _element.richTextRanges;
+
+            if (delta !== 0) {
+              // Find change position by comparing old and new text
+              // Look for the first character that differs
+              let changePos = 0;
+              const minLen = Math.min(oldText.length, nextOriginalText.length);
+              for (let i = 0; i < minLen; i++) {
+                if (oldText[i] !== nextOriginalText[i]) {
+                  changePos = i;
+                  break;
+                }
+                changePos = i + 1;
+              }
+
+              const adjustRanges = <T extends { start: number; end: number }>(
+                ranges: readonly T[],
+              ): T[] => {
+                if (!ranges?.length) return (ranges as T[]) ?? [];
+                return ranges
+                  .flatMap((range): Array<T | null> => {
+                    let { start, end } = range;
+                    if (delta < 0) {
+                      const deleteStart = changePos;
+                      const deleteEnd = changePos - delta;
+                      if (end <= deleteStart) {
+                      } else if (start >= deleteEnd) {
+                        start += delta;
+                        end += delta;
+                      } else if (start >= deleteStart && end <= deleteEnd) {
+                        return [null];
+                      } else if (start < deleteStart && end > deleteEnd) {
+                        end += delta;
+                      } else if (start < deleteStart) {
+                        end = deleteStart;
+                      } else {
+                        start = deleteStart;
+                        end = Math.max(deleteStart, end + delta);
+                      }
+                      return [{ ...range, start, end }];
+                    } else {
+                      if (start < changePos && end > changePos) {
+                        return [
+                          { ...range, start, end: changePos },
+                          { ...range, start: changePos + delta, end: end + delta },
+                        ];
+                      }
+                      if (start >= changePos) start += delta;
+                      if (end >= changePos) end += delta;
+                      return [{ ...range, start, end }];
+                    }
+                  })
+                  .filter((r): r is T => r !== null && r.start < r.end);
+              };
+
+              if (_element.textStyleRanges?.length) {
+                adjustedTextStyleRanges = adjustRanges(_element.textStyleRanges);
+              }
+              if (_element.richTextRanges?.length) {
+                adjustedRichTextRanges = adjustRanges(_element.richTextRanges);
+              }
+            }
+
+            const next = newElementWith(_element, {
               originalText: nextOriginalText,
               isDeleted: isDeleted ?? _element.isDeleted,
+              textStyleRanges: adjustedTextStyleRanges?.length ? adjustedTextStyleRanges : undefined,
+              richTextRanges: adjustedRichTextRanges?.length ? adjustedRichTextRanges : undefined,
               // returns (wrapped) text and new dimensions
               ...refreshTextDimensions(
                 _element,
@@ -5930,6 +6007,7 @@ class App extends React.Component<AppProps, AppState> {
                 nextOriginalText,
               ),
             });
+            return next;
           }
           return _element;
         }),

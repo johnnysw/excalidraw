@@ -64,6 +64,7 @@ interface HistoryItemProps {
   onSelect: (taskId: number) => void;
   onToggleStatus: (task: TaskHistoryItem, currentStatus: number) => void;
   onEdit: (task: TaskHistoryItem) => void;
+  onPrint: (task: TaskHistoryItem) => void;
 }
 
 const HistoryItem = React.memo(
@@ -76,6 +77,7 @@ const HistoryItem = React.memo(
     onSelect,
     onToggleStatus,
     onEdit,
+    onPrint,
   }: HistoryItemProps) => {
     const metaText = getTaskMetaText(task);
     const classes = task.targets?.classes ?? [];
@@ -88,21 +90,29 @@ const HistoryItem = React.memo(
         })}
         aria-current={isSelected ? "true" : undefined}
       >
-        <div className="AnswerStatusMenu__history-header">
-          <div className="AnswerStatusMenu__history-title">{task.title}</div>
-          <div className="AnswerStatusMenu__history-actions">
+        <h3 className="AnswerStatusMenu__history-title">{task.title}</h3>
+        <div className="AnswerStatusMenu__history-body">
+          <div className="AnswerStatusMenu__history-info">
+            {metaText && (
+              <p className="AnswerStatusMenu__history-meta" title={metaText}>
+                {metaText}
+              </p>
+            )}
+            {classes.length > 0 && (
+              <div className="AnswerStatusMenu__history-classes">
+                {classes.map((cls) => (
+                  <span key={cls.id} className="AnswerStatusMenu__history-class-tag">
+                    {cls.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="AnswerStatusMenu__history-actions" role="toolbar" aria-label="任务操作">
             <Tooltip label="切换任务">
               <button
                 type="button"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="AnswerStatusMenu__history-action-btn"
                 onClick={(event) => {
                   event.stopPropagation();
                   onSelect(task.id);
@@ -111,19 +121,25 @@ const HistoryItem = React.memo(
                 <Icon icon="hugeicons:arrow-left-right" width={16} height={16} />
               </button>
             </Tooltip>
+            <Tooltip label="打印">
+              <button
+                type="button"
+                className="AnswerStatusMenu__history-action-btn"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onPrint(task);
+                }}
+              >
+                <Icon icon="hugeicons:printer" width={16} height={16} />
+              </button>
+            </Tooltip>
             <Tooltip label={isPublished ? "取消发布" : "发布"}>
               <button
                 type="button"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  padding: 0,
-                  cursor: isUpdating ? 'not-allowed' : 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: isUpdating ? 0.5 : 1,
-                }}
+                className={clsx(
+                  "AnswerStatusMenu__history-action-btn",
+                  isUpdating && "AnswerStatusMenu__history-action-btn--disabled",
+                )}
                 disabled={isUpdating}
                 onClick={(event) => {
                   event.stopPropagation();
@@ -141,15 +157,7 @@ const HistoryItem = React.memo(
             <Tooltip label="编辑任务">
               <button
                 type="button"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  padding: 0,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
+                className="AnswerStatusMenu__history-action-btn"
                 onClick={(event) => {
                   event.stopPropagation();
                   onEdit(task);
@@ -160,16 +168,6 @@ const HistoryItem = React.memo(
             </Tooltip>
           </div>
         </div>
-        {metaText && <div className="AnswerStatusMenu__history-meta">{metaText}</div>}
-        {classes.length > 0 && (
-          <div className="AnswerStatusMenu__history-classes">
-            {classes.map((cls) => (
-              <span key={cls.id} className="AnswerStatusMenu__history-class-tag">
-                {cls.name}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
     );
   },
@@ -455,6 +453,19 @@ export const AnswerStatusMenu: React.FC<AnswerStatusMenuProps> = ({
     document.dispatchEvent(event);
   });
 
+  const handlePrintHistoryTask = useEventCallback((task: TaskHistoryItem) => {
+    const event = new CustomEvent("excalidraw:printTask", {
+      detail: {
+        source: "answer-status",
+        task,
+        teachingContext: teachingContext || null,
+        coursewareId: task.coursewareId ?? teachingCoursewareId ?? undefined,
+      },
+      bubbles: true,
+    });
+    document.dispatchEvent(event);
+  });
+
   // 渲染空状态
   if (!config) {
     return (
@@ -591,6 +602,7 @@ export const AnswerStatusMenu: React.FC<AnswerStatusMenuProps> = ({
                 onSelect={handleSelectHistoryTask}
                 onToggleStatus={toggleTaskStatus}
                 onEdit={handleEditHistoryTask}
+                onPrint={handlePrintHistoryTask}
               />
             );
           })}

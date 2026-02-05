@@ -15,7 +15,11 @@ import {
   toBrandedType,
 } from "@excalidraw/common";
 
-import { getCommonBounds, getElementAbsoluteCoords } from "@excalidraw/element";
+import {
+  getCommonBounds,
+  getCornerRadius,
+  getElementAbsoluteCoords,
+} from "@excalidraw/element";
 
 import {
   getInitializedImageElements,
@@ -416,8 +420,14 @@ export const exportToSvg = async (
       rect.setAttribute("height", `${frame.height}`);
 
       if (!exportingFrame) {
-        rect.setAttribute("rx", `${FRAME_STYLE.radius}`);
-        rect.setAttribute("ry", `${FRAME_STYLE.radius}`);
+        const cornerRadius = getCornerRadius(
+          Math.min(frame.width, frame.height),
+          frame,
+        );
+        if (cornerRadius > 0) {
+          rect.setAttribute("rx", `${cornerRadius}`);
+          rect.setAttribute("ry", `${cornerRadius}`);
+        }
       }
 
       clipPath.appendChild(rect);

@@ -308,6 +308,8 @@ export const isArrowBoundToElement = (element: ExcalidrawArrowElement) => {
 
 export const isUsingAdaptiveRadius = (type: string) =>
   type === "rectangle" ||
+  type === "frame" ||
+  type === "magicframe" ||
   type === "embeddable" ||
   type === "iframe" ||
   type === "image";

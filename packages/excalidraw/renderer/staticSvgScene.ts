@@ -1,5 +1,4 @@
 import {
-  FRAME_STYLE,
   MAX_DECIMALS_FOR_SVG_EXPORT,
   MIME_TYPES,
   SVG_NS,
@@ -582,34 +581,29 @@ const renderElementToSvg = (
         renderConfig.frameRendering.enabled &&
         renderConfig.frameRendering.outline
       ) {
-        const rect = document.createElementNS(SVG_NS, "rect");
+        const shape = ShapeCache.generateElementShape(element, null);
+        const node = shape
+          ? roughSVGDrawWithPrecision(
+              rsvg,
+              shape,
+              MAX_DECIMALS_FOR_SVG_EXPORT,
+            )
+          : null;
 
-        rect.setAttribute(
-          "transform",
-          `translate(${offsetX || 0} ${
-            offsetY || 0
-          }) rotate(${degree} ${cx} ${cy})`,
-        );
-
-        rect.setAttribute("width", `${element.width}px`);
-        rect.setAttribute("height", `${element.height}px`);
-        // Rounded corners
-        rect.setAttribute("rx", FRAME_STYLE.radius.toString());
-        rect.setAttribute("ry", FRAME_STYLE.radius.toString());
-
-        const strokeWidth = FRAME_STYLE.strokeWidth;
-        const strokeStyle = element.strokeStyle ?? FRAME_STYLE.strokeStyle;
-
-        rect.setAttribute("fill", "none");
-        rect.setAttribute("stroke", FRAME_STYLE.strokeColor);
-        rect.setAttribute("stroke-width", strokeWidth.toString());
-        if (strokeStyle === "dashed") {
-          rect.setAttribute("stroke-dasharray", "8 10");
-        } else if (strokeStyle === "dotted") {
-          rect.setAttribute("stroke-dasharray", "1.5 8");
+        if (node) {
+          if (opacity !== 1) {
+            node.setAttribute("stroke-opacity", `${opacity}`);
+            node.setAttribute("fill-opacity", `${opacity}`);
+          }
+          node.setAttribute("stroke-linecap", "round");
+          node.setAttribute(
+            "transform",
+            `translate(${offsetX || 0} ${
+              offsetY || 0
+            }) rotate(${degree} ${cx} ${cy})`,
+          );
+          addToRoot(node, element);
         }
-
-        addToRoot(rect, element);
       }
       break;
     }

@@ -7,7 +7,12 @@ import {
   normalizeEOL,
 } from "@excalidraw/common";
 
-import type { FontString, ExcalidrawTextElement } from "./types";
+import type {
+  FontString,
+  ExcalidrawTextElement,
+  FontFamilyValues,
+  TextStyleRange,
+} from "./types";
 
 export const measureText = (
   text: string,
@@ -24,6 +29,99 @@ export const measureText = (
   const height = getTextHeight(_text, fontSize, lineHeight);
   const width = getTextWidth(_text, font);
   return { width, height };
+};
+
+export const measureTextWithStyleRanges = (
+  text: string,
+  baseFontSize: number,
+  baseFontFamily: FontFamilyValues,
+  lineHeight: ExcalidrawTextElement["lineHeight"],
+  textStyleRanges?: readonly TextStyleRange[],
+) => {
+  if (!textStyleRanges || textStyleRanges.length === 0) {
+    return measureText(
+      text,
+      getFontString({ fontSize: baseFontSize, fontFamily: baseFontFamily }),
+      lineHeight,
+    );
+  }
+
+  const normalized = normalizeText(text);
+  const lines = normalized.split("\n");
+  let maxWidth = 0;
+  let totalHeight = 0;
+  let globalIndex = 0;
+
+  const getStyleAt = (index: number) => {
+    let fontSize = baseFontSize;
+    let fontFamily = baseFontFamily;
+    for (const range of textStyleRanges) {
+      if (index >= range.start && index < range.end) {
+        if (range.fontSize != null) {
+          fontSize = range.fontSize;
+        }
+        if (range.fontFamily != null) {
+          fontFamily = range.fontFamily;
+        }
+      }
+    }
+    return { fontSize, fontFamily };
+  };
+
+  for (const rawLine of lines) {
+    const lineStart = globalIndex;
+    const lineEnd = globalIndex + rawLine.length;
+
+    if (rawLine.length === 0) {
+      const font = getFontString({
+        fontSize: baseFontSize,
+        fontFamily: baseFontFamily,
+      });
+      maxWidth = Math.max(maxWidth, getLineWidth(" ", font));
+      totalHeight += getLineHeightInPx(baseFontSize, lineHeight);
+      globalIndex = lineEnd + 1;
+      continue;
+    }
+
+    let width = 0;
+    let maxLineFontSize = baseFontSize;
+    let segmentStart = 0;
+    let currentStyle = getStyleAt(lineStart);
+    maxLineFontSize = Math.max(maxLineFontSize, currentStyle.fontSize);
+
+    for (let localIndex = 0; localIndex < rawLine.length; localIndex++) {
+      const global = lineStart + localIndex;
+      const nextStyle = getStyleAt(global);
+      if (
+        nextStyle.fontSize !== currentStyle.fontSize ||
+        nextStyle.fontFamily !== currentStyle.fontFamily
+      ) {
+        const segmentText = rawLine.slice(segmentStart, localIndex);
+        const segmentFont = getFontString({
+          fontSize: currentStyle.fontSize,
+          fontFamily: currentStyle.fontFamily,
+        });
+        width += getLineWidth(segmentText, segmentFont);
+        segmentStart = localIndex;
+        currentStyle = nextStyle;
+      }
+      maxLineFontSize = Math.max(maxLineFontSize, nextStyle.fontSize);
+    }
+
+    const tailText = rawLine.slice(segmentStart);
+    const tailFont = getFontString({
+      fontSize: currentStyle.fontSize,
+      fontFamily: currentStyle.fontFamily,
+    });
+    width += getLineWidth(tailText, tailFont);
+
+    maxWidth = Math.max(maxWidth, width);
+    totalHeight += getLineHeightInPx(maxLineFontSize, lineHeight);
+
+    globalIndex = lineEnd + 1;
+  }
+
+  return { width: maxWidth, height: totalHeight };
 };
 
 const DUMMY_TEXT = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".toLocaleUpperCase();

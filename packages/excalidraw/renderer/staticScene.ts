@@ -1,7 +1,8 @@
-import { FRAME_STYLE, ANIMATION_SIDEBAR_TAB, throttleRAF } from "@excalidraw/common";
+import { ANIMATION_SIDEBAR_TAB, throttleRAF } from "@excalidraw/common";
 import { isElementLink } from "@excalidraw/element";
 import { createPlaceholderEmbeddableLabel } from "@excalidraw/element";
 import { getBoundTextElement } from "@excalidraw/element";
+import { getCornerRadius } from "@excalidraw/element";
 import {
   isEmbeddableElement,
   isIframeLikeElement,
@@ -122,14 +123,11 @@ export const frameClip = (
 ) => {
   context.translate(frame.x + appState.scrollX, frame.y + appState.scrollY);
   context.beginPath();
-  if (context.roundRect) {
-    context.roundRect(
-      0,
-      0,
-      frame.width,
-      frame.height,
-      FRAME_STYLE.radius / appState.zoom.value,
-    );
+  const cornerRadius =
+    getCornerRadius(Math.min(frame.width, frame.height), frame) /
+    appState.zoom.value;
+  if (cornerRadius > 0 && context.roundRect) {
+    context.roundRect(0, 0, frame.width, frame.height, cornerRadius);
   } else {
     context.rect(0, 0, frame.width, frame.height);
   }

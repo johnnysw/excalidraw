@@ -24,6 +24,7 @@ import { getBoundTextElement, getContainerElement } from "./textElement";
 import {
   isFrameElement,
   isFrameLikeElement,
+  isFreeDrawElement,
   isTextElement,
 } from "./typeChecks";
 
@@ -853,6 +854,10 @@ export const shouldApplyFrameClip = (
   checkedGroups?: Map<string, boolean>,
 ) => {
   if (!appState.frameRendering || !appState.frameRendering.clip) {
+    return false;
+  }
+
+  if (isFreeDrawElement(element)) {
     return false;
   }
 

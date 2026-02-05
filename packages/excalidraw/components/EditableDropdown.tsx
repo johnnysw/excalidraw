@@ -26,6 +26,8 @@ export const EditableDropdown: React.FC<EditableDropdownProps> = ({
   const [inputValue, setInputValue] = useState(String(value));
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Track if option was just clicked to skip blur submit
+  const justClickedOptionRef = useRef(false);
 
   // Sync input value when external value changes
   useEffect(() => {
@@ -67,6 +69,8 @@ export const EditableDropdown: React.FC<EditableDropdownProps> = ({
 
   const handleOptionClick = (option: number | string) => {
     const numValue = typeof option === "string" ? parseFloat(option) : option;
+    // Mark that option was clicked to prevent blur from submitting stale value
+    justClickedOptionRef.current = true;
     onChange(numValue);
     setInputValue(String(numValue));
     setIsOpen(false);
@@ -84,6 +88,11 @@ export const EditableDropdown: React.FC<EditableDropdownProps> = ({
   const handleInputBlur = () => {
     // Delay to allow option click to register
     setTimeout(() => {
+      // Skip submit if option was just clicked (it already called onChange)
+      if (justClickedOptionRef.current) {
+        justClickedOptionRef.current = false;
+        return;
+      }
       if (!containerRef.current?.contains(document.activeElement)) {
         handleSubmit();
       }

@@ -519,21 +519,31 @@ const drawElementOnCanvas = (
             ? element.width
             : 0;
 
+        const hasRichTextRanges =
+          element.richTextRanges && element.richTextRanges.length > 0;
+        const hasTextStyleRanges =
+          element.textStyleRanges && element.textStyleRanges.length > 0;
+
+        // Calculate max font size for proper line height when rich text is used
+        let maxFontSize = element.fontSize;
+        if (hasTextStyleRanges && element.textStyleRanges) {
+          for (const range of element.textStyleRanges) {
+            if (range.fontSize != null && range.fontSize > maxFontSize) {
+              maxFontSize = range.fontSize;
+            }
+          }
+        }
+
         const lineHeightPx = getLineHeightInPx(
-          element.fontSize,
+          maxFontSize,
           element.lineHeight,
         );
 
         const verticalOffset = getVerticalOffset(
           element.fontFamily,
-          element.fontSize,
+          maxFontSize,
           lineHeightPx,
         );
-
-        const hasRichTextRanges =
-          element.richTextRanges && element.richTextRanges.length > 0;
-        const hasTextStyleRanges =
-          element.textStyleRanges && element.textStyleRanges.length > 0;
 
         // Track global character index across all lines
         let globalCharIndex = 0;
@@ -928,40 +938,65 @@ export const renderElement = (
         );
         context.fillStyle = "rgba(0, 0, 200, 0.04)";
 
-        const strokeWidth = FRAME_STYLE.strokeWidth;
+        const strokeWidth = element.strokeWidth ?? FRAME_STYLE.strokeWidth;
         const strokeStyle = element.strokeStyle ?? FRAME_STYLE.strokeStyle;
-        context.lineWidth = strokeWidth / appState.zoom.value;
-        context.strokeStyle = FRAME_STYLE.strokeColor;
+        const roughness = element.roughness ?? FRAME_STYLE.roughness;
+        const strokeColor = isMagicFrameElement(element)
+          ? appState.theme === THEME.LIGHT
+            ? "#7affd7"
+            : "#1d8264"
+          : element.strokeColor ?? FRAME_STYLE.strokeColor;
 
-        const dashArray =
-          strokeStyle === "dashed"
-            ? [8, 10]
-            : strokeStyle === "dotted"
-            ? [1.5, 8]
-            : null;
-        context.setLineDash(
-          dashArray ? dashArray.map((value) => value / appState.zoom.value) : [],
-        );
-
-        // TODO change later to only affect AI frames
-        if (isMagicFrameElement(element)) {
-          context.strokeStyle =
-            appState.theme === THEME.LIGHT ? "#7affd7" : "#1d8264";
-        }
-
-        if (FRAME_STYLE.radius && context.roundRect) {
-          context.beginPath();
-          context.roundRect(
-            0,
-            0,
-            element.width,
-            element.height,
-            FRAME_STYLE.radius / appState.zoom.value,
+        if (roughness > 0) {
+          const frameRenderElement = {
+            ...element,
+            strokeWidth: strokeWidth / appState.zoom.value,
+            strokeStyle,
+            roughness,
+            strokeColor,
+          };
+          const shape = ShapeCache.generateElementShape(
+            frameRenderElement,
+            renderConfig,
           );
-          context.stroke();
-          context.closePath();
+          if (shape) {
+            context.lineJoin = "round";
+            context.lineCap = "round";
+            if (Array.isArray(shape)) {
+              shape.forEach((drawable) => rc.draw(drawable));
+            } else {
+              rc.draw(shape);
+            }
+          }
         } else {
-          context.strokeRect(0, 0, element.width, element.height);
+          context.lineWidth = strokeWidth / appState.zoom.value;
+          context.strokeStyle = strokeColor;
+
+          const dashArray =
+            strokeStyle === "dashed"
+              ? [8, 10]
+              : strokeStyle === "dotted"
+              ? [1.5, 8]
+              : null;
+          context.setLineDash(
+            dashArray
+              ? dashArray.map((value) => value / appState.zoom.value)
+              : [],
+          );
+
+          const cornerRadius =
+            getCornerRadius(
+              Math.min(element.width, element.height),
+              element,
+            ) / appState.zoom.value;
+          if (cornerRadius > 0 && context.roundRect) {
+            context.beginPath();
+            context.roundRect(0, 0, element.width, element.height, cornerRadius);
+            context.stroke();
+            context.closePath();
+          } else {
+            context.strokeRect(0, 0, element.width, element.height);
+          }
         }
 
         context.restore();

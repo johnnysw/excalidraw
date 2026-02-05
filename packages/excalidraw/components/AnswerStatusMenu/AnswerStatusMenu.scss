@@ -309,7 +309,7 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
     padding-bottom: 8px;
     padding-top: 2px;
     content-visibility: auto;
@@ -317,86 +317,104 @@
   }
 
   &__history-item {
+    container-type: inline-size;
+    container-name: history-card;
     width: 100%;
     text-align: left;
     border: none;
     cursor: default;
-    padding: 12px 14px;
+    padding: clamp(16px, 4cqi, 24px) clamp(18px, 5cqi, 24px) clamp(14px, 3.5cqi, 20px);
+    min-height: 120px;
     background: #ffffff;
     border: 1px solid #e2e8f0; // slate-200
-    border-radius: 12px;
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+    border-radius: 14px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    transition: background 0.2s ease, box-shadow 0.2s ease;
 
     &:hover {
-      border-color: #6965db;
-      transform: none;
+      cursor: pointer;
+      background: linear-gradient(180deg, rgba(22, 163, 74, 0.08) 0%, rgba(255, 255, 255, 0.96) 100%);
     }
 
     &--active {
       border-color: #6965db;
-      background: linear-gradient(180deg, rgba(105, 101, 219, 0.08) 0%, rgba(255, 255, 255, 0.9) 100%);
-      box-shadow: none;
+      background: linear-gradient(180deg, rgba(105, 101, 219, 0.06) 0%, rgba(255, 255, 255, 0.98) 100%);
+      box-shadow: 0 0 0 1px rgba(105, 101, 219, 0.15);
     }
 
     &--published {
       border-color: #16a34a; // green-600
-      background: linear-gradient(180deg, rgba(22, 163, 74, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
+      background: linear-gradient(180deg, rgba(22, 163, 74, 0.04) 0%, rgba(255, 255, 255, 0.98) 100%);
+      box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.12);
     }
   }
 
-  &__history-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
   &__history-title {
-    font-size: 13px;
+    font-size: clamp(14px, 3.5cqi, 16px);
     font-weight: 600;
     color: #0f172a; // slate-900
-    margin-bottom: 4px;
     line-height: 1.35;
-    flex: 1;
-    min-width: 0;
+    margin: 0 0 clamp(14px, 3.5cqi, 20px) 0;
+    letter-spacing: -0.01em;
     word-break: break-word;
   }
 
+  &__history-body {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(12px, 3cqi, 16px);
+    align-items: stretch;
+  }
+
+  &__history-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  &__history-meta {
+    font-size: 12px;
+    color: #64748b; // slate-500
+    line-height: 1.45;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   &__history-actions {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: 10px;
+    justify-content: center;
+    gap: 6px;
     flex-shrink: 0;
   }
 
   &__history-action-btn {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #e2e8f0; // slate-200
-    background: #ffffff;
+    border: none;
+    background: transparent;
     color: #475569; // slate-600
     border-radius: 8px;
     cursor: pointer;
-    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+    transition: color 0.15s ease;
 
     &:hover {
-      border-color: #6965db;
-      color: #4338ca; // indigo-700
-      background: #eef2ff; // indigo-50
+      color: #15803d; // green-700，与任务卡片绿色风格一致
     }
 
     &:active {
-      transform: translateY(0.5px);
+      transform: scale(0.96);
     }
 
     &:focus-visible {
       outline: none;
-      border-color: #6965db;
-      box-shadow: 0 0 0 2px rgba(105, 101, 219, 0.2);
+      box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.35);
     }
   }
 
@@ -405,28 +423,199 @@
     pointer-events: none;
   }
 
-  &__history-meta {
-    font-size: 11px;
-    color: #64748b; // slate-500
-    line-height: 1.4;
-    margin-bottom: 6px;
+  @container history-card (max-width: 220px) {
+    .AnswerStatusMenu__history-actions {
+      justify-content: center;
+    }
   }
 
   &__history-classes {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: 6px;
   }
 
   &__history-class-tag {
-    font-size: 11px;
-    padding: 3px 8px;
+    font-size: 12px;
+    padding: 4px 10px;
     font-weight: 500;
-    color: #475569; // slate-600
-    background: #f8fafc; // slate-50
-    border: 1px solid #e2e8f0; // slate-200
-    border-radius: 999px;
+    color: #166534; // green-800，与任务卡片绿色统一
+    background: #f0fdf4; // green-50
+    border: 1px solid #bbf7d0; // green-200
+    border-radius: 8px;
     white-space: nowrap;
+    line-height: 1.35;
+  }
+
+  // 打印设置弹窗（轻量实现，依附于 AnswerStatusMenu）
+  .AnswerStatusMenuPrintModal__backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+  }
+
+  .AnswerStatusMenuPrintModal__dialog {
+    width: 420px;
+    max-width: calc(100% - 32px);
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 16px 16px 12px;
+    box-shadow: 0 20px 40px rgba(15, 23, 42, 0.25);
+  }
+
+  .AnswerStatusMenuPrintModal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+  }
+
+  .AnswerStatusMenuPrintModal__title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #0f172a;
+  }
+
+  .AnswerStatusMenuPrintModal__icon-btn {
+    border: none;
+    background: transparent;
+    padding: 4px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    border-radius: 999px;
+
+    &:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+  }
+
+  .AnswerStatusMenuPrintModal__body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+  }
+
+  .AnswerStatusMenuPrintModal__section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .AnswerStatusMenuPrintModal__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #475569;
+  }
+
+  .AnswerStatusMenuPrintModal__input {
+    width: 100%;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    font-size: 13px;
+  }
+
+  .AnswerStatusMenuPrintModal__section-label {
+    font-size: 12px;
+    color: #64748b;
+  }
+
+  .AnswerStatusMenuPrintModal__margin-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px 10px;
+  }
+
+  .AnswerStatusMenuPrintModal__margin-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #64748b;
+
+    input {
+      flex: 1;
+      padding: 4px 6px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      font-size: 12px;
+    }
+  }
+
+  .AnswerStatusMenuPrintModal__font-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    input {
+      width: 72px;
+      padding: 4px 6px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+      font-size: 12px;
+    }
+  }
+
+  .AnswerStatusMenuPrintModal__hint-text {
+    font-size: 11px;
+    color: #94a3b8;
+  }
+
+  .AnswerStatusMenuPrintModal__error {
+    margin-top: 4px;
+    font-size: 12px;
+    color: #dc2626;
+  }
+
+  .AnswerStatusMenuPrintModal__footer {
+    margin-top: 12px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .AnswerStatusMenuPrintModal__btn {
+    min-width: 84px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+
+    &--secondary {
+      border-color: #e2e8f0;
+      background: #ffffff;
+      color: #475569;
+
+      &:hover {
+        background: #f8fafc;
+      }
+    }
+
+    &--primary {
+      border-color: #6965db;
+      background: #6965db;
+      color: #ffffff;
+
+      &:hover {
+        background: #4f46e5;
+        border-color: #4f46e5;
+      }
+    }
   }
 
   // 统计区域 - 两行布局，更宽松
@@ -673,10 +862,11 @@
     &__history-item {
       background: #1e293b; // slate-800
       border-color: #334155; // slate-700
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      transition: background 0.2s ease, box-shadow 0.2s ease;
 
       &:hover {
-        border-color: #6965db;
+        cursor: pointer;
+        background: linear-gradient(180deg, rgba(22, 163, 74, 0.18) 0%, rgba(30, 41, 59, 0.92) 100%);
       }
 
       &:focus-visible {
@@ -698,18 +888,16 @@
     }
 
     &__history-action-btn {
-      border-color: rgba(71, 85, 105, 0.7);
-      background: rgba(30, 41, 59, 0.9);
+      border: none;
+      background: transparent;
       color: #cbd5e1; // slate-300
 
       &:hover {
-        border-color: #6965db;
-        color: #c7d2fe;
-        background: rgba(99, 102, 241, 0.2);
+        color: #86efac; // green-300，与任务卡片绿色风格一致
       }
 
       &:focus-visible {
-        box-shadow: 0 0 0 2px rgba(159, 155, 255, 0.2);
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35);
       }
     }
 
@@ -733,9 +921,9 @@
     }
 
     &__history-class-tag {
-      background: rgba(51, 65, 85, 0.6);
-      border-color: rgba(71, 85, 105, 0.7);
-      color: #e2e8f0; // slate-200
+      color: #86efac; // green-300
+      background: rgba(22, 163, 74, 0.15);
+      border-color: rgba(34, 197, 94, 0.35);
     }
 
     &__title {

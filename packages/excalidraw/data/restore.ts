@@ -5,6 +5,7 @@ import {
   DEFAULT_TEXT_ALIGN,
   DEFAULT_VERTICAL_ALIGN,
   FONT_FAMILY,
+  FRAME_STYLE,
   ROUNDNESS,
   DEFAULT_SIDEBAR,
   DEFAULT_ELEMENT_PROPS,
@@ -219,6 +220,14 @@ const restoreElementWithProperties = <
   > &
     Partial<Pick<ExcalidrawElement, "type" | "x" | "y" | "customData">>,
 ): T => {
+  const hasRoundnessProp = Object.prototype.hasOwnProperty.call(
+    element,
+    "roundness",
+  );
+  const shouldDefaultFrameRoundness =
+    !hasRoundnessProp &&
+    (element.type === "frame" || element.type === "magicframe");
+
   const base: Pick<T, keyof ExcalidrawElement> = {
     type: extra.type || element.type,
     // all elements must have version > 0 so getSceneVersion() will pick up
@@ -245,17 +254,22 @@ const restoreElementWithProperties = <
     seed: element.seed ?? 1,
     groupIds: element.groupIds ?? [],
     frameId: element.frameId ?? null,
-    roundness: element.roundness
+    roundness: hasRoundnessProp
       ? element.roundness
-      : element.strokeSharpness === "round"
+      : shouldDefaultFrameRoundness
         ? {
-          // for old elements that would now use adaptive radius algo,
-          // use legacy algo instead
-          type: isUsingAdaptiveRadius(element.type)
-            ? ROUNDNESS.LEGACY
-            : ROUNDNESS.PROPORTIONAL_RADIUS,
+          type: ROUNDNESS.ADAPTIVE_RADIUS,
+          value: FRAME_STYLE.radius,
         }
-        : null,
+        : element.strokeSharpness === "round"
+          ? {
+            // for old elements that would now use adaptive radius algo,
+            // use legacy algo instead
+            type: isUsingAdaptiveRadius(element.type)
+              ? ROUNDNESS.LEGACY
+              : ROUNDNESS.PROPORTIONAL_RADIUS,
+          }
+          : null,
     boundElements: element.boundElementIds
       ? element.boundElementIds.map((id) => ({ type: "arrow", id }))
       : element.boundElements ?? [],

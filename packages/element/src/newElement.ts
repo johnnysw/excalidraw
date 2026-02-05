@@ -24,7 +24,11 @@ import {
 } from "./bounds";
 import { newElementWith } from "./mutateElement";
 import { getBoundTextMaxWidth } from "./textElement";
-import { normalizeText, measureText } from "./textMeasurements";
+import {
+  normalizeText,
+  measureText,
+  measureTextWithStyleRanges,
+} from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 
 import { isLineElement } from "./typeChecks";
@@ -308,11 +312,19 @@ const getAdjustedDimensions = (
   width: number;
   height: number;
 } => {
-  let { width: nextWidth, height: nextHeight } = measureText(
-    nextText,
-    getFontString(element),
-    element.lineHeight,
-  );
+  const shouldUseStyledMetrics =
+    element.autoResize &&
+    !element.containerId &&
+    !!element.textStyleRanges?.length;
+  let { width: nextWidth, height: nextHeight } = shouldUseStyledMetrics
+    ? measureTextWithStyleRanges(
+        nextText,
+        element.fontSize,
+        element.fontFamily,
+        element.lineHeight,
+        element.textStyleRanges,
+      )
+    : measureText(nextText, getFontString(element), element.lineHeight);
 
   // wrapped text
   if (!element.autoResize) {
@@ -328,11 +340,15 @@ const getAdjustedDimensions = (
     !element.containerId &&
     element.autoResize
   ) {
-    const prevMetrics = measureText(
-      element.text,
-      getFontString(element),
-      element.lineHeight,
-    );
+    const prevMetrics = shouldUseStyledMetrics
+      ? measureTextWithStyleRanges(
+          element.text,
+          element.fontSize,
+          element.fontFamily,
+          element.lineHeight,
+          element.textStyleRanges,
+        )
+      : measureText(element.text, getFontString(element), element.lineHeight);
     const offsets = getTextElementPositionOffsets(element, {
       width: nextWidth - prevMetrics.width,
       height: nextHeight - prevMetrics.height,

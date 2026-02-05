@@ -22,6 +22,7 @@ import {
   deconstructDiamondElement,
   deconstructRectanguloidElement,
   elementCenterPoint,
+  getCornerRadius,
   getOmitSidesForEditorInterface,
   getTransformHandles,
   getTransformHandlesFromCoords,
@@ -229,13 +230,18 @@ const renderBindingHighlightForBindableElement_simple = (
 
     context.beginPath();
 
-    if (FRAME_STYLE.radius && context.roundRect) {
+    const enclosingRadius =
+      getCornerRadius(
+        Math.min(enclosingFrame.width, enclosingFrame.height),
+        enclosingFrame,
+      ) / appState.zoom.value;
+    if (enclosingRadius > 0 && context.roundRect) {
       context.roundRect(
         -1,
         -1,
         enclosingFrame.width + 1,
         enclosingFrame.height + 1,
-        FRAME_STYLE.radius / appState.zoom.value,
+        enclosingRadius,
       );
     } else {
       context.rect(-1, -1, enclosingFrame.width + 1, enclosingFrame.height + 1);
@@ -259,15 +265,12 @@ const renderBindingHighlightForBindableElement_simple = (
           ? `rgba(3, 93, 161, 1)`
           : `rgba(106, 189, 252, 1)`;
 
-      if (FRAME_STYLE.radius && context.roundRect) {
+      const highlightRadius =
+        getCornerRadius(Math.min(element.width, element.height), element) /
+        appState.zoom.value;
+      if (highlightRadius > 0 && context.roundRect) {
         context.beginPath();
-        context.roundRect(
-          0,
-          0,
-          element.width,
-          element.height,
-          FRAME_STYLE.radius / appState.zoom.value,
-        );
+        context.roundRect(0, 0, element.width, element.height, highlightRadius);
         context.stroke();
         context.closePath();
       } else {
@@ -414,13 +417,18 @@ const renderBindingHighlightForBindableElement_complex = (
 
     context.beginPath();
 
-    if (FRAME_STYLE.radius && context.roundRect) {
+    const enclosingRadius =
+      getCornerRadius(
+        Math.min(enclosingFrame.width, enclosingFrame.height),
+        enclosingFrame,
+      ) / appState.zoom.value;
+    if (enclosingRadius > 0 && context.roundRect) {
       context.roundRect(
         -1,
         -1,
         enclosingFrame.width + 1,
         enclosingFrame.height + 1,
-        FRAME_STYLE.radius / appState.zoom.value,
+        enclosingRadius,
       );
     } else {
       context.rect(-1, -1, enclosingFrame.width + 1, enclosingFrame.height + 1);
@@ -444,15 +452,12 @@ const renderBindingHighlightForBindableElement_complex = (
           ? `rgba(3, 93, 161, ${opacity})`
           : `rgba(106, 189, 252, ${opacity})`;
 
-      if (FRAME_STYLE.radius && context.roundRect) {
+      const highlightRadius =
+        getCornerRadius(Math.min(element.width, element.height), element) /
+        appState.zoom.value;
+      if (highlightRadius > 0 && context.roundRect) {
         context.beginPath();
-        context.roundRect(
-          0,
-          0,
-          element.width,
-          element.height,
-          FRAME_STYLE.radius / appState.zoom.value,
-        );
+        context.roundRect(0, 0, element.width, element.height, highlightRadius);
         context.stroke();
         context.closePath();
       } else {
@@ -758,6 +763,9 @@ const renderFrameHighlight = (
   const [x1, y1, x2, y2] = getElementAbsoluteCoords(frame, elementsMap);
   const width = x2 - x1;
   const height = y2 - y1;
+  const cornerRadius =
+    getCornerRadius(Math.min(frame.width, frame.height), frame) /
+    appState.zoom.value;
 
   context.strokeStyle = "rgb(0,118,255)";
   context.lineWidth = FRAME_STYLE.strokeWidth / appState.zoom.value;
@@ -774,7 +782,7 @@ const renderFrameHighlight = (
     y1 + height / 2,
     frame.angle,
     false,
-    FRAME_STYLE.radius / appState.zoom.value,
+    cornerRadius,
   );
   context.restore();
 };

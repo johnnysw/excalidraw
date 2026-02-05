@@ -211,6 +211,8 @@ export const generateRoughOptions = (
 
   switch (element.type) {
     case "rectangle":
+    case "frame":
+    case "magicframe":
     case "iframe":
     case "embeddable":
     case "diamond":
@@ -617,6 +619,8 @@ const generateElementShape = (
 ): Drawable | Drawable[] | null => {
   switch (element.type) {
     case "rectangle":
+    case "frame":
+    case "magicframe":
     case "iframe":
     case "embeddable": {
       let shape: ElementShapes[typeof element.type];
@@ -820,8 +824,6 @@ const generateElementShape = (
       }
       return shape;
     }
-    case "frame":
-    case "magicframe":
     case "text":
     case "image": {
       const shape: ElementShapes[typeof element.type] = null;

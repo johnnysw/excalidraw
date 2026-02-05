@@ -65,7 +65,7 @@ const getStrokeColorLabel = (
       return "线条色";
     }
     // 形状工具：rectangle, diamond, ellipse
-    if (["rectangle", "diamond", "ellipse"].includes(toolType)) {
+    if (["rectangle", "diamond", "ellipse", "frame"].includes(toolType)) {
       return "边框色";
     }
     return "描边色";
@@ -79,7 +79,8 @@ const getStrokeColorLabel = (
     (el) =>
       el.type === "rectangle" ||
       el.type === "diamond" ||
-      el.type === "ellipse",
+      el.type === "ellipse" ||
+      el.type === "frame",
   );
 
   // 统计类型数量

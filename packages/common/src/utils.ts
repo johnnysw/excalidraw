@@ -60,7 +60,8 @@ export const isInputLike = (
   | HTMLSelectElement
   | HTMLBRElement
   | HTMLDivElement =>
-  (target instanceof HTMLElement && target.dataset.type === "wysiwyg") ||
+  (target instanceof HTMLElement &&
+    (target.dataset.type === "wysiwyg" || target.isContentEditable)) ||
   target instanceof HTMLBRElement || // newline in wysiwyg
   target instanceof HTMLInputElement ||
   target instanceof HTMLTextAreaElement ||
@@ -80,7 +81,8 @@ export const isWritableElement = (
   | HTMLTextAreaElement
   | HTMLBRElement
   | HTMLDivElement =>
-  (target instanceof HTMLElement && target.dataset.type === "wysiwyg") ||
+  (target instanceof HTMLElement &&
+    (target.dataset.type === "wysiwyg" || target.isContentEditable)) ||
   target instanceof HTMLBRElement || // newline in wysiwyg
   target instanceof HTMLTextAreaElement ||
   (target instanceof HTMLInputElement &&

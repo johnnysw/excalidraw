@@ -180,6 +180,10 @@ export const actionWrapSelectionInFrame = register({
     const PADDING = 16;
     const frame = newFrameElement({
       ...FRAME_STYLE,
+      roundness: {
+        type: ROUNDNESS.ADAPTIVE_RADIUS,
+        value: FRAME_STYLE.radius,
+      },
       x: x1 - PADDING,
       y: y1 - PADDING,
       width: x2 - x1 + PADDING * 2,

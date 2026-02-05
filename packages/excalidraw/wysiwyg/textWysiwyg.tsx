@@ -83,6 +83,13 @@ const getTransform = (
 
 type SubmitHandler = () => void;
 
+// Undo/Redo state type for text editing
+type TextUndoState = {
+  text: string;
+  selectionStart: number;
+  selectionEnd: number;
+};
+
 export const textWysiwyg = ({
   id,
   onChange,
@@ -113,6 +120,11 @@ export const textWysiwyg = ({
   let currentSelection: { start: number; end: number } | null = null;
   let isInputting = false;
   let isComposing = false;
+
+  // Custom undo/redo stacks for text editing
+  const undoStack: TextUndoState[] = [];
+  const redoStack: TextUndoState[] = [];
+  let lastSavedText = element.originalText || "";
 
   const textPropertiesUpdated = (
     updatedTextElement: ExcalidrawTextElement,
@@ -243,13 +255,28 @@ export const textWysiwyg = ({
 
       const font = getFontString(updatedTextElement);
 
+      // Calculate the maximum font size from textStyleRanges for proper line-height
+      let maxFontSize = updatedTextElement.fontSize;
+      if (updatedTextElement.textStyleRanges?.length) {
+        for (const range of updatedTextElement.textStyleRanges) {
+          if (range.fontSize != null && range.fontSize > maxFontSize) {
+            maxFontSize = range.fontSize;
+          }
+        }
+      }
+      // Use pixel-based line-height when there are mixed font sizes
+      const effectiveLineHeight =
+        maxFontSize > updatedTextElement.fontSize
+          ? `${maxFontSize * updatedTextElement.lineHeight}px`
+          : updatedTextElement.lineHeight;
+
       // Make sure text editor height doesn't go beyond viewport
       const editorMaxHeight =
         (appState.height - viewportY) / appState.zoom.value;
       Object.assign(editable.style, {
         font,
         // must be defined *after* font ¯\_(ツ)_/¯
-        lineHeight: updatedTextElement.lineHeight,
+        lineHeight: effectiveLineHeight,
         width: `${width}px`,
         height: `${height}px`,
         left: `${viewportX}px`,
@@ -337,7 +364,7 @@ export const textWysiwyg = ({
     outline: 0,
     resize: "none",
     background: "transparent",
-    overflow: "hidden",
+    overflow: "visible",
     // must be specified because in dark mode canvas creates a stacking context
     zIndex: "var(--zIndex-wysiwyg)",
     wordBreak,
@@ -468,6 +495,10 @@ export const textWysiwyg = ({
           span.style.fontFamily = getFontFamilyString({
             fontFamily: currentStyle.fontFamily,
           });
+          // Set line-height for each span to prevent text clipping when font size differs
+          span.style.lineHeight = `${textElement.lineHeight}`;
+          // Use baseline alignment to match canvas rendering (alphabetic baseline)
+          span.style.verticalAlign = "baseline";
 
           const spanStyleAny = span.style as any;
           spanStyleAny.webkitTextStrokeWidth = `${currentStyle.textOutlineWidth}px`;
@@ -528,12 +559,178 @@ export const textWysiwyg = ({
       updateTextEditorSelection();
       const raw = editable.innerText || "";
       const normalized = normalizeText(raw);
+
+      // Only save undo state when NOT composing (IME input)
+      // For IME input, we save the state in compositionend event
+      if (!isComposing && normalized !== lastSavedText) {
+        undoStack.push({
+          text: lastSavedText,
+          selectionStart: currentSelection?.start ?? 0,
+          selectionEnd: currentSelection?.end ?? 0,
+        });
+        // Clear redo stack when new input occurs
+        redoStack.length = 0;
+        lastSavedText = normalized;
+      }
+
       onChange(normalized);
       isInputting = false;
     };
   }
 
+  // Helper to get current selection offsets
+  const getSelectionOffsets = (): { start: number; end: number } => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) {
+      return { start: 0, end: 0 };
+    }
+    const range = selection.getRangeAt(0);
+    if (!editable.contains(range.startContainer)) {
+      return { start: 0, end: 0 };
+    }
+
+    let start = 0;
+    let end = 0;
+    let currentLength = 0;
+    let foundStart = false;
+    let foundEnd = false;
+
+    const traverse = (node: Node) => {
+      if (foundStart && foundEnd) return;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const textLen = (node.textContent || "").length;
+        if (!foundStart && range.startContainer === node) {
+          start = currentLength + range.startOffset;
+          foundStart = true;
+        }
+        if (!foundEnd && range.endContainer === node) {
+          end = currentLength + range.endOffset;
+          foundEnd = true;
+        }
+        currentLength += textLen;
+      } else {
+        for (const child of Array.from(node.childNodes)) {
+          traverse(child);
+        }
+      }
+    };
+    traverse(editable);
+    return { start, end };
+  };
+
+  // Helper to restore selection by offset
+  const restoreSelectionByOffset = (start: number, end: number) => {
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    let currentLength = 0;
+    let startNode: Node | null = null;
+    let startOffset = 0;
+    let endNode: Node | null = null;
+    let endOffset = 0;
+
+    const traverse = (node: Node) => {
+      if (startNode && endNode) return;
+      if (node.nodeType === Node.TEXT_NODE) {
+        const textLen = (node.textContent || "").length;
+        if (!startNode && currentLength + textLen >= start) {
+          startNode = node;
+          startOffset = start - currentLength;
+        }
+        if (!endNode && currentLength + textLen >= end) {
+          endNode = node;
+          endOffset = end - currentLength;
+        }
+        currentLength += textLen;
+      } else {
+        for (const child of Array.from(node.childNodes)) {
+          traverse(child);
+        }
+      }
+    };
+    traverse(editable);
+
+    if (startNode && endNode) {
+      const range = document.createRange();
+      range.setStart(startNode, Math.min(startOffset, (startNode.textContent || "").length));
+      range.setEnd(endNode, Math.min(endOffset, (endNode.textContent || "").length));
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+  };
+
+  // Undo function
+  const performUndo = () => {
+    if (undoStack.length === 0) return;
+
+    const currentState: TextUndoState = {
+      text: editable.innerText || "",
+      selectionStart: getSelectionOffsets().start,
+      selectionEnd: getSelectionOffsets().end,
+    };
+    redoStack.push(currentState);
+
+    const prevState = undoStack.pop()!;
+    lastSavedText = prevState.text;
+
+    // Update the text element
+    if (onChange) {
+      onChange(prevState.text);
+    }
+
+    // Update editable content after onChange updates the element
+    // Always place cursor at the end of restored text
+    setTimeout(() => {
+      updateWysiwygStyle();
+      const textLen = prevState.text.length;
+      restoreSelectionByOffset(textLen, textLen);
+    }, 0);
+  };
+
+  // Redo function
+  const performRedo = () => {
+    if (redoStack.length === 0) return;
+
+    const currentState: TextUndoState = {
+      text: editable.innerText || "",
+      selectionStart: getSelectionOffsets().start,
+      selectionEnd: getSelectionOffsets().end,
+    };
+    undoStack.push(currentState);
+
+    const nextState = redoStack.pop()!;
+    lastSavedText = nextState.text;
+
+    // Update the text element
+    if (onChange) {
+      onChange(nextState.text);
+    }
+
+    // Update editable content after onChange updates the element
+    // Always place cursor at the end of restored text
+    setTimeout(() => {
+      updateWysiwygStyle();
+      const textLen = nextState.text.length;
+      restoreSelectionByOffset(textLen, textLen);
+    }, 0);
+  };
+
   editable.onkeydown = (event) => {
+    // Handle Undo (Ctrl+Z / Cmd+Z)
+    if (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === "z" && !event.shiftKey) {
+      event.preventDefault();
+      performUndo();
+      return;
+    }
+    // Handle Redo (Ctrl+Shift+Z / Cmd+Shift+Z or Ctrl+Y / Cmd+Y)
+    if (
+      (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === "z" && event.shiftKey) ||
+      (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === "y")
+    ) {
+      event.preventDefault();
+      performRedo();
+      return;
+    }
     if (!event.shiftKey && actionZoomIn.keyTest(event)) {
       event.preventDefault();
       app.actionManager.executeAction(actionZoomIn);
@@ -758,6 +955,18 @@ export const textWysiwyg = ({
 
   editable.addEventListener("compositionend", () => {
     isComposing = false;
+    // Save undo state after IME composition ends (e.g., after typing Chinese characters)
+    const raw = editable.innerText || "";
+    const normalized = normalizeText(raw);
+    if (normalized !== lastSavedText) {
+      undoStack.push({
+        text: lastSavedText,
+        selectionStart: currentSelection?.start ?? 0,
+        selectionEnd: currentSelection?.end ?? 0,
+      });
+      redoStack.length = 0;
+      lastSavedText = normalized;
+    }
   });
 
   // Listen for selection changes
