@@ -24,6 +24,7 @@ import type {
   ExcalidrawFrameLikeElement,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
+import type { AnimationTarget } from "../components/AnimationMenu/types";
 
 import {
   EXTERNAL_LINK_IMG,
