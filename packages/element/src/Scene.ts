@@ -420,7 +420,7 @@ export class Scene {
 
   insertElement = (element: ExcalidrawElement) => {
     const index = element.frameId
-      ? this.getElementIndex(element.frameId)
+      ? this.getFrameChildrenEndIndex(element.frameId)
       : this.elements.length;
 
     this.insertElementAtIndex(element, index);
@@ -432,7 +432,7 @@ export class Scene {
     }
 
     const index = elements[0]?.frameId
-      ? this.getElementIndex(elements[0].frameId)
+      ? this.getFrameChildrenEndIndex(elements[0].frameId)
       : this.elements.length;
 
     this.insertElementsAtIndex(elements, index);
@@ -440,6 +440,16 @@ export class Scene {
 
   getElementIndex(elementId: string) {
     return this.elements.findIndex((element) => element.id === elementId);
+  }
+
+  getFrameChildrenEndIndex(frameId: string) {
+    let lastIndex = -1;
+    for (let i = 0; i < this.elements.length; i++) {
+      if (this.elements[i].id === frameId || this.elements[i].frameId === frameId) {
+        lastIndex = i;
+      }
+    }
+    return lastIndex >= 0 ? lastIndex + 1 : this.elements.length;
   }
 
   getContainerElement = (
