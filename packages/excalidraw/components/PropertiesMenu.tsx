@@ -346,9 +346,9 @@ export const PropertiesMenu: React.FC = () => {
                 {actionManager.renderAction("changeStrokeWidth")}
                 <NumberInput
                   value={strokeWidthValue}
-                  min={0.5}
+                  min={0.1}
                   max={100}
-                  step={0.5}
+                  step={(value) => (value < 0.5 ? 0.1 : 0.5)}
                   onChange={(value) => {
                     actionManager.executeAction(actionChangeStrokeWidth, "ui", value);
                   }}

@@ -6,7 +6,7 @@ interface NumberInputProps {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
-  step?: number;
+  step?: number | ((value: number) => number);
   className?: string;
   style?: React.CSSProperties;
 }
@@ -28,6 +28,9 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     setInputValue(String(value));
   }, [value]);
 
+  const getStep = (stepValue: number) =>
+    typeof step === "function" ? step(stepValue) : step;
+
   const commitValue = (newValueStr: string) => {
     let newValue = parseFloat(newValueStr);
     if (isNaN(newValue)) {
@@ -39,7 +42,8 @@ export const NumberInput: React.FC<NumberInputProps> = ({
     newValue = Math.min(Math.max(newValue, min), max);
 
     // Round to step precision to avoid float issues
-    const precision = step.toString().split(".")[1]?.length || 0;
+    const stepValue = getStep(newValue);
+    const precision = stepValue.toString().split(".")[1]?.length || 0;
     newValue = parseFloat(newValue.toFixed(precision));
 
     onChange(newValue);
@@ -65,12 +69,14 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   const increment = () => {
     const currentValue = parseFloat(inputValue) || 0;
-    commitValue(String(currentValue + step));
+    const stepValue = getStep(currentValue);
+    commitValue(String(currentValue + stepValue));
   };
 
   const decrement = () => {
     const currentValue = parseFloat(inputValue) || 0;
-    commitValue(String(currentValue - step));
+    const stepValue = getStep(currentValue - Number.EPSILON);
+    commitValue(String(currentValue - stepValue));
   };
 
   return (
