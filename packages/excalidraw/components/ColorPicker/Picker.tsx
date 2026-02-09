@@ -71,10 +71,14 @@ export const Picker = React.forwardRef(
       : null;
 
     const [customColors] = React.useState(() => {
-      if (type === "canvasBackground") {
+      if (type === "canvasBackground" || type === "questionShadow") {
         return [];
       }
-      return getMostUsedCustomColors(elements, type, palette);
+      return getMostUsedCustomColors(
+        elements,
+        type as "elementBackground" | "elementStroke" | "textOutline",
+        palette,
+      );
     });
 
     const [activeColorPickerSection, setActiveColorPickerSection] = useAtom(
@@ -122,16 +126,17 @@ export const Picker = React.forwardRef(
         setActiveShade(colorObj.shade);
       }
 
-      const keyup = (event: KeyboardEvent) => {
-        if (event.key === KEYS.ALT) {
-          onEyeDropperToggle(false);
-        }
-      };
-      document.addEventListener(EVENT.KEYUP, keyup, { capture: true });
-      return () => {
-        document.removeEventListener(EVENT.KEYUP, keyup, { capture: true });
-      };
-    }, [colorObj, onEyeDropperToggle]);
+      // 吸管工具已禁用：保留快捷键逻辑以便后续恢复
+      // const keyup = (event: KeyboardEvent) => {
+      //   if (event.key === KEYS.ALT) {
+      //     onEyeDropperToggle(false);
+      //   }
+      // };
+      // document.addEventListener(EVENT.KEYUP, keyup, { capture: true });
+      // return () => {
+      //   document.removeEventListener(EVENT.KEYUP, keyup, { capture: true });
+      // };
+    }, [colorObj]);
     const pickerRef = React.useRef<HTMLDivElement>(null);
 
     useImperativeHandle(ref, () => pickerRef.current!);
@@ -145,13 +150,15 @@ export const Picker = React.forwardRef(
         <div
           ref={pickerRef}
           onKeyDown={(event) => {
+            // 吸管工具已禁用：传入占位回调以满足类型
+            const noopEyeDropperToggle = () => {};
             const handled = colorPickerKeyNavHandler({
               event,
               activeColorPickerSection,
               palette,
               color,
               onChange,
-              onEyeDropperToggle,
+              onEyeDropperToggle: noopEyeDropperToggle,
               customColors,
               setActiveColorPickerSection,
               updateData,

@@ -2889,49 +2889,50 @@ class App extends React.Component<AppProps, AppState> {
     }
   };
 
-  private openEyeDropper = ({ type }: { type: "stroke" | "background" }) => {
-    this.updateEditorAtom(activeEyeDropperAtom, {
-      swapPreviewOnAlt: true,
-      colorPickerType:
-        type === "stroke" ? "elementStroke" : "elementBackground",
-      onSelect: (color, event) => {
-        const shouldUpdateStrokeColor =
-          (type === "background" && event.altKey) ||
-          (type === "stroke" && !event.altKey);
-        const selectedElements = this.scene.getSelectedElements(this.state);
-        if (
-          !selectedElements.length ||
-          this.state.activeTool.type !== "selection"
-        ) {
-          if (shouldUpdateStrokeColor) {
-            this.syncActionResult({
-              appState: { ...this.state, currentItemStrokeColor: color },
-              captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-            });
-          } else {
-            this.syncActionResult({
-              appState: { ...this.state, currentItemBackgroundColor: color },
-              captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-            });
-          }
-        } else {
-          this.updateScene({
-            elements: this.scene.getElementsIncludingDeleted().map((el) => {
-              if (this.state.selectedElementIds[el.id]) {
-                return newElementWith(el, {
-                  [shouldUpdateStrokeColor ? "strokeColor" : "backgroundColor"]:
-                    color,
-                });
-              }
-              return el;
-            }),
-            captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-          });
-        }
-      },
-      keepOpenOnAlt: false,
-    });
-  };
+  // 吸管工具已禁用：保留逻辑以便后续恢复
+  // private openEyeDropper = ({ type }: { type: "stroke" | "background" }) => {
+  //   this.updateEditorAtom(activeEyeDropperAtom, {
+  //     swapPreviewOnAlt: true,
+  //     colorPickerType:
+  //       type === "stroke" ? "elementStroke" : "elementBackground",
+  //     onSelect: (color, event) => {
+  //       const shouldUpdateStrokeColor =
+  //         (type === "background" && event.altKey) ||
+  //         (type === "stroke" && !event.altKey);
+  //       const selectedElements = this.scene.getSelectedElements(this.state);
+  //       if (
+  //         !selectedElements.length ||
+  //         this.state.activeTool.type !== "selection"
+  //       ) {
+  //         if (shouldUpdateStrokeColor) {
+  //           this.syncActionResult({
+  //             appState: { ...this.state, currentItemStrokeColor: color },
+  //             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  //           });
+  //         } else {
+  //           this.syncActionResult({
+  //             appState: { ...this.state, currentItemBackgroundColor: color },
+  //             captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  //           });
+  //         }
+  //       } else {
+  //         this.updateScene({
+  //           elements: this.scene.getElementsIncludingDeleted().map((el) => {
+  //             if (this.state.selectedElementIds[el.id]) {
+  //               return newElementWith(el, {
+  //                 [shouldUpdateStrokeColor ? "strokeColor" : "backgroundColor"]:
+  //                   color,
+  //               });
+  //             }
+  //             return el;
+  //           }),
+  //           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+  //         });
+  //       }
+  //     },
+  //     keepOpenOnAlt: false,
+  //   });
+  // };
 
   public dismissLinearEditor = () => {
     setTimeout(() => {
@@ -5541,19 +5542,20 @@ class App extends React.Component<AppProps, AppState> {
         this.updateEditorAtom(activeConfirmDialogAtom, "clearCanvas");
       }
 
-      // eye dropper
-      // -----------------------------------------------------------------------
-      const lowerCased = event.key.toLocaleLowerCase();
-      const isPickingStroke = lowerCased === KEYS.S && event.shiftKey;
-      const isPickingBackground =
-        event.key === KEYS.I || (lowerCased === KEYS.G && event.shiftKey);
-
-      if (isPickingStroke || isPickingBackground) {
-        this.openEyeDropper({
-          type: isPickingStroke ? "stroke" : "background",
-        });
-      }
-      // -----------------------------------------------------------------------
+      // 吸管工具已禁用：保留快捷键逻辑以便后续恢复
+      // // eye dropper
+      // // -----------------------------------------------------------------------
+      // const lowerCased = event.key.toLocaleLowerCase();
+      // const isPickingStroke = lowerCased === KEYS.S && event.shiftKey;
+      // const isPickingBackground =
+      //   event.key === KEYS.I || (lowerCased === KEYS.G && event.shiftKey);
+      //
+      // if (isPickingStroke || isPickingBackground) {
+      //   this.openEyeDropper({
+      //     type: isPickingStroke ? "stroke" : "background",
+      //   });
+      // }
+      // // -----------------------------------------------------------------------
     },
   );
 

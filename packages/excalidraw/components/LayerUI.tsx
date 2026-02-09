@@ -216,7 +216,8 @@ const LayerUI = ({
 
   const TunnelsJotaiProvider = tunnels.tunnelsJotai.Provider;
 
-  const [eyeDropperState, setEyeDropperState] = useAtom(activeEyeDropperAtom);
+  // 吸管工具已禁用：保留状态以便后续恢复
+  // const [eyeDropperState, setEyeDropperState] = useAtom(activeEyeDropperAtom);
 
   const renderJSONExportDialog = () => {
     if (!UIOptions.canvasActions.export) {
@@ -639,7 +640,8 @@ const LayerUI = ({
           {appState.errorMessage}
         </ErrorDialog>
       )}
-      {eyeDropperState && editorInterface.formFactor !== "phone" && (
+      {/* 吸管工具已禁用：保留渲染逻辑以便后续恢复 */}
+      {/* {eyeDropperState && editorInterface.formFactor !== "phone" && (
         <EyeDropper
           colorPickerType={eyeDropperState.colorPickerType}
           onCancel={() => {
@@ -682,7 +684,7 @@ const LayerUI = ({
             eyeDropperState?.onSelect?.(color, event);
           }}
         />
-      )}
+      )} */}
       {appState.openDialog?.name === "help" && (
         <HelpDialog
           onClose={() => {

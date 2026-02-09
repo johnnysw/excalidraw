@@ -91,15 +91,18 @@ export const ColorInput = ({
         onKeyDown={(event) => {
           if (event.key === KEYS.TAB) {
             return;
-          } else if (event.key === KEYS.ESCAPE) {
-            eyeDropperTriggerRef.current?.focus();
           }
+          // 吸管工具已禁用，避免聚焦到吸管触发器
+          // else if (event.key === KEYS.ESCAPE) {
+          //   eyeDropperTriggerRef.current?.focus();
+          // }
           event.stopPropagation();
         }}
         placeholder={placeholder}
       />
       {/* TODO reenable on mobile with a better UX */}
-      {editorInterface.formFactor !== "phone" && (
+      {/* 吸管工具已禁用：保留代码但不渲染触发入口 */}
+      {/* {editorInterface.formFactor !== "phone" && (
         <>
           <div
             style={{
@@ -131,7 +134,7 @@ export const ColorInput = ({
             {eyeDropperIcon}
           </div>
         </>
-      )}
+      )} */}
     </div>
   );
 };

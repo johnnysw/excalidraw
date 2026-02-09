@@ -105,29 +105,29 @@ const ColorPickerPopupContent = ({
 }) => {
   const [, setActiveColorPickerSection] = useAtom(activeColorPickerSectionAtom);
 
-  const [eyeDropperState, setEyeDropperState] = useAtom(activeEyeDropperAtom);
-
-  const handleEyeDropperToggle = (force?: boolean) => {
-    setEyeDropperState((state) => {
-      if (force) {
-        state = state || {
-          keepOpenOnAlt: true,
-          onSelect: onChange,
-          colorPickerType: type,
-        };
-        state.keepOpenOnAlt = true;
-        return state;
-      }
-
-      return force === false || state
-        ? null
-        : {
-            keepOpenOnAlt: false,
-            onSelect: onChange,
-            colorPickerType: type,
-          };
-    });
-  };
+  // 吸管工具已禁用：保留状态逻辑以便后续恢复
+  // const [eyeDropperState, setEyeDropperState] = useAtom(activeEyeDropperAtom);
+  // const handleEyeDropperToggle = (force?: boolean) => {
+  //   setEyeDropperState((state) => {
+  //     if (force) {
+  //       state = state || {
+  //         keepOpenOnAlt: true,
+  //         onSelect: onChange,
+  //         colorPickerType: type,
+  //       };
+  //       state.keepOpenOnAlt = true;
+  //       return state;
+  //     }
+  //
+  //     return force === false || state
+  //       ? null
+  //       : {
+  //           keepOpenOnAlt: false,
+  //           onSelect: onChange,
+  //           colorPickerType: type,
+  //         };
+  //   });
+  // };
 
   const handleClose = () => {
     // only clear if we're still the active popup (avoid racing with switch)
@@ -173,7 +173,7 @@ const ColorPickerPopupContent = ({
       <AdvancedColorPicker
         color={color}
         onChange={handleColorChange}
-        onEyeDropperToggle={handleEyeDropperToggle}
+        // 吸管工具已禁用：不传入 onEyeDropperToggle
         onClose={handleClose}
       />
     </PropertiesPopover>
