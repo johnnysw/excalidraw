@@ -122,8 +122,6 @@ const DefaultMainMenu: React.FC<{
       {!isMember && <MainMenu.DefaultItems.LoadScene />}
       {!isMember && <MainMenu.DefaultItems.SaveToActiveFile />}
       {/* FIXME we should to test for this inside the item itself */}
-      {!isMember && UIOptions.canvasActions.export && <MainMenu.DefaultItems.Export />}
-      {/* FIXME we should to test for this inside the item itself */}
       {!isMember && UIOptions.canvasActions.saveAsImage && (
         <MainMenu.DefaultItems.SaveAsImage />
       )}
