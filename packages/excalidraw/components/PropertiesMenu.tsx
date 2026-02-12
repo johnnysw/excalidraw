@@ -175,20 +175,49 @@ export const PropertiesMenu: React.FC = () => {
 
   const selectedQuestionIds = new Set(
     targetElements
-      .filter((el) => (el as any)?.customData?.type === "question")
-      .map((el) => String((el as any)?.customData?.questionId))
-      .filter(Boolean),
+      .map((el) => (el as any)?.customData)
+      .filter(
+        (customData) =>
+          customData?.type === "question" && customData?.questionId != null,
+      )
+      .map((customData) => String(customData.questionId)),
   );
-  const hasQuestionSelection = selectedQuestionIds.size > 0;
+  const selectedRichTextNodeIds = new Set(
+    targetElements
+      .map((el) => (el as any)?.customData)
+      .filter(
+        (customData) =>
+          customData?.type === "richTextNode" && customData?.nodeId != null,
+      )
+      .map((customData) => String(customData.nodeId)),
+  );
+  const hasShadowSelection =
+    selectedQuestionIds.size > 0 || selectedRichTextNodeIds.size > 0;
+  const isSelectedShadowElement = (customData: any) => {
+    if (customData?.role !== "shadow") {
+      return false;
+    }
+    if (
+      customData?.type === "question" &&
+      customData?.questionId != null &&
+      selectedQuestionIds.has(String(customData.questionId))
+    ) {
+      return true;
+    }
+    if (
+      customData?.type === "richTextNode" &&
+      customData?.nodeId != null &&
+      selectedRichTextNodeIds.has(String(customData.nodeId))
+    ) {
+      return true;
+    }
+    return false;
+  };
   const shadowColors = new Set<string>();
-  if (hasQuestionSelection) {
+  if (hasShadowSelection) {
     elements.forEach((el) => {
       const customData = (el as any)?.customData;
-      if (
-        customData?.type === "question" &&
-        customData?.role === "shadow" &&
-        selectedQuestionIds.has(String(customData?.questionId))
-      ) {
+      if (isSelectedShadowElement(customData)) {
         if (typeof el.backgroundColor === "string") {
           shadowColors.add(el.backgroundColor);
         }
@@ -199,7 +228,7 @@ export const PropertiesMenu: React.FC = () => {
     shadowColors.size === 1 ? [...shadowColors][0] : null;
 
   const applyShadowTheme = (color: string) => {
-    if (!hasQuestionSelection) {
+    if (!hasShadowSelection) {
       return;
     }
     const matchedTheme = QUESTION_SHADOW_THEMES.find(
@@ -207,11 +236,7 @@ export const PropertiesMenu: React.FC = () => {
     );
     const updatedElements = elements.map((el) => {
       const customData = (el as any)?.customData;
-      if (
-        customData?.type === "question" &&
-        customData?.role === "shadow" &&
-        selectedQuestionIds.has(String(customData?.questionId))
-      ) {
+      if (isSelectedShadowElement(customData)) {
         return {
           ...el,
           backgroundColor: color,
@@ -289,8 +314,8 @@ export const PropertiesMenu: React.FC = () => {
         </div>
       )}
 
-      {/* 题目阴影主题 */}
-      {hasQuestionSelection && (
+      {/* 节点阴影色 */}
+      {hasShadowSelection && (
         <div className="PropertiesMenu__section">
           <div className="PropertiesMenu__section-title">阴影色</div>
           <div className="PropertiesMenu__color-row">
