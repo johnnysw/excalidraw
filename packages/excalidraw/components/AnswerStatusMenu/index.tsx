@@ -477,7 +477,11 @@ export const AnswerStatusMenu: React.FC<AnswerStatusMenuProps> = ({
   }
 
   // 未关联课件或任务列表为空时，仅展示任务历史空态（不展示 tabs/刷新）
-  if (!teachingCoursewareId || (!teachingTaskId && hasHistoryLoaded && !hasHistoryTasks)) {
+  const shouldShowUnlinkedEmpty =
+    (!teachingCoursewareId && !teachingTaskId) ||
+    (!!teachingCoursewareId && !teachingTaskId && hasHistoryLoaded && !hasHistoryTasks);
+
+  if (shouldShowUnlinkedEmpty) {
     if (hideHistoryTab && hideTaskTargets) {
       return (
         <div className="AnswerStatusMenu">
