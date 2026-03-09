@@ -418,7 +418,12 @@ import { isMaybeMermaidDefinition } from "../mermaid";
 
 import { LassoTrail } from "../lasso";
 
-import { EraserTrail } from "../eraser";
+import {
+  collectElementsForErasure,
+  EraserTrail,
+  getErasableElements,
+  getElementsToEraseByBBox,
+} from "../eraser";
 
 import { getShortcutKey } from "../shortcut";
 
@@ -7454,6 +7459,30 @@ class App extends React.Component<AppProps, AppState> {
     this.triggerRender();
   };
 
+  private updateElementsPendingErasureForBoxEraser = () => {
+    const selectionElement = this.state.selectionElement;
+
+    if (!selectionElement) {
+      this.elementsPendingErasure = new Set();
+      this.triggerRender();
+      return;
+    }
+
+    this.elementsPendingErasure = new Set(
+      getElementsToEraseByBBox({
+        elements: this.scene.getNonDeletedElements(),
+        selectionElement,
+        elementsMap: this.scene.getNonDeletedElementsMap(),
+        appState: {
+          presentationMode: this.state.presentationMode,
+          presentationAnnotationSessionId:
+            this.state.presentationAnnotationSessionId,
+        },
+      }),
+    );
+    this.triggerRender();
+  };
+
   // set touch moving for mobile context menu
   private handleTouchMove = (event: React.TouchEvent<HTMLCanvasElement>) => {
     invalidateContextMenu = true;
@@ -7965,6 +7994,8 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState.lastCoords.x,
         pointerDownState.lastCoords.y,
       );
+    } else if (pointerDownState.eraserMode === "box") {
+      this.createGenericElementOnPointerDown("selection", pointerDownState);
     } else if (
       this.state.activeTool.type !== "eraser" &&
       this.state.activeTool.type !== "hand" &&
@@ -7983,7 +8014,7 @@ class App extends React.Component<AppProps, AppState> {
       event,
     );
 
-    if (this.state.activeTool.type === "eraser") {
+    if (pointerDownState.eraserMode === "path") {
       this.eraserTrail.startPath(
         pointerDownState.lastCoords.x,
         pointerDownState.lastCoords.y,
@@ -8329,6 +8360,11 @@ class App extends React.Component<AppProps, AppState> {
         onKeyUp: null,
         onKeyDown: null,
       },
+      eraserMode: isEraserActive(this.state)
+        ? event.button === POINTER_BUTTON.ERASER
+          ? "path"
+          : this.state.preferredEraserMode
+        : null,
       boxSelection: {
         hasOccurred: false,
       },
@@ -9630,7 +9666,7 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
-      if (isEraserActive(this.state)) {
+      if (pointerDownState.eraserMode === "path") {
         this.handleEraser(event, pointerCoords);
         return;
       }
@@ -10161,7 +10197,7 @@ class App extends React.Component<AppProps, AppState> {
       if (this.state.selectionElement) {
         pointerDownState.lastCoords.x = pointerCoords.x;
         pointerDownState.lastCoords.y = pointerCoords.y;
-        if (event.altKey) {
+        if (event.altKey && this.state.activeTool.type === "selection") {
           this.setActiveTool(
             { type: "lasso", fromSelection: true },
             event.shiftKey,
@@ -10272,8 +10308,16 @@ class App extends React.Component<AppProps, AppState> {
         }
       }
 
-      if (this.state.activeTool.type === "selection") {
+      if (
+        this.state.activeTool.type === "selection" ||
+        pointerDownState.eraserMode === "box"
+      ) {
         pointerDownState.boxSelection.hasOccurred = true;
+
+        if (pointerDownState.eraserMode === "box") {
+          this.updateElementsPendingErasureForBoxEraser();
+          return;
+        }
 
         const elements = this.scene.getNonDeletedElements();
 
@@ -11051,7 +11095,7 @@ class App extends React.Component<AppProps, AppState> {
       const pointerStart = this.lastPointerDownEvent;
       const pointerEnd = this.lastPointerUpEvent || this.lastPointerMoveEvent;
 
-      if (isEraserActive(this.state) && pointerStart && pointerEnd) {
+      if (pointerDownState.eraserMode === "path" && pointerStart && pointerEnd) {
         this.eraserTrail.endPath();
 
         const draggedDistance = pointDistance(
@@ -11071,31 +11115,28 @@ class App extends React.Component<AppProps, AppState> {
             scenePointer.x,
             scenePointer.y,
           );
-          // 过滤掉不可擦除的自定义元素
-          const nonErasableTypes = new Set([
-            "question",
-            "richTextNode",
-            "questionTagBadge",
-          ]);
-          // Frame 类型也不可被擦除
-          const nonErasableElementTypes = new Set([
-            "frame",
-            "magicframe",
-          ]);
-          hitElements
-            .filter((el) => {
-              // 检查元素类型，阻止擦除 Frame 类型
-              if (nonErasableElementTypes.has(el.type)) {
-                return false;
-              }
-              const customType = (el as any).customData?.type;
-              return !customType || !nonErasableTypes.has(customType);
-            })
-            .forEach((hitElement) =>
-              this.elementsPendingErasure.add(hitElement.id),
-            );
+          this.elementsPendingErasure = new Set(
+            collectElementsForErasure({
+              elements: getErasableElements(hitElements, {
+                presentationMode: this.state.presentationMode,
+                presentationAnnotationSessionId:
+                  this.state.presentationAnnotationSessionId,
+              }),
+              elementsMap: this.scene.getNonDeletedElementsMap(),
+            }),
+          );
         }
         this.eraseElements();
+        return;
+      } else if (pointerDownState.eraserMode === "box") {
+        if (
+          pointerDownState.boxSelection.hasOccurred &&
+          this.elementsPendingErasure.size
+        ) {
+          this.eraseElements();
+        } else if (this.elementsPendingErasure.size) {
+          this.restoreReadyToEraseElements();
+        }
         return;
       } else if (this.elementsPendingErasure.size) {
         this.restoreReadyToEraseElements();
@@ -12174,10 +12215,17 @@ class App extends React.Component<AppProps, AppState> {
   ): void => {
     const selectionElement = this.state.selectionElement;
     const pointerCoords = pointerDownState.lastCoords;
-    if (selectionElement && this.state.activeTool.type !== "eraser") {
+    if (
+      selectionElement &&
+      (this.state.activeTool.type !== "eraser" ||
+        this.state.preferredEraserMode === "box")
+    ) {
       dragNewElement({
         newElement: selectionElement,
-        elementType: this.state.activeTool.type,
+        elementType:
+          this.state.activeTool.type === "eraser"
+            ? "selection"
+            : this.state.activeTool.type,
         originX: pointerDownState.origin.x,
         originY: pointerDownState.origin.y,
         x: pointerCoords.x,

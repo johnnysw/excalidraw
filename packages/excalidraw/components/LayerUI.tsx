@@ -51,7 +51,7 @@ import MainMenu from "./main-menu/MainMenu";
 import { ActiveConfirmDialog } from "./ActiveConfirmDialog";
 import { useEditorInterface, useStylesPanelMode } from "./App";
 import { OverwriteConfirmDialog } from "./OverwriteConfirm/OverwriteConfirm";
-import { sidebarRightIcon, PlayIcon, FreedrawIcon, EraserIcon, TextIcon, frameToolIcon } from "./icons";
+import { sidebarRightIcon, PlayIcon, FreedrawIcon, TextIcon, frameToolIcon } from "./icons";
 import { DefaultSidebar } from "./DefaultSidebar";
 import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
@@ -62,6 +62,7 @@ import { FixedSideContainer } from "./FixedSideContainer";
 import { HandButton } from "./HandButton";
 import { HelpDialog } from "./HelpDialog";
 import { ToolButton } from "./ToolButton";
+import EraserToolPopover from "./EraserToolPopover";
 import { getToolbarTools } from "./shapes";
 import { HintViewer } from "./HintViewer";
 import { ImageExportDialog } from "./ImageExportDialog";
@@ -455,7 +456,7 @@ const LayerUI = ({
                               if (!eraserTool) {
                                 return null;
                               }
-                              const { icon, key, numericKey } = eraserTool;
+                              const { key, numericKey } = eraserTool;
                               const label = t("toolBar.eraser");
                               const letter =
                                 key &&
@@ -466,27 +467,17 @@ const LayerUI = ({
                                 ? `${letter} ${t("helpDialog.or")} ${numericKey}`
                                 : `${numericKey}`;
                               return (
-                                <ToolButton
-                                  className="Shape"
-                                  type="radio"
-                                  icon={icon}
-                                  checked={appState.activeTool.type === "eraser"}
-                                  name="editor-current-shape"
+                                <EraserToolPopover
+                                  app={app}
+                                  appState={appState}
+                                  setAppState={setAppState}
                                   title={`${capitalizeString(label)} — ${shortcut}`}
                                   keyBindingLabel={numericKey || letter}
-                                  aria-label={capitalizeString(label)}
-                                  aria-keyshortcuts={shortcut}
                                   data-testid="toolbar-eraser"
-                                  onPointerDown={({ pointerType }) => {
+                                  onTriggerPointerDown={({ pointerType }) => {
                                     if (!app.state.penDetected && pointerType === "pen") {
                                       app.togglePenMode(true);
                                     }
-                                  }}
-                                  onChange={() => {
-                                    if (appState.activeTool.type !== "eraser") {
-                                      trackEvent("toolbar", "eraser", "ui");
-                                    }
-                                    app.setActiveTool({ type: "eraser" });
                                   }}
                                 />
                               );

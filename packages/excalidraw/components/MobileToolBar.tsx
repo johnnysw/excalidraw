@@ -14,12 +14,12 @@ import { useTunnels } from "../context/tunnels";
 import { HandButton } from "./HandButton";
 import { ToolButton } from "./ToolButton";
 import DropdownMenu from "./dropdownMenu/DropdownMenu";
+import EraserToolPopover from "./EraserToolPopover";
 import { ToolPopover } from "./ToolPopover";
 
 import {
   SelectionIcon,
   FreedrawIcon,
-  EraserIcon,
   RectangleIcon,
   ArrowIcon,
   extraToolsIcon,
@@ -248,18 +248,15 @@ export const MobileToolBar = ({
       />
 
       {/* Eraser */}
-      <ToolButton
+      <EraserToolPopover
+        app={app}
+        appState={app.state}
+        setAppState={setAppState as any}
         className={clsx({
           active: activeTool.type === "eraser",
         })}
-        type="radio"
-        icon={EraserIcon}
-        checked={activeTool.type === "eraser"}
-        name="editor-current-shape"
         title={`${capitalizeString(t("toolBar.eraser"))}`}
-        aria-label={capitalizeString(t("toolBar.eraser"))}
         data-testid="toolbar-eraser"
-        onChange={() => handleToolChange("eraser")}
       />
 
       {/* Rectangle */}

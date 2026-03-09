@@ -15,7 +15,7 @@ import type { EditorInterface } from "@excalidraw/common";
 
 import { t } from "../i18n";
 import { getShortcutKey } from "../shortcut";
-import { isEraserActive } from "../appState";
+import { isEraserPathModeActive } from "../appState";
 import { isGridModeEnabled } from "../snapping";
 
 import "./HintViewer.scss";
@@ -57,7 +57,7 @@ const getHints = ({
     return null;
   }
 
-  if (isEraserActive(appState)) {
+  if (isEraserPathModeActive(appState)) {
     return t("hints.eraserRevert", {
       shortcut: getTaggedShortcutKey("Alt"),
     });

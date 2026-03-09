@@ -1,4 +1,7 @@
 import { arrayToMap, easeOut, THEME } from "@excalidraw/common";
+import {
+  elementPartiallyOverlapsWithOrContainsBBox,
+} from "@excalidraw/utils/withinBounds";
 
 import {
   computeBoundTextPosition,
@@ -6,6 +9,7 @@ import {
   getBoundTextElement,
   getElementBounds,
   getElementLineSegments,
+  getElementsWithinSelection,
   getFreedrawOutlineAsSegments,
   getFreedrawOutlinePoints,
   intersectElementWithLineSegment,
@@ -31,13 +35,208 @@ import { getBoundTextElementId } from "@excalidraw/element";
 import type { Bounds } from "@excalidraw/element";
 
 import type { GlobalPoint, LineSegment } from "@excalidraw/math/types";
-import type { ElementsMap, ExcalidrawElement } from "@excalidraw/element/types";
+import type {
+  ElementsMap,
+  ExcalidrawElement,
+  NonDeletedExcalidrawElement,
+} from "@excalidraw/element/types";
 
 import { AnimatedTrail } from "../animated-trail";
 
 import type { AnimationFrameHandler } from "../animation-frame-handler";
+import type { AppState } from "../types";
 
 import type App from "../components/App";
+
+const NON_ERASABLE_CUSTOM_TYPES = new Set([
+  "question",
+  "richTextNode",
+  "questionTagBadge",
+  "practice-question",
+  "mindmap",
+  "paper",
+]);
+
+const NON_ERASABLE_ELEMENT_TYPES = new Set(["frame", "magicframe"]);
+
+export const getErasableElements = <T extends NonDeletedExcalidrawElement>(
+  elements: readonly T[],
+  appState: Pick<
+    AppState,
+    "presentationMode" | "presentationAnnotationSessionId"
+  >,
+) => {
+  return elements.filter((element) => {
+    if (element.locked) {
+      return false;
+    }
+
+    if (appState.presentationMode) {
+      if (element.type !== "freedraw") {
+        return false;
+      }
+
+      if (!appState.presentationAnnotationSessionId) {
+        return false;
+      }
+
+      const annotationSessionId = (element as any).customData?.annotationSessionId;
+      if (annotationSessionId !== appState.presentationAnnotationSessionId) {
+        return false;
+      }
+    }
+
+    if (NON_ERASABLE_ELEMENT_TYPES.has(element.type)) {
+      return false;
+    }
+
+    const customType = (element as any).customData?.type;
+    if (customType && NON_ERASABLE_CUSTOM_TYPES.has(customType)) {
+      return false;
+    }
+
+    return true;
+  });
+};
+
+const addElementToEraseSet = ({
+  element,
+  elementsToErase,
+  groupsToErase,
+  elementsMap,
+}: {
+  element: ExcalidrawElement;
+  elementsToErase: Set<ExcalidrawElement["id"]>;
+  groupsToErase: Set<ExcalidrawElement["id"]>;
+  elementsMap: ElementsMap;
+}) => {
+  const shallowestGroupId = element.groupIds.at(-1);
+
+  if (shallowestGroupId && !groupsToErase.has(shallowestGroupId)) {
+    const elementsInGroup = getElementsInGroup(elementsMap, shallowestGroupId);
+
+    for (const elementInGroup of elementsInGroup) {
+      elementsToErase.add(elementInGroup.id);
+    }
+    groupsToErase.add(shallowestGroupId);
+  }
+
+  if (hasBoundTextElement(element)) {
+    const boundText = getBoundTextElementId(element);
+
+    if (boundText) {
+      elementsToErase.add(boundText);
+    }
+  }
+
+  if (isBoundToContainer(element)) {
+    elementsToErase.add(element.containerId);
+  }
+
+  elementsToErase.add(element.id);
+};
+
+const removeElementFromEraseSet = ({
+  element,
+  elementsToErase,
+  groupsToErase,
+  elementsMap,
+}: {
+  element: ExcalidrawElement;
+  elementsToErase: Set<ExcalidrawElement["id"]>;
+  groupsToErase: Set<ExcalidrawElement["id"]>;
+  elementsMap: ElementsMap;
+}) => {
+  const shallowestGroupId = element.groupIds.at(-1);
+
+  if (shallowestGroupId && groupsToErase.has(shallowestGroupId)) {
+    const elementsInGroup = getElementsInGroup(elementsMap, shallowestGroupId);
+    for (const elementInGroup of elementsInGroup) {
+      elementsToErase.delete(elementInGroup.id);
+    }
+    groupsToErase.delete(shallowestGroupId);
+  }
+
+  if (isBoundToContainer(element)) {
+    elementsToErase.delete(element.containerId);
+  }
+
+  if (hasBoundTextElement(element)) {
+    const boundText = getBoundTextElementId(element);
+
+    if (boundText) {
+      elementsToErase.delete(boundText);
+    }
+  }
+
+  elementsToErase.delete(element.id);
+};
+
+export const collectElementsForErasure = ({
+  elements,
+  elementsMap,
+}: {
+  elements: readonly ExcalidrawElement[];
+  elementsMap: ElementsMap;
+}) => {
+  const elementsToErase = new Set<ExcalidrawElement["id"]>();
+  const groupsToErase = new Set<ExcalidrawElement["id"]>();
+
+  for (const element of elements) {
+    addElementToEraseSet({
+      element,
+      elementsToErase,
+      groupsToErase,
+      elementsMap,
+    });
+  }
+
+  return Array.from(elementsToErase);
+};
+
+export const getElementsToEraseByBBox = ({
+  elements,
+  selectionElement,
+  elementsMap,
+  appState,
+}: {
+  elements: readonly NonDeletedExcalidrawElement[];
+  selectionElement: NonDeletedExcalidrawElement;
+  elementsMap: ElementsMap;
+  appState: Pick<
+    AppState,
+    "presentationMode" | "presentationAnnotationSessionId"
+  >;
+}) => {
+  const candidateElements = getErasableElements(elements, appState);
+  const bounds: Bounds = [
+    selectionElement.x,
+    selectionElement.y,
+    selectionElement.x + selectionElement.width,
+    selectionElement.y + selectionElement.height,
+  ];
+
+  const containedElements = getElementsWithinSelection(
+    candidateElements,
+    selectionElement,
+    elementsMap,
+    false,
+  );
+  const containedElementIds = new Set(containedElements.map((element) => element.id));
+
+  const hitElements = candidateElements.filter((element) => {
+    if (isFreeDrawElement(element)) {
+      return elementPartiallyOverlapsWithOrContainsBBox(element, bounds);
+    }
+
+    return containedElementIds.has(element.id);
+  });
+
+  return collectElementsForErasure({
+    elements: hitElements,
+    elementsMap,
+  });
+};
 
 export class EraserTrail extends AnimatedTrail {
   private elementsToErase: Set<ExcalidrawElement["id"]> = new Set();
@@ -100,55 +299,14 @@ export class EraserTrail extends AnimatedTrail {
       eraserPath[eraserPath.length - 2],
     );
 
-    // 过滤掉锁定的元素和自定义不可擦除的元素
-    const nonErasableTypes = new Set([
-      "question",
-      "richTextNode",
-      "questionTagBadge",
-      "practice-question",
-      "mindmap",
-      "paper",
-    ]);
-    // Frame 类型也不可被擦除
-    const nonErasableElementTypes = new Set([
-      "frame",
-      "magicframe",
-    ]);
-    const isPresentationMode = (this.app.state as any).presentationMode;
-    const presentationAnnotationSessionId = (this.app.state as any)
-      .presentationAnnotationSessionId as string | null | undefined;
-
-    const candidateElements = this.app.visibleElements.filter((el) => {
-      if (el.locked) {
-        return false;
-      }
-      // 在演示模式下，只允许擦除 freedraw 类型的元素（画笔/荧光笔笔迹）
-      if (isPresentationMode && el.type !== "freedraw") {
-        return false;
-      }
-      // 在演示模式下，只允许擦除当前会话新增的标注（通过 customData.annotationSessionId 识别）
-      if (isPresentationMode) {
-        if (!presentationAnnotationSessionId) {
-          return false;
-        }
-        const annotationSessionId = (el as any).customData?.annotationSessionId;
-        if (annotationSessionId !== presentationAnnotationSessionId) {
-          return false;
-        }
-      }
-      // 检查元素类型，阻止擦除 Frame 类型
-      if (nonErasableElementTypes.has(el.type)) {
-        return false;
-      }
-      // 检查 customData.type，阻止擦除特定类型的自定义元素
-      const customType = (el as any).customData?.type;
-      if (customType && nonErasableTypes.has(customType)) {
-        return false;
-      }
-      return true;
+    const candidateElements = getErasableElements(this.app.visibleElements, {
+      presentationMode: this.app.state.presentationMode,
+      presentationAnnotationSessionId:
+        this.app.state.presentationAnnotationSessionId,
     });
 
     const candidateElementsMap = arrayToMap(candidateElements);
+    const sceneElementsMap = this.app.scene.getNonDeletedElementsMap();
 
     for (const element of candidateElements) {
       // restore only if already added to the to-be-erased set
@@ -161,32 +319,12 @@ export class EraserTrail extends AnimatedTrail {
         );
 
         if (intersects) {
-          const shallowestGroupId = element.groupIds.at(-1)!;
-
-          if (this.groupsToErase.has(shallowestGroupId)) {
-            const elementsInGroup = getElementsInGroup(
-              this.app.scene.getNonDeletedElementsMap(),
-              shallowestGroupId,
-            );
-            for (const elementInGroup of elementsInGroup) {
-              this.elementsToErase.delete(elementInGroup.id);
-            }
-            this.groupsToErase.delete(shallowestGroupId);
-          }
-
-          if (isBoundToContainer(element)) {
-            this.elementsToErase.delete(element.containerId);
-          }
-
-          if (hasBoundTextElement(element)) {
-            const boundText = getBoundTextElementId(element);
-
-            if (boundText) {
-              this.elementsToErase.delete(boundText);
-            }
-          }
-
-          this.elementsToErase.delete(element.id);
+          removeElementFromEraseSet({
+            element,
+            elementsToErase: this.elementsToErase,
+            groupsToErase: this.groupsToErase,
+            elementsMap: sceneElementsMap,
+          });
         }
       } else if (!restoreToErase && !this.elementsToErase.has(element.id)) {
         const intersects = eraserTest(
@@ -197,33 +335,12 @@ export class EraserTrail extends AnimatedTrail {
         );
 
         if (intersects) {
-          const shallowestGroupId = element.groupIds.at(-1)!;
-
-          if (!this.groupsToErase.has(shallowestGroupId)) {
-            const elementsInGroup = getElementsInGroup(
-              this.app.scene.getNonDeletedElementsMap(),
-              shallowestGroupId,
-            );
-
-            for (const elementInGroup of elementsInGroup) {
-              this.elementsToErase.add(elementInGroup.id);
-            }
-            this.groupsToErase.add(shallowestGroupId);
-          }
-
-          if (hasBoundTextElement(element)) {
-            const boundText = getBoundTextElementId(element);
-
-            if (boundText) {
-              this.elementsToErase.add(boundText);
-            }
-          }
-
-          if (isBoundToContainer(element)) {
-            this.elementsToErase.add(element.containerId);
-          }
-
-          this.elementsToErase.add(element.id);
+          addElementToEraseSet({
+            element,
+            elementsToErase: this.elementsToErase,
+            groupsToErase: this.groupsToErase,
+            elementsMap: sceneElementsMap,
+          });
         }
       }
     }

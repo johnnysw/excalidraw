@@ -157,6 +157,8 @@ export type ToolType =
   | "laser"
   | "richText";
 
+export type EraserMode = "path" | "box";
+
 export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
 export type ActiveTool =
@@ -336,6 +338,7 @@ export interface AppState {
     type: "selection" | "lasso";
     initialized: boolean;
   };
+  preferredEraserMode: EraserMode;
   penMode: boolean;
   penDetected: boolean;
   exportBackground: boolean;
@@ -891,6 +894,7 @@ export type PointerDownState = Readonly<{
     // It's defined on the initial pointer down event
     onKeyUp: null | ((event: KeyboardEvent) => void);
   };
+  eraserMode: AppState["preferredEraserMode"] | null;
   boxSelection: {
     hasOccurred: boolean;
   };

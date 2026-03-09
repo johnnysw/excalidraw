@@ -68,6 +68,7 @@ export const getDefaultAppState = (): Omit<
       type: "selection",
       initialized: false,
     },
+    preferredEraserMode: "path",
     penMode: false,
     penDetected: false,
     errorMessage: null,
@@ -209,6 +210,7 @@ const APP_STATE_STORAGE_CONF = (<
     editingGroupId: { browser: true, export: false, server: false },
     activeTool: { browser: true, export: false, server: false },
     preferredSelectionTool: { browser: true, export: false, server: false },
+    preferredEraserMode: { browser: true, export: false, server: false },
     penMode: { browser: true, export: false, server: false },
     penDetected: { browser: true, export: false, server: false },
     errorMessage: { browser: false, export: false, server: false },
@@ -332,6 +334,22 @@ export const isEraserActive = ({
 }: {
   activeTool: AppState["activeTool"];
 }) => activeTool.type === "eraser";
+
+export const isEraserPathModeActive = ({
+  activeTool,
+  preferredEraserMode,
+}: {
+  activeTool: AppState["activeTool"];
+  preferredEraserMode: AppState["preferredEraserMode"];
+}) => activeTool.type === "eraser" && preferredEraserMode === "path";
+
+export const isEraserBoxModeActive = ({
+  activeTool,
+  preferredEraserMode,
+}: {
+  activeTool: AppState["activeTool"];
+  preferredEraserMode: AppState["preferredEraserMode"];
+}) => activeTool.type === "eraser" && preferredEraserMode === "box";
 
 export const isHandToolActive = ({
   activeTool,
