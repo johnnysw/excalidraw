@@ -625,6 +625,7 @@ export interface ExcalidrawProps {
     button: "down" | "up";
     pointersMap: Gesture["pointers"];
   }) => void;
+  onEraserPreviewUpdate?: (payload: { elementIds: string[] }) => void;
   onPaste?: (
     data: ClipboardData,
     event: ClipboardEvent | null,

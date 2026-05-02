@@ -7456,7 +7456,14 @@ class App extends React.Component<AppProps, AppState> {
     );
 
     this.elementsPendingErasure = new Set(elementsToErase);
+    this.emitEraserPreviewUpdate();
     this.triggerRender();
+  };
+
+  private emitEraserPreviewUpdate = () => {
+    this.props.onEraserPreviewUpdate?.({
+      elementIds: Array.from(this.elementsPendingErasure),
+    });
   };
 
   private updateElementsPendingErasureForBoxEraser = () => {
@@ -7464,6 +7471,7 @@ class App extends React.Component<AppProps, AppState> {
 
     if (!selectionElement) {
       this.elementsPendingErasure = new Set();
+      this.emitEraserPreviewUpdate();
       this.triggerRender();
       return;
     }
@@ -7480,6 +7488,7 @@ class App extends React.Component<AppProps, AppState> {
         },
       }),
     );
+    this.emitEraserPreviewUpdate();
     this.triggerRender();
   };
 
@@ -11446,6 +11455,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private restoreReadyToEraseElements = () => {
     this.elementsPendingErasure = new Set();
+    this.emitEraserPreviewUpdate();
     this.triggerRender();
   };
 
@@ -11531,6 +11541,7 @@ class App extends React.Component<AppProps, AppState> {
       this.store.scheduleCapture();
       this.scene.replaceAllElements(elements);
     }
+    this.emitEraserPreviewUpdate();
   };
 
   private initializeImage = async (
