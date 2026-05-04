@@ -474,6 +474,17 @@ export const MobileToolBar = ({
           >
             {t("toolBar.mermaidToExcalidraw")}
           </DropdownMenu.Item>
+          {app.props.extraToolsMenuItems?.map((item) => (
+            <DropdownMenu.Item
+              key={item.id}
+              onSelect={item.onSelect}
+              icon={item.icon as any}
+              disabled={item.disabled}
+              data-testid={`toolbar-extra-${item.id}`}
+            >
+              {item.label}
+            </DropdownMenu.Item>
+          ))}
           {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
             <>
               <DropdownMenu.Item

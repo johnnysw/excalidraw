@@ -568,6 +568,14 @@ export type OnUserFollowedPayload = {
   action: "FOLLOW" | "UNFOLLOW";
 };
 
+export interface ExtraToolsMenuItem {
+  id: string;
+  label: React.ReactNode;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  onSelect: () => void;
+}
+
 /**
  * 角色类型
  * teacher: 教师端（完整功能）
@@ -668,6 +676,7 @@ export interface ExcalidrawProps {
     elements: readonly NonDeletedExcalidrawElement[],
     appState: UIAppState,
   ) => JSX.Element;
+  extraToolsMenuItems?: readonly ExtraToolsMenuItem[];
   UIOptions?: Partial<UIOptions>;
   detectScroll?: boolean;
   handleKeyboardGlobally?: boolean;

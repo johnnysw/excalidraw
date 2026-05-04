@@ -59,6 +59,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     showDeprecatedFonts,
     renderScrollbars,
     shareModePermissions,
+    extraToolsMenuItems,
   } = props;
 
   const canvasActions = props.UIOptions?.canvasActions;
@@ -155,6 +156,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           showDeprecatedFonts={showDeprecatedFonts}
           renderScrollbars={renderScrollbars}
           shareModePermissions={shareModePermissions}
+          extraToolsMenuItems={extraToolsMenuItems}
         >
           {children}
         </App>
