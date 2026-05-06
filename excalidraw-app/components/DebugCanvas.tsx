@@ -370,7 +370,6 @@ export const debugRenderer = throttleRAF(
   ) => {
     _debugRenderer(canvas, appState, elements, scale);
   },
-  { trailing: true },
 );
 
 export const loadSavedDebugState = () => {

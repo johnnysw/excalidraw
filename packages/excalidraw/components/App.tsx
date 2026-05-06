@@ -109,6 +109,8 @@ import {
   loadDesktopUIModePreference,
   setDesktopUIMode,
   isSelectionLikeTool,
+  DEFAULT_ELEMENT_PROPS,
+  STROKE_WIDTH,
 } from "@excalidraw/common";
 
 import {
@@ -615,6 +617,7 @@ class App extends React.Component<AppProps, AppState> {
   private stylesPanelMode: StylesPanelMode = deriveStylesPanelMode(
     editorInterfaceContextInitialValue,
   );
+  private hasAppliedFreedrawDefaultStrokeWidth = false;
 
   public excalidrawContainerRef = React.createRef<HTMLDivElement>();
 
@@ -5778,16 +5781,26 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     this.setState((prevState) => {
+      const shouldApplyFreedrawDefaultStrokeWidth =
+        nextActiveTool.type === "freedraw" &&
+        !this.hasAppliedFreedrawDefaultStrokeWidth &&
+        prevState.currentItemStrokeWidth === DEFAULT_ELEMENT_PROPS.strokeWidth;
+
       const commonResets = {
         snapLines: prevState.snapLines.length ? [] : prevState.snapLines,
         originSnapOffset: null,
         activeEmbeddable: null,
+        currentItemStrokeWidth:
+          shouldApplyFreedrawDefaultStrokeWidth
+            ? STROKE_WIDTH.extraThin
+            : prevState.currentItemStrokeWidth,
         selectedLinearElement: isSelectionLikeTool(nextActiveTool.type)
           ? prevState.selectedLinearElement
           : null,
       } as const;
 
       if (nextActiveTool.type === "freedraw") {
+        this.hasAppliedFreedrawDefaultStrokeWidth = true;
         this.store.scheduleCapture();
       }
 

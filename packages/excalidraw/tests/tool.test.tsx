@@ -1,6 +1,10 @@
 import React from "react";
 
-import { resolvablePromise } from "@excalidraw/common";
+import {
+  DEFAULT_ELEMENT_PROPS,
+  resolvablePromise,
+  STROKE_WIDTH,
+} from "@excalidraw/common";
 
 import { Excalidraw } from "../index";
 
@@ -20,6 +24,7 @@ describe("setActiveTool()", () => {
     const excalidrawAPIPromise = resolvablePromise<ExcalidrawImperativeAPI>();
     await render(
       <Excalidraw
+        role="teacher"
         excalidrawAPI={(api) => excalidrawAPIPromise.resolve(api as any)}
       />,
     );
@@ -42,6 +47,39 @@ describe("setActiveTool()", () => {
     mouse.up(20, 20);
 
     expect(h.state.activeTool.type).toBe("selection");
+  });
+
+  it("should use extra thin stroke width by default for freedraw", async () => {
+    expect(h.state.currentItemStrokeWidth).toBe(
+      DEFAULT_ELEMENT_PROPS.strokeWidth,
+    );
+
+    act(() => {
+      excalidrawAPI.setActiveTool({ type: "freedraw" });
+    });
+
+    expect(h.state.activeTool.type).toBe("freedraw");
+    expect(h.state.currentItemStrokeWidth).toBe(STROKE_WIDTH.extraThin);
+  });
+
+  it("should not overwrite a custom freedraw stroke width after applying the default", async () => {
+    act(() => {
+      excalidrawAPI.setActiveTool({ type: "freedraw" });
+    });
+    expect(h.state.currentItemStrokeWidth).toBe(STROKE_WIDTH.extraThin);
+
+    act(() => {
+      excalidrawAPI.updateScene({
+        appState: { currentItemStrokeWidth: DEFAULT_ELEMENT_PROPS.strokeWidth },
+      });
+      excalidrawAPI.setActiveTool({ type: "selection" });
+      excalidrawAPI.setActiveTool({ type: "freedraw" });
+    });
+
+    expect(h.state.activeTool.type).toBe("freedraw");
+    expect(h.state.currentItemStrokeWidth).toBe(
+      DEFAULT_ELEMENT_PROPS.strokeWidth,
+    );
   });
 
   it("should support tool locking", async () => {

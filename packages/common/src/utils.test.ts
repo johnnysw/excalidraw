@@ -2,7 +2,9 @@ import {
   isTransparent,
   mapFind,
   reduceToCommonValue,
+  throttleRAF,
 } from "@excalidraw/common";
+import { vi } from "vitest";
 
 describe("@excalidraw/common/utils", () => {
   describe("isTransparent()", () => {
@@ -77,6 +79,74 @@ describe("@excalidraw/common/utils", () => {
     it("should return undefined if no mapped element is found", () => {
       expect(mapFind([1, 2], () => undefined)).toBe(undefined);
       expect(mapFind([1, 2], () => null)).toBe(undefined);
+    });
+  });
+
+  describe("throttleRAF()", () => {
+    let rafCallbacks: FrameRequestCallback[] = [];
+    let rafId = 0;
+
+    beforeEach(() => {
+      vi.stubEnv("MODE", "development");
+      rafCallbacks = [];
+      rafId = 0;
+
+      vi.spyOn(window, "requestAnimationFrame").mockImplementation(
+        (callback: FrameRequestCallback) => {
+          rafCallbacks.push(callback);
+          return ++rafId;
+        },
+      );
+      vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      vi.unstubAllEnvs();
+      vi.restoreAllMocks();
+    });
+
+    const runAnimationFrame = () => {
+      const callbacks = [...rafCallbacks];
+      rafCallbacks = [];
+      callbacks.forEach((callback) => callback(performance.now()));
+    };
+
+    it("should execute with the latest args from a RAF window", () => {
+      const fn = vi.fn();
+      const throttled = throttleRAF(fn);
+
+      throttled("first");
+      throttled("latest");
+
+      expect(fn).not.toHaveBeenCalled();
+
+      runAnimationFrame();
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith("latest");
+    });
+
+    it("should flush with the latest args", () => {
+      const fn = vi.fn();
+      const throttled = throttleRAF(fn);
+
+      throttled("first");
+      throttled("latest");
+      throttled.flush();
+
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(fn).toHaveBeenCalledWith("latest");
+    });
+
+    it("should cancel a queued frame", () => {
+      const fn = vi.fn();
+      const throttled = throttleRAF(fn);
+
+      throttled("cancelled");
+      throttled.cancel();
+      runAnimationFrame();
+
+      expect(fn).not.toHaveBeenCalled();
     });
   });
 });
