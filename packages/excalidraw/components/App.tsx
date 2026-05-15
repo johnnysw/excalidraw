@@ -607,6 +607,13 @@ const gesture: Gesture = {
   initialScale: null,
 };
 
+const resetGestureState = () => {
+  gesture.pointers.clear();
+  gesture.lastCenter = null;
+  gesture.initialDistance = null;
+  gesture.initialScale = null;
+};
+
 class App extends React.Component<AppProps, AppState> {
   canvas: AppClassProperties["canvas"];
   interactiveCanvas: AppClassProperties["interactiveCanvas"] = null;
@@ -3042,6 +3049,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private onBlur = withBatchedUpdates(() => {
     isHoldingSpace = false;
+    resetGestureState();
     this.setState({ isBindingEnabled: true });
   });
 
@@ -3450,6 +3458,12 @@ class App extends React.Component<AppProps, AppState> {
       addEventListener(document, EVENT.POINTER_UP, this.removePointer, {
         passive: false,
       }), // #3553
+      addEventListener(document, "pointercancel", this.removePointer, {
+        passive: false,
+      }),
+      addEventListener(document, "lostpointercapture", this.removePointer, {
+        passive: false,
+      }),
       addEventListener(document, EVENT.COPY, this.onCopy, { passive: false }),
       addEventListener(document, EVENT.KEYUP, this.onKeyUp, { passive: true }),
       addEventListener(
@@ -4494,6 +4508,11 @@ class App extends React.Component<AppProps, AppState> {
     }
 
     gesture.pointers.delete(event.pointerId);
+    if (gesture.pointers.size < 2) {
+      gesture.lastCenter = null;
+      gesture.initialDistance = null;
+      gesture.initialScale = null;
+    }
   };
 
   toggleLock = (source: "keyboard" | "ui" = "ui") => {
@@ -7617,6 +7636,20 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerDown = (
     event: React.PointerEvent<HTMLElement>,
   ) => {
+    if (this.state.penMode && this.state.activeTool.type === "freedraw") {
+      if (event.pointerType === "touch") {
+        // Treat touch contacts during pen freedraw as palm input. Adding them to
+        // the gesture map can leave Excalidraw in a stuck pinch/pan state when
+        // the device suppresses the matching pointerup.
+        event.preventDefault();
+        return;
+      }
+
+      if (event.pointerType === "pen") {
+        resetGestureState();
+      }
+    }
+
     const scenePointer = viewportCoordsToSceneCoords(event, this.state);
     const { x: scenePointerX, y: scenePointerY } = scenePointer;
     this.lastPointerMoveCoords = {
