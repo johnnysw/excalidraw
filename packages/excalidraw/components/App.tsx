@@ -460,6 +460,7 @@ import {
   PlayIcon,
   PresenterModeIcon,
   Presentation05Icon,
+  SlideBackgroundIcon,
   pencilIcon,
   ListOrderedIcon,
 } from "./icons";
@@ -2429,6 +2430,24 @@ class App extends React.Component<AppProps, AppState> {
                                     .filter((el) => isFrameElement(el)).length
                                 }
                                 onOrderChange={updateFrameSlideOrder}
+                              />
+                              <ElementCanvasButton
+                                title="Frame 设置"
+                                icon={SlideBackgroundIcon}
+                                checked={false}
+                                onChange={() => {
+                                  const event = new CustomEvent(
+                                    "excalidraw:editSlideBackground",
+                                    {
+                                      detail: {
+                                        frameId: firstSelectedElement.id,
+                                        mode: "master",
+                                      },
+                                      bubbles: true,
+                                    },
+                                  );
+                                  document.dispatchEvent(event);
+                                }}
                               />
                             </ElementCanvasButtons>
                           )}

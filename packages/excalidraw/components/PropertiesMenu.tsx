@@ -10,6 +10,7 @@ import {
   useExcalidrawElements,
   useExcalidrawActionManager,
   useExcalidrawSetAppState,
+  useAppProps,
 } from "./App";
 import { getSelectedElements, getTargetElements } from "../scene";
 import {
@@ -123,6 +124,7 @@ const QUESTION_SHADOW_TOP_PICKS = [
 
 export const PropertiesMenu: React.FC = () => {
   const app = useApp();
+  const appProps = useAppProps();
   const elements = useExcalidrawElements();
   const actionManager = useExcalidrawActionManager();
   const setAppState = useExcalidrawSetAppState();
@@ -277,8 +279,14 @@ export const PropertiesMenu: React.FC = () => {
     isImageElement(targetElements[0]);
 
   if (targetElements.length === 0 && !isFreedrawToolActive) {
+    const emptyPanelContent = appProps.renderEmptyPropertiesPanel?.();
     return (
       <div className="PropertiesMenu">
+        {emptyPanelContent ? (
+          <div className="PropertiesMenu__empty-extra">
+            {emptyPanelContent}
+          </div>
+        ) : null}
         <div className="PropertiesMenu__empty">
           <Icon icon="hugeicons:cursor-02" width={48} height={48} style={{ color: '#9ca3af', marginBottom: 12 }} />
           <p>未选中元素</p>

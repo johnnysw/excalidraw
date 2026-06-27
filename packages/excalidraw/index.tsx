@@ -32,6 +32,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     onEraserPreviewUpdate,
     renderTopLeftUI,
     renderTopRightUI,
+    renderEmptyPropertiesPanel,
     langCode = defaultLang.code,
     viewModeEnabled,
     zenModeEnabled,
@@ -129,6 +130,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onEraserPreviewUpdate={onEraserPreviewUpdate}
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
+          renderEmptyPropertiesPanel={renderEmptyPropertiesPanel}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}
           zenModeEnabled={zenModeEnabled}

@@ -20,6 +20,7 @@ import {
   distance,
   getFontString,
   isRTL,
+  isTransparent,
   getVerticalOffset,
   invariant,
 } from "@excalidraw/common";
@@ -407,6 +408,45 @@ const drawImagePlaceholder = (
   );
 };
 
+const isSlideBackgroundSolidEllipse = (
+  element: NonDeletedExcalidrawElement,
+) =>
+  element.type === "ellipse" &&
+  element.customData?.type === "slideBackground" &&
+  (element.fillStyle || "solid") === "solid" &&
+  !isTransparent(element.backgroundColor);
+
+const drawSlideBackgroundSolidEllipse = (
+  element: NonDeletedExcalidrawElement,
+  context: CanvasRenderingContext2D,
+) => {
+  if (!isSlideBackgroundSolidEllipse(element)) {
+    return;
+  }
+
+  context.save();
+  context.fillStyle = element.backgroundColor;
+  context.beginPath();
+  context.ellipse(
+    element.width / 2,
+    element.height / 2,
+    element.width / 2,
+    element.height / 2,
+    0,
+    0,
+    Math.PI * 2,
+  );
+  context.fill();
+
+  if (!isTransparent(element.strokeColor) && element.strokeWidth > 0) {
+    context.strokeStyle = element.strokeColor;
+    context.lineWidth = element.strokeWidth;
+    context.setLineDash([]);
+    context.stroke();
+  }
+  context.restore();
+};
+
 const drawElementOnCanvas = (
   element: NonDeletedExcalidrawElement,
   rc: RoughCanvas,
@@ -421,7 +461,11 @@ const drawElementOnCanvas = (
     case "ellipse": {
       context.lineJoin = "round";
       context.lineCap = "round";
-      rc.draw(ShapeCache.get(element)!);
+      if (isSlideBackgroundSolidEllipse(element)) {
+        drawSlideBackgroundSolidEllipse(element, context);
+      } else {
+        rc.draw(ShapeCache.get(element)!);
+      }
       break;
     }
     case "arrow":
@@ -758,6 +802,7 @@ const generateElementWithCanvas = (
 
   if (
     !prevElementWithCanvas ||
+    isSlideBackgroundSolidEllipse(element) ||
     shouldRegenerateBecauseZoom ||
     prevElementWithCanvas.theme !== appState.theme ||
     prevElementWithCanvas.boundTextElementVersion !== boundTextElementVersion ||

@@ -260,7 +260,8 @@
         }
     }
 
-    &__note-btn {
+    &__note-btn,
+    &__background-btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -294,7 +295,18 @@
                 color: #fff;
             }
         }
+    }
 
+    &__background-btn {
+        color: var(--color-primary);
+
+        svg {
+            width: 14px;
+            height: 14px;
+        }
+    }
+
+    &__note-btn {
         .PresentationMenu__note-icon {
             position: relative;
             width: 14px;

@@ -418,6 +418,13 @@ export interface AppState {
   animationProgress: number;
   /** custom slide order (frame ids) used by presentation mode */
   slideOrder?: string[];
+  /** host-specific question element rendering settings */
+  questionElementSettings?: {
+    showQuestionCardBorder?: boolean;
+    showQuestionMetadataBadge?: boolean;
+    applyFrameMasterToNewQuestionFrames?: boolean;
+    currentFrameMasterTemplateId?: string;
+  };
   /** presenter notes per frame */
   slideNotes?: Record<string, string>;
   theme: Theme;
@@ -662,6 +669,7 @@ export interface ExcalidrawProps {
     isMobile: boolean,
     appState: UIAppState,
   ) => JSX.Element | null;
+  renderEmptyPropertiesPanel?: () => React.ReactNode;
   langCode?: Language["code"];
   viewModeEnabled?: boolean;
   zenModeEnabled?: boolean;

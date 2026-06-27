@@ -3,6 +3,7 @@ import {
   MIME_TYPES,
   SVG_NS,
   getFontFamilyString,
+  isTransparent,
   isRTL,
   isTestEnv,
   getVerticalOffset,
@@ -59,6 +60,35 @@ const roughSVGDrawWithPrecision = (
     options: { ...drawable.options, fixedDecimalPlaceDigits: precision },
   };
   return rsvg.draw(pshape);
+};
+
+const isSlideBackgroundSolidEllipse = (
+  element: NonDeletedExcalidrawElement,
+) =>
+  element.type === "ellipse" &&
+  element.customData?.type === "slideBackground" &&
+  (element.fillStyle || "solid") === "solid" &&
+  !isTransparent(element.backgroundColor);
+
+const createSlideBackgroundSolidEllipseSvgNode = (
+  element: NonDeletedExcalidrawElement,
+  svgRoot: SVGElement,
+) => {
+  const node = svgRoot.ownerDocument!.createElementNS(SVG_NS, "ellipse");
+  node.setAttribute("cx", `${element.width / 2}`);
+  node.setAttribute("cy", `${element.height / 2}`);
+  node.setAttribute("rx", `${element.width / 2}`);
+  node.setAttribute("ry", `${element.height / 2}`);
+  node.setAttribute("fill", element.backgroundColor);
+
+  if (!isTransparent(element.strokeColor) && element.strokeWidth > 0) {
+    node.setAttribute("stroke", element.strokeColor);
+    node.setAttribute("stroke-width", `${element.strokeWidth}`);
+  } else {
+    node.setAttribute("stroke", "none");
+  }
+
+  return node;
 };
 
 const maybeWrapNodesInFrameClipPath = (
@@ -146,12 +176,16 @@ const renderElementToSvg = (
     case "rectangle":
     case "diamond":
     case "ellipse": {
-      const shape = ShapeCache.generateElementShape(element, null);
-      const node = roughSVGDrawWithPrecision(
-        rsvg,
-        shape,
-        MAX_DECIMALS_FOR_SVG_EXPORT,
-      );
+      let node: SVGElement;
+      if (isSlideBackgroundSolidEllipse(element)) {
+        node = createSlideBackgroundSolidEllipseSvgNode(element, svgRoot);
+      } else {
+        node = roughSVGDrawWithPrecision(
+          rsvg,
+          ShapeCache.generateElementShape(element, null),
+          MAX_DECIMALS_FOR_SVG_EXPORT,
+        );
+      }
       if (opacity !== 1) {
         node.setAttribute("stroke-opacity", `${opacity}`);
         node.setAttribute("fill-opacity", `${opacity}`);

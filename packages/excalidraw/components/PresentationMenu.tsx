@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo, useRef } from "react"
 import { useApp, useExcalidrawElements, useExcalidrawSetAppState } from "./App";
 import { isFrameLikeElement } from "@excalidraw/element";
 import { exportToCanvas } from "../scene/export";
-import { PlayIcon, PresenterModeIcon, Presentation05Icon, Comment01Icon, save } from "./icons";
+import { PlayIcon, PresenterModeIcon, Presentation05Icon, Comment01Icon, SlideBackgroundIcon, save } from "./icons";
 import "./PresentationMenu.scss";
 import clsx from "clsx";
 import { useTunnels } from "../context/tunnels";
@@ -530,6 +530,14 @@ const PresentationMenuContent: React.FC = () => {
         document.dispatchEvent(event);
     }, [getFrameSlideNoteHtml]);
 
+    const handleEditBackground = useCallback((slideId: string) => {
+        const event = new CustomEvent("excalidraw:editSlideBackground", {
+            detail: { frameId: slideId, mode: "master" },
+            bubbles: true,
+        });
+        document.dispatchEvent(event);
+    }, []);
+
     // Start presentation
     const startPresentation = useCallback(() => {
         if (orderedSlides.length === 0) return;
@@ -737,6 +745,16 @@ const PresentationMenuContent: React.FC = () => {
                                         {PresenterModeIcon}
                                     </button>
                                 )}
+                                <button
+                                    className="PresentationMenu__background-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditBackground(slide.id);
+                                    }}
+                                    title="Frame 设置"
+                                >
+                                    {SlideBackgroundIcon}
+                                </button>
                                 <button
                                     className="PresentationMenu__note-btn"
                                     onClick={(e) => {
