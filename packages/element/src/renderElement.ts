@@ -131,7 +131,7 @@ const isHandDrawnFontFamily = (fontFamily: number) =>
 
 const getSyntheticBoldStrokeWidth = (fontSize: number, fontFamily: number) =>
   isHandDrawnFontFamily(fontFamily)
-    ? Math.min(1.1, Math.max(0.4, fontSize * 0.035))
+    ? Math.min(0.6, Math.max(0.2, fontSize * 0.018))
     : Math.min(1.9, Math.max(0.6, fontSize * 0.05));
 
 const fillTextWithWeight = (
