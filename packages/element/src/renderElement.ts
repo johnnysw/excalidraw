@@ -14,6 +14,7 @@ import {
   BOUND_TEXT_PADDING,
   DEFAULT_REDUCED_GLOBAL_ALPHA,
   ELEMENT_READY_TO_ERASE_OPACITY,
+  FONT_FAMILY,
   FRAME_STYLE,
   MIME_TYPES,
   THEME,
@@ -123,6 +124,32 @@ const getCanvasPadding = (element: ExcalidrawElement) => {
     default:
       return 20;
   }
+};
+
+const isHandDrawnFontFamily = (fontFamily: number) =>
+  fontFamily === FONT_FAMILY.Virgil || fontFamily === FONT_FAMILY.Excalifont;
+
+const getSyntheticBoldStrokeWidth = (fontSize: number, fontFamily: number) =>
+  isHandDrawnFontFamily(fontFamily)
+    ? Math.min(1.1, Math.max(0.4, fontSize * 0.035))
+    : Math.min(1.9, Math.max(0.6, fontSize * 0.05));
+
+const fillTextWithWeight = (
+  context: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  fontSize: number,
+  fontFamily: number,
+  fontWeight: ExcalidrawTextElement["fontWeight"],
+  fillStyle: string,
+) => {
+  if (fontWeight === "bold") {
+    context.lineWidth = getSyntheticBoldStrokeWidth(fontSize, fontFamily);
+    context.strokeStyle = fillStyle;
+    context.strokeText(text, x, y);
+  }
+  context.fillText(text, x, y);
 };
 
 export const getRenderOpacity = (
@@ -639,6 +666,22 @@ const drawElementOnCanvas = (
               return fontFamily;
             };
 
+            const getFontWeightForIndex = (
+              index: number,
+            ): ExcalidrawTextElement["fontWeight"] => {
+              let fontWeight = element.fontWeight || "normal";
+              for (const range of textStyleRanges) {
+                if (
+                  index >= range.start &&
+                  index < range.end &&
+                  range.fontWeight != null
+                ) {
+                  fontWeight = range.fontWeight;
+                }
+              }
+              return fontWeight;
+            };
+
             const getTextOutlineWidthForIndex = (index: number): number => {
               let width = element.textOutlineWidth;
               for (const range of textStyleRanges) {
@@ -684,6 +727,7 @@ const drawElementOnCanvas = (
             let currentColor = getColorForIndex(globalCharIndex);
             let currentFontSize = getFontSizeForIndex(globalCharIndex);
             let currentFontFamily = getFontFamilyForIndex(globalCharIndex);
+            let currentFontWeight = getFontWeightForIndex(globalCharIndex);
             let currentTextOutlineWidth =
               getTextOutlineWidthForIndex(globalCharIndex);
             let currentTextOutlineColor =
@@ -700,6 +744,7 @@ const drawElementOnCanvas = (
                       color: getColorForIndex(globalIdx),
                       fontSize: getFontSizeForIndex(globalIdx),
                       fontFamily: getFontFamilyForIndex(globalIdx),
+                      fontWeight: getFontWeightForIndex(globalIdx),
                       textOutlineWidth: getTextOutlineWidthForIndex(globalIdx),
                       textOutlineColor: getTextOutlineColorForIndex(globalIdx),
                     }
@@ -710,6 +755,7 @@ const drawElementOnCanvas = (
                 (nextStyle.color !== currentColor ||
                   nextStyle.fontSize !== currentFontSize ||
                   nextStyle.fontFamily !== currentFontFamily ||
+                  nextStyle.fontWeight !== currentFontWeight ||
                   nextStyle.textOutlineWidth !== currentTextOutlineWidth ||
                   nextStyle.textOutlineColor !== currentTextOutlineColor);
 
@@ -721,6 +767,7 @@ const drawElementOnCanvas = (
                   context.font = getFontString({
                     fontSize: currentFontSize,
                     fontFamily: currentFontFamily,
+                    fontWeight: currentFontWeight,
                   });
 
                   if (currentTextOutlineWidth > 0) {
@@ -730,7 +777,16 @@ const drawElementOnCanvas = (
                   }
 
                   context.fillStyle = currentColor;
-                  context.fillText(segment, currentX, lineY);
+                  fillTextWithWeight(
+                    context,
+                    segment,
+                    currentX,
+                    lineY,
+                    currentFontSize,
+                    currentFontFamily,
+                    currentFontWeight,
+                    currentColor,
+                  );
                   currentX += context.measureText(segment).width;
                 }
 
@@ -739,6 +795,7 @@ const drawElementOnCanvas = (
                   currentColor = nextStyle.color;
                   currentFontSize = nextStyle.fontSize;
                   currentFontFamily = nextStyle.fontFamily;
+                  currentFontWeight = nextStyle.fontWeight;
                   currentTextOutlineWidth = nextStyle.textOutlineWidth;
                   currentTextOutlineColor = nextStyle.textOutlineColor;
                 }
@@ -755,7 +812,16 @@ const drawElementOnCanvas = (
               context.strokeText(line, horizontalOffset, lineY);
             }
 
-            context.fillText(line, horizontalOffset, lineY);
+            fillTextWithWeight(
+              context,
+              line,
+              horizontalOffset,
+              lineY,
+              element.fontSize,
+              element.fontFamily,
+              element.fontWeight,
+              element.strokeColor,
+            );
           }
 
           // Update global char index (add line length + 1 for newline character)

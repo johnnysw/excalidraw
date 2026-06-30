@@ -321,6 +321,7 @@ export const DEFAULT_UI_OPTIONS: AppProps["UIOptions"] = {
     saveToActiveFile: true,
     toggleTheme: null,
     saveAsImage: true,
+    changeFontWeight: true,
   },
   tools: {
     image: true,

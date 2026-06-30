@@ -25,7 +25,8 @@ export const measureText = (
     // lines would be stripped from computation
     .map((x) => x || " ")
     .join("\n");
-  const fontSize = parseFloat(font);
+  const fontSizeMatch = font.match(/(\d+(?:\.\d+)?)px/);
+  const fontSize = fontSizeMatch ? parseFloat(fontSizeMatch[1]) : parseFloat(font);
   const height = getTextHeight(_text, fontSize, lineHeight);
   const width = getTextWidth(_text, font);
   return { width, height };
@@ -37,11 +38,16 @@ export const measureTextWithStyleRanges = (
   baseFontFamily: FontFamilyValues,
   lineHeight: ExcalidrawTextElement["lineHeight"],
   textStyleRanges?: readonly TextStyleRange[],
+  baseFontWeight: ExcalidrawTextElement["fontWeight"] = "normal",
 ) => {
   if (!textStyleRanges || textStyleRanges.length === 0) {
     return measureText(
       text,
-      getFontString({ fontSize: baseFontSize, fontFamily: baseFontFamily }),
+      getFontString({
+        fontSize: baseFontSize,
+        fontFamily: baseFontFamily,
+        fontWeight: baseFontWeight,
+      }),
       lineHeight,
     );
   }
@@ -55,6 +61,7 @@ export const measureTextWithStyleRanges = (
   const getStyleAt = (index: number) => {
     let fontSize = baseFontSize;
     let fontFamily = baseFontFamily;
+    let fontWeight = baseFontWeight;
     for (const range of textStyleRanges) {
       if (index >= range.start && index < range.end) {
         if (range.fontSize != null) {
@@ -63,9 +70,12 @@ export const measureTextWithStyleRanges = (
         if (range.fontFamily != null) {
           fontFamily = range.fontFamily;
         }
+        if (range.fontWeight != null) {
+          fontWeight = range.fontWeight;
+        }
       }
     }
-    return { fontSize, fontFamily };
+    return { fontSize, fontFamily, fontWeight };
   };
 
   for (const rawLine of lines) {
@@ -76,6 +86,7 @@ export const measureTextWithStyleRanges = (
       const font = getFontString({
         fontSize: baseFontSize,
         fontFamily: baseFontFamily,
+        fontWeight: baseFontWeight,
       });
       maxWidth = Math.max(maxWidth, getLineWidth(" ", font));
       totalHeight += getLineHeightInPx(baseFontSize, lineHeight);
@@ -94,12 +105,14 @@ export const measureTextWithStyleRanges = (
       const nextStyle = getStyleAt(global);
       if (
         nextStyle.fontSize !== currentStyle.fontSize ||
-        nextStyle.fontFamily !== currentStyle.fontFamily
+        nextStyle.fontFamily !== currentStyle.fontFamily ||
+        nextStyle.fontWeight !== currentStyle.fontWeight
       ) {
         const segmentText = rawLine.slice(segmentStart, localIndex);
         const segmentFont = getFontString({
           fontSize: currentStyle.fontSize,
           fontFamily: currentStyle.fontFamily,
+          fontWeight: currentStyle.fontWeight,
         });
         width += getLineWidth(segmentText, segmentFont);
         segmentStart = localIndex;
@@ -112,6 +125,7 @@ export const measureTextWithStyleRanges = (
     const tailFont = getFontString({
       fontSize: currentStyle.fontSize,
       fontFamily: currentStyle.fontFamily,
+      fontWeight: currentStyle.fontWeight,
     });
     width += getLineWidth(tailText, tailFont);
 

@@ -110,11 +110,13 @@ export const getFontFamilyString = ({
 export const getFontString = ({
   fontSize,
   fontFamily,
+  fontWeight,
 }: {
   fontSize: number;
   fontFamily: FontFamilyValues;
+  fontWeight?: "normal" | "bold";
 }) => {
-  return `${fontSize}px ${getFontFamilyString({ fontFamily })}` as FontString;
+  return `${fontWeight === "bold" ? "900 " : ""}${fontSize}px ${getFontFamilyString({ fontFamily })}` as FontString;
 };
 
 /** executes callback in the frame that's after the current one */

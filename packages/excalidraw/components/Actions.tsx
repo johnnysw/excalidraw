@@ -229,6 +229,7 @@ export const SelectedShapeActions = ({
           {renderAction("changeTextOutlineColor")}
           {renderAction("changeTextOutlineWidth")}
           {renderAction("changeFontFamily")}
+          {renderAction("changeFontWeight")}
           {renderAction("changeFontSize")}
           {(appState.activeTool.type === "text" ||
             suppportsHorizontalAlign(targetElements, elementsMap)) &&
@@ -609,6 +610,7 @@ const CombinedTextProperties = ({
               {(appState.activeTool.type === "text" ||
                 targetElements.some(isTextElement)) && (
                 <>
+                  {renderAction("changeFontWeight")}
                   {renderAction("changeFontSize")}
                 </>
               )}
@@ -887,6 +889,9 @@ export const CompactShapeActions = ({
           <div className="compact-action-item">
             {renderAction("changeFontFamily")}
           </div>
+          <div className="compact-action-item">
+            {renderAction("changeFontWeight")}
+          </div>
           <CombinedTextProperties
             appState={appState}
             renderAction={renderAction}
@@ -1021,6 +1026,9 @@ export const MobileShapeActions = ({
           <>
             <div className="compact-action-item">
               {renderAction("changeFontFamily")}
+            </div>
+            <div className="compact-action-item">
+              {renderAction("changeFontWeight")}
             </div>
             <CombinedTextProperties
               appState={appState}

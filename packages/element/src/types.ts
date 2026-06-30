@@ -275,6 +275,8 @@ export type TextStyleRange = {
   fontSize?: number;
   /** Font family for this range. If omitted, falls back to element.fontFamily. */
   fontFamily?: FontFamilyValues;
+  /** Font weight for this range. If omitted, falls back to element.fontWeight. */
+  fontWeight?: "normal" | "bold";
   textOutlineColor?: string;
   textOutlineWidth?: number;
 };
@@ -291,6 +293,7 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
     type: "text";
     fontSize: number;
     fontFamily: FontFamilyValues;
+    fontWeight?: "normal" | "bold";
     text: string;
     textAlign: TextAlign;
     verticalAlign: VerticalAlign;

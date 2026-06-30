@@ -329,6 +329,10 @@ export const restoreElement = (
         fontFamily = getFontFamilyByName(_fontFamily);
       }
       const text = (typeof element.text === "string" && element.text) || "";
+      const fontWeight =
+        (element as ExcalidrawTextElement).fontWeight === "bold"
+          ? "bold"
+          : "normal";
 
       // line-height might not be specified either when creating elements
       // programmatically, or when importing old diagrams.
@@ -346,6 +350,7 @@ export const restoreElement = (
       element = restoreElementWithProperties(element, {
         fontSize,
         fontFamily,
+        fontWeight,
         text,
         textAlign: element.textAlign || DEFAULT_TEXT_ALIGN,
         verticalAlign: element.verticalAlign || DEFAULT_VERTICAL_ALIGN,

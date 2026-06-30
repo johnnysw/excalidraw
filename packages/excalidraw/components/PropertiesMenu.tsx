@@ -463,6 +463,16 @@ export const PropertiesMenu: React.FC = () => {
         </div>
       )}
 
+      {/* 加粗 */}
+      {canEditTextProps && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">加粗</div>
+          <div className="PropertiesMenu__actions">
+            {actionManager.renderAction("changeFontWeight")}
+          </div>
+        </div>
+      )}
+
       {/* 字体大小 */}
       {canEditTextProps && (
         <div className="PropertiesMenu__section">

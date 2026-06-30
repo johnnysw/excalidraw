@@ -760,6 +760,7 @@ export type CanvasActions = Partial<{
   saveToActiveFile: boolean;
   toggleTheme: boolean | null;
   saveAsImage: boolean;
+  changeFontWeight: boolean;
 }>;
 
 export type UIOptions = Partial<{

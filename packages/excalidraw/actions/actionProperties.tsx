@@ -162,6 +162,8 @@ import type { AppClassProperties, AppState, Primitive } from "../types";
 
 const FONT_SIZE_RELATIVE_INCREASE_STEP = 0.1;
 
+const TextBoldIcon = <span style={{ fontWeight: 800, fontSize: 15 }}>B</span>;
+
 const CUSTOM_STROKE_PICKS = [
   COLOR_PALETTE.transparent,
   COLOR_PALETTE.black,
@@ -416,6 +418,7 @@ const applyColorToRichTextRange = (
 type TextStylePropKey =
   | "fontSize"
   | "fontFamily"
+  | "fontWeight"
   | "textOutlineColor"
   | "textOutlineWidth";
 
@@ -462,6 +465,7 @@ const applyTextStylePropToRange = <K extends TextStylePropKey>(
           middleRange.color !== undefined ||
           middleRange.fontSize !== undefined ||
           middleRange.fontFamily !== undefined ||
+          middleRange.fontWeight !== undefined ||
           middleRange.textOutlineColor !== undefined ||
           middleRange.textOutlineWidth !== undefined
         ) {
@@ -535,6 +539,7 @@ const applyTextStylePropToRange = <K extends TextStylePropKey>(
       last.color === range.color &&
       last.fontSize === range.fontSize &&
       last.fontFamily === range.fontFamily &&
+      last.fontWeight === range.fontWeight &&
       last.textOutlineColor === range.textOutlineColor &&
       last.textOutlineWidth === range.textOutlineWidth
     ) {
@@ -579,6 +584,63 @@ const applyFontFamilyToRange = (
     fontFamily,
     defaultFontFamily,
   );
+};
+
+const applyFontWeightToRange = (
+  existingRanges: readonly TextStyleRange[] | undefined,
+  start: number,
+  end: number,
+  fontWeight: ExcalidrawTextElement["fontWeight"],
+  defaultFontWeight: ExcalidrawTextElement["fontWeight"],
+): TextStyleRange[] => {
+  return applyTextStylePropToRange(
+    existingRanges,
+    start,
+    end,
+    "fontWeight",
+    fontWeight,
+    defaultFontWeight,
+  );
+};
+
+const normalizeFontWeight = (
+  fontWeight: ExcalidrawTextElement["fontWeight"],
+): ExcalidrawTextElement["fontWeight"] =>
+  fontWeight === "bold" ? "bold" : "normal";
+
+const getFontWeightAtIndex = (
+  element: ExcalidrawTextElement,
+  index: number,
+): ExcalidrawTextElement["fontWeight"] => {
+  let fontWeight = normalizeFontWeight(element.fontWeight);
+  for (const range of element.textStyleRanges || []) {
+    if (index >= range.start && index < range.end && range.fontWeight) {
+      fontWeight = normalizeFontWeight(range.fontWeight);
+    }
+  }
+  return fontWeight;
+};
+
+const getSelectionFontWeight = (
+  element: ExcalidrawTextElement,
+  start: number,
+  end: number,
+): ExcalidrawTextElement["fontWeight"] | null => {
+  if (start === end) {
+    return getFontWeightAtIndex(
+      element,
+      Math.max(0, Math.min(start, element.originalText.length - 1)),
+    );
+  }
+
+  const weights = new Set<ExcalidrawTextElement["fontWeight"]>();
+  for (let index = start; index < end; index++) {
+    weights.add(getFontWeightAtIndex(element, index));
+    if (weights.size > 1) {
+      return null;
+    }
+  }
+  return weights.values().next().value ?? normalizeFontWeight(element.fontWeight);
 };
 
  const applyTextOutlineColorToRange = (
@@ -1360,6 +1422,7 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
                 editingElement.fontFamily,
                 editingElement.lineHeight,
                 newTextStyleRanges,
+                editingElement.fontWeight,
               )
             : null;
           const updatedEditingElement = newElementWith(editingElement, {
@@ -1602,6 +1665,193 @@ export const actionIncreaseFontSize = register({
       event.shiftKey &&
       // KEYS.PERIOD needed for MacOS
       (event.key === KEYS.CHEVRON_RIGHT || event.key === KEYS.PERIOD)
+    );
+  },
+});
+
+export const actionChangeFontWeight = register<
+  ExcalidrawTextElement["fontWeight"]
+>({
+  name: "changeFontWeight",
+  label: "labels.bold",
+  icon: TextBoldIcon,
+  trackEvent: false,
+  perform: (elements, appState, value, app) => {
+    const nextFontWeight = normalizeFontWeight(value);
+
+    if (
+      appState.editingTextElement &&
+      appState.textEditorSelection &&
+      appState.textEditorSelection.start !== appState.textEditorSelection.end
+    ) {
+      const editingElement = elements.find(
+        (el) => el.id === appState.editingTextElement?.id,
+      ) as ExcalidrawTextElement | undefined;
+
+      if (editingElement && isTextElement(editingElement)) {
+        const { start, end } = appState.textEditorSelection;
+        const newTextStyleRanges = applyFontWeightToRange(
+          editingElement.textStyleRanges,
+          start,
+          end,
+          nextFontWeight,
+          normalizeFontWeight(editingElement.fontWeight),
+        );
+        const container = app.scene.getContainerElement(editingElement);
+        const shouldAutoResize = editingElement.autoResize && !container;
+        const styledMetrics = shouldAutoResize
+          ? measureTextWithStyleRanges(
+              editingElement.originalText,
+              editingElement.fontSize,
+              editingElement.fontFamily,
+              editingElement.lineHeight,
+              newTextStyleRanges,
+              editingElement.fontWeight,
+            )
+          : null;
+
+        return {
+          elements: elements.map((el) =>
+            el.id === editingElement.id
+              ? newElementWith(el as ExcalidrawTextElement, {
+                  textStyleRanges:
+                    newTextStyleRanges.length > 0
+                      ? newTextStyleRanges
+                      : undefined,
+                  ...(styledMetrics
+                    ? {
+                        width: styledMetrics.width,
+                        height: styledMetrics.height,
+                      }
+                    : {}),
+                })
+              : el,
+          ),
+          appState,
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        };
+      }
+    }
+
+    const updatedElements = changeProperty(
+      elements,
+      appState,
+      (oldElement) => {
+        if (isTextElement(oldElement)) {
+          const textLength = oldElement.originalText.length;
+          const newTextStyleRanges = applyFontWeightToRange(
+            oldElement.textStyleRanges,
+            0,
+            textLength,
+            nextFontWeight,
+            nextFontWeight,
+          );
+
+          let newElement: ExcalidrawTextElement = newElementWith(oldElement, {
+            fontWeight: nextFontWeight,
+            textStyleRanges:
+              newTextStyleRanges.length > 0 ? newTextStyleRanges : undefined,
+          });
+          redrawTextBoundingBox(
+            newElement,
+            app.scene.getContainerElement(oldElement),
+            app.scene,
+          );
+          newElement = offsetElementAfterFontResize(
+            oldElement,
+            newElement,
+            app.scene,
+          );
+          return newElement;
+        }
+        return oldElement;
+      },
+      true,
+    );
+
+    getSelectedElements(elements, appState, {
+      includeBoundTextElement: true,
+    }).forEach((element) => {
+      if (isTextElement(element)) {
+        updateBoundElements(element, app.scene);
+      }
+    });
+
+    return {
+      elements: updatedElements,
+      appState,
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    };
+  },
+  PanelComponent: ({ elements, appState, updateData, app, data }) => {
+    const { isCompact } = getStylesPanelInfo(app);
+
+    const selectedFontWeight = (() => {
+      if (appState.editingTextElement && appState.textEditorSelection) {
+        const editingElement = elements.find(
+          (el) => el.id === appState.editingTextElement?.id,
+        ) as ExcalidrawTextElement | undefined;
+
+        if (editingElement && isTextElement(editingElement)) {
+          const { start, end } = appState.textEditorSelection;
+          return getSelectionFontWeight(editingElement, start, end);
+        }
+      }
+
+      return getFormValue(
+        elements,
+        app,
+        (element) => {
+          if (isTextElement(element)) {
+            return normalizeFontWeight(element.fontWeight);
+          }
+          const boundTextElement = getBoundTextElement(
+            element,
+            app.scene.getNonDeletedElementsMap(),
+          );
+          if (boundTextElement) {
+            return normalizeFontWeight(boundTextElement.fontWeight);
+          }
+          return null;
+        },
+        (element) =>
+          isTextElement(element) ||
+          getBoundTextElement(
+            element,
+            app.scene.getNonDeletedElementsMap(),
+          ) !== null,
+        () => "normal",
+      );
+    })();
+
+    const currentFontWeight = selectedFontWeight === "bold" ? "bold" : "normal";
+    const nextFontWeight = currentFontWeight === "bold" ? "normal" : "bold";
+
+    return (
+      <fieldset>
+        <legend>{t("labels.bold")}</legend>
+        <div className="buttonList">
+          <RadioSelection
+            type="button"
+            options={[
+              {
+                value: "bold",
+                text: t("labels.bold"),
+                icon: TextBoldIcon,
+                active: currentFontWeight === "bold",
+                testId: "fontWeight-bold",
+              },
+            ]}
+            value="bold"
+            onClick={() => {
+              if (isCompact && data?.onPreventClose) {
+                data.onPreventClose();
+              }
+              updateData(nextFontWeight);
+            }}
+          />
+        </div>
+      </fieldset>
     );
   },
 });

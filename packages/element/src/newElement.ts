@@ -248,6 +248,7 @@ export const newTextElement = (
     originalText?: string;
     fontSize?: number;
     fontFamily?: FontFamilyValues;
+    fontWeight?: ExcalidrawTextElement["fontWeight"];
     textAlign?: TextAlign;
     verticalAlign?: VerticalAlign;
     containerId?: ExcalidrawTextContainer["id"] | null;
@@ -260,11 +261,12 @@ export const newTextElement = (
 ): NonDeleted<ExcalidrawTextElement> => {
   const fontFamily = opts.fontFamily || DEFAULT_FONT_FAMILY;
   const fontSize = opts.fontSize || DEFAULT_FONT_SIZE;
+  const fontWeight = opts.fontWeight || "normal";
   const lineHeight = opts.lineHeight || getLineHeight(fontFamily);
   const text = normalizeText(opts.text);
   const metrics = measureText(
     text,
-    getFontString({ fontFamily, fontSize }),
+    getFontString({ fontFamily, fontSize, fontWeight }),
     lineHeight,
   );
   const textAlign = opts.textAlign || DEFAULT_TEXT_ALIGN;
@@ -279,6 +281,7 @@ export const newTextElement = (
     text,
     fontSize,
     fontFamily,
+    fontWeight,
     textAlign,
     verticalAlign,
     x: opts.x - offsets.x,
@@ -323,6 +326,7 @@ const getAdjustedDimensions = (
         element.fontFamily,
         element.lineHeight,
         element.textStyleRanges,
+        element.fontWeight,
       )
     : measureText(nextText, getFontString(element), element.lineHeight);
 
@@ -347,6 +351,7 @@ const getAdjustedDimensions = (
           element.fontFamily,
           element.lineHeight,
           element.textStyleRanges,
+          element.fontWeight,
         )
       : measureText(element.text, getFontString(element), element.lineHeight);
     const offsets = getTextElementPositionOffsets(element, {

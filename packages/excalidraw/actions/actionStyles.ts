@@ -121,9 +121,13 @@ export const actionPasteStyles = register({
             const fontFamily =
               (elementStylesToCopyFrom as ExcalidrawTextElement).fontFamily ||
               DEFAULT_FONT_FAMILY;
+            const fontWeight =
+              (elementStylesToCopyFrom as ExcalidrawTextElement).fontWeight ||
+              "normal";
             newElement = newElementWith(newElement, {
               fontSize,
               fontFamily,
+              fontWeight,
               textAlign:
                 (elementStylesToCopyFrom as ExcalidrawTextElement).textAlign ||
                 DEFAULT_TEXT_ALIGN,

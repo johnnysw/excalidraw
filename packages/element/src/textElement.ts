@@ -96,6 +96,7 @@ export const redrawTextBoundingBox = (
         textElement.fontFamily,
         textElement.lineHeight,
         textElement.textStyleRanges,
+        textElement.fontWeight,
       )
     : measureText(
         boundTextUpdates.text,
