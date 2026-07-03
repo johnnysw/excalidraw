@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import "./Presentation.scss";
-import { useApp, useExcalidrawAppState, useExcalidrawElements, useExcalidrawSetAppState } from "../App";
+import { useApp, useAppProps, useExcalidrawAppState, useExcalidrawElements, useExcalidrawSetAppState } from "../App";
 import { ArrowRightIcon, CloseIcon, pencilIcon, EraserIcon, ClearCanvasIcon, HighlighterIcon, ExitPresentationIcon } from "../icons";
 import { KEYS, randomId } from "@excalidraw/common";
 import { ExcalidrawFrameLikeElement, ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
@@ -56,6 +56,8 @@ const Presentation = () => {
     const setAppState = useExcalidrawSetAppState();
     const elements = useExcalidrawElements();
     const app = useApp();
+    const appProps = useAppProps();
+    const appPropsRef = useRef(appProps);
 
     const [frames, setFrames] = useState<ExcalidrawFrameLikeElement[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -95,17 +97,62 @@ const Presentation = () => {
     const framesLengthRef = useRef(frames.length);
     const framesRef = useRef(frames);
     const presentationStepRef = useRef(appState.presentationStep || 0);
+    const appStateRef = useRef(appState);
+    const isExitingPresentationRef = useRef(false);
+    const shouldDiscardPresentationInkOnCleanupRef = useRef(true);
     currentIndexRef.current = currentIndex;
     framesLengthRef.current = frames.length;
     framesRef.current = frames;
     presentationStepRef.current = appState.presentationStep || 0;
+    appStateRef.current = appState;
+    appPropsRef.current = appProps;
 
-    const exitPresentation = useCallback(() => {
+    const exitPresentation = useCallback(async () => {
+        if (isExitingPresentationRef.current) {
+            return;
+        }
+        isExitingPresentationRef.current = true;
         setShowPenColors(false);
         setShowHighlighterColors(false);
 
-        const sessionId = appState.presentationAnnotationSessionId;
-        if (sessionId) {
+        const latestAppState = appStateRef.current;
+        const sessionId = latestAppState.presentationAnnotationSessionId;
+        const beforeStopDetail: {
+            mode: "viewer";
+            promises: Promise<unknown>[];
+            keepPresentationInk?: boolean;
+        } = {
+            mode: "viewer",
+            promises: [],
+        };
+        document.dispatchEvent(
+            new CustomEvent("excalidraw:beforePresentationStop", {
+                detail: beforeStopDetail,
+            }),
+        );
+        if (beforeStopDetail.promises.length > 0) {
+            await Promise.allSettled(beforeStopDetail.promises);
+        }
+
+        let inkRetentionDecision: "keep" | "discard" =
+            beforeStopDetail.keepPresentationInk === true ? "keep" : "discard";
+        if (sessionId && appPropsRef.current.onPresentationInkRetentionRequest) {
+            try {
+                inkRetentionDecision = await appPropsRef.current.onPresentationInkRetentionRequest({
+                    elements: app.scene.getElementsIncludingDeleted() as any,
+                    appState: latestAppState,
+                    files: app.files,
+                    sessionId,
+                });
+            } catch (error) {
+                console.warn("Presentation ink retention request failed:", error);
+                inkRetentionDecision = "discard";
+            }
+        }
+
+        shouldDiscardPresentationInkOnCleanupRef.current = inkRetentionDecision !== "keep";
+
+        if (sessionId && inkRetentionDecision !== "keep") {
             const currentElements = app.scene.getElementsIncludingDeleted();
             const elementsToKeep = currentElements.filter(
                 (el) =>
@@ -126,6 +173,7 @@ const Presentation = () => {
         setAppState((state) => ({
             presentationMode: false,
             presentationAnnotationSessionId: null,
+            _keepPresentationInkOnExit: inkRetentionDecision === "keep" ? true : undefined,
             openSidebar: (state as any)._savedOpenSidebar ?? state.openSidebar,
             _savedOpenSidebar: undefined,
             ...(savedViewport
@@ -136,7 +184,7 @@ const Presentation = () => {
                 }
                 : {}),
         } as any));
-    }, [setAppState, app, appState.presentationAnnotationSessionId]);
+    }, [setAppState, app]);
 
     useEffect(() => {
         if (appState.presentationMode && !presentationActiveRef.current) {
@@ -258,7 +306,7 @@ const Presentation = () => {
             }
             initialSlideAppliedRef.current = true;
         }
-    }, [appState.presentationMode, frames.length, appState]);
+    }, [appState.presentationMode, frames.length, (appState as any).presentationSlideIndex]);
 
     // Zoom to fit frame with full viewport coverage when index changes
     useEffect(() => {
@@ -273,16 +321,23 @@ const Presentation = () => {
                 duration: 600,
             });
 
-            setAppState((state) => ({
-                ...state,
-                // Hide frame border and name during presentation
-                frameRendering: {
-                    enabled: true,
-                    clip: true,
-                    outline: false,
-                    name: false,
-                },
-            }));
+            const currentFrameRendering = appStateRef.current.frameRendering;
+            if (
+                currentFrameRendering?.enabled !== true ||
+                currentFrameRendering?.clip !== true ||
+                currentFrameRendering?.outline !== false ||
+                currentFrameRendering?.name !== false
+            ) {
+                setAppState({
+                    // Hide frame border and name during presentation
+                    frameRendering: {
+                        enabled: true,
+                        clip: true,
+                        outline: false,
+                        name: false,
+                    },
+                } as any);
+            }
         }
     }, [currentIndex, frames, appState.presentationMode, appState.width, appState.height]);
 
@@ -344,7 +399,7 @@ const Presentation = () => {
                 setShowPenColors(false);
                 setShowHighlighterColors(false);
                 if (!showPenColors && !showHighlighterColors) {
-                    exitPresentation();
+                    void exitPresentation();
                 }
             }
         };
@@ -399,18 +454,18 @@ const Presentation = () => {
             };
 
             requestAnimationFrame(animate);
-        } else {
+        } else if ((appState as any).animationProgress !== 1) {
             // Going backward or staying same - no animation
             setAppState({ animationProgress: 1 } as any);
         }
 
         prevStepRef.current = currentStep;
-    }, [appState.presentationStep, setAppState, currentIndex, frames]);
+    }, [appState.presentationStep, (appState as any).animationProgress, setAppState, currentIndex]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
-            if (appState.presentationMode && !document.fullscreenElement) {
-                exitPresentation();
+            if (appStateRef.current.presentationMode && !document.fullscreenElement) {
+                void exitPresentation();
             }
         };
 
@@ -422,8 +477,24 @@ const Presentation = () => {
                     console.error("Error attempting to exit fullscreen:", err);
                 });
             }
-            // Clear all presentation drawings on exit
-            clearAllPresentationDrawings(CaptureUpdateAction.NEVER);
+            // Clear all presentation drawings on exit unless host retained them.
+            if (shouldDiscardPresentationInkOnCleanupRef.current) {
+                const sessionId = presentationSessionIdRef.current;
+                if (sessionId) {
+                    const currentElements = app.scene.getElementsIncludingDeleted();
+                    const elementsToKeep = currentElements.filter(
+                        (el) =>
+                            el.type !== "freedraw" ||
+                            (el as any).customData?.annotationSessionId !== sessionId,
+                    );
+                    if (elementsToKeep.length !== currentElements.length) {
+                        (app as any).updateScene({
+                            elements: elementsToKeep,
+                            captureUpdate: CaptureUpdateAction.NEVER,
+                        });
+                    }
+                }
+            }
             // Restore original settings on exit
             setAppState((state) => ({
                 frameRendering: originalFrameRenderingRef.current,
@@ -434,7 +505,7 @@ const Presentation = () => {
             app.setActiveTool({ type: "selection" });
             document.removeEventListener("fullscreenchange", handleFullscreenChange);
         };
-    }, [appState.presentationMode, setAppState, app, exitPresentation]);
+    }, [setAppState, app, exitPresentation]);
 
     // Hide settings panel when clicking on canvas to start drawing
     useEffect(() => {
@@ -459,7 +530,7 @@ const Presentation = () => {
     const clearAllPresentationDrawings = (
         captureUpdate: any = CaptureUpdateAction.IMMEDIATELY,
     ) => {
-        const sessionId = appState.presentationAnnotationSessionId;
+        const sessionId = presentationSessionIdRef.current;
         if (!sessionId) {
             return;
         }
@@ -997,7 +1068,7 @@ const Presentation = () => {
                 }}>
                     {ArrowRightIcon}
                 </div>
-                <div className="Presentation-controls__close" onClick={exitPresentation}>
+                <div className="Presentation-controls__close" onClick={() => void exitPresentation()}>
                     {ExitPresentationIcon}
                 </div>
             </div>

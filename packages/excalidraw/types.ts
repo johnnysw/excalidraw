@@ -629,6 +629,12 @@ export interface ExcalidrawProps {
     appState: AppState,
     files: BinaryFiles,
   ) => void;
+  onPresentationInkRetentionRequest?: (payload: {
+    elements: readonly OrderedExcalidrawElement[];
+    appState: AppState;
+    files: BinaryFiles;
+    sessionId: string | null;
+  }) => MaybePromise<"keep" | "discard">;
   onIncrement?: (event: DurableIncrement | EphemeralIncrement) => void;
   initialData?:
   | (() => MaybePromise<ExcalidrawInitialDataState | null>)

@@ -3641,7 +3641,13 @@ class App extends React.Component<AppProps, AppState> {
       this.presentationHistorySnapshot = this.history.createSnapshot();
       this.history.clear();
     } else if (prevState.presentationMode && !this.state.presentationMode) {
-      if (this.presentationHistorySnapshot) {
+      const shouldKeepPresentationInkOnExit =
+        (this.state as any)._keepPresentationInkOnExit === true;
+      if (shouldKeepPresentationInkOnExit) {
+        this.presentationHistorySnapshot = null;
+        this.history.clear();
+        this.setState({ _keepPresentationInkOnExit: undefined } as any);
+      } else if (this.presentationHistorySnapshot) {
         this.history.restoreSnapshot(this.presentationHistorySnapshot);
         this.presentationHistorySnapshot = null;
       } else {

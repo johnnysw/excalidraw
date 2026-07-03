@@ -24,6 +24,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
   const {
     role,
     onChange,
+    onPresentationInkRetentionRequest,
     onIncrement,
     initialData,
     excalidrawAPI,
@@ -122,6 +123,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
         <App
           role={role}
           onChange={onChange}
+          onPresentationInkRetentionRequest={onPresentationInkRetentionRequest}
           onIncrement={onIncrement}
           initialData={initialData}
           excalidrawAPI={excalidrawAPI}
