@@ -54,6 +54,7 @@ export type ActionName =
   | "sendToBack"
   | "bringToFront"
   | "copyStyles"
+  | "textFormatBrush"
   | "selectAll"
   | "pasteStyles"
   | "gridMode"

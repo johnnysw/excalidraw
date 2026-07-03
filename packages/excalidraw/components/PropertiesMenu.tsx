@@ -37,6 +37,7 @@ import {
   isFreeDrawElement,
 } from "@excalidraw/element";
 import { alignActionsPredicate } from "../actions/actionAlign";
+import { isTextFormatBrushActive } from "../actions/actionStyles";
 import { t } from "../i18n";
 import { NumberInput } from "./NumberInput";
 import { actionChangeStrokeWidth } from "../actions/actionProperties";
@@ -134,6 +135,25 @@ export const PropertiesMenu: React.FC = () => {
   const elementsMap = app.scene.getNonDeletedElementsMap();
   const targetElements = getTargetElements(elementsMap, app.state);
   const isRTL = document.documentElement.getAttribute("dir") === "rtl";
+  const selectedTextTargetKey = React.useMemo(
+    () =>
+      targetElements
+        .filter((element) => isTextElement(element))
+        .map((element) => element.id)
+        .sort()
+        .join(","),
+    [targetElements],
+  );
+
+  React.useEffect(() => {
+    if (!isTextFormatBrushActive() || !selectedTextTargetKey) {
+      return;
+    }
+    const textFormatBrushAction = actionManager.actions.textFormatBrush;
+    if (textFormatBrushAction) {
+      actionManager.executeAction(textFormatBrushAction, "ui", "apply");
+    }
+  }, [actionManager, selectedTextTargetKey]);
 
   // 检查是否是单个带文本容器
   let isSingleElementBoundContainer = false;
@@ -469,6 +489,16 @@ export const PropertiesMenu: React.FC = () => {
           <div className="PropertiesMenu__section-title">加粗</div>
           <div className="PropertiesMenu__actions">
             {actionManager.renderAction("changeFontWeight")}
+          </div>
+        </div>
+      )}
+
+      {/* 格式刷 */}
+      {canEditTextProps && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">格式刷</div>
+          <div className="PropertiesMenu__actions">
+            {actionManager.renderAction("textFormatBrush")}
           </div>
         </div>
       )}
