@@ -413,7 +413,20 @@ import {
 import { ElementCanvasButtons } from "../components/ElementCanvasButtons";
 import { SlideOrderButton } from "../components/SlideOrderButton";
 import { LaserTrails } from "../laser-trails";
-import { withBatchedUpdates, withBatchedUpdatesThrottled } from "../reactUtils";
+import {
+  isFreedrawPerfV2Enabled,
+  markExcalidrawPerf,
+  measureExcalidrawPerf,
+  withBatchedUpdates,
+  withBatchedUpdatesThrottled,
+} from "../reactUtils";
+import {
+  applyActiveFreedrawStroke,
+  appendFreedrawPoint,
+  clearActiveFreedrawBounds,
+  createActiveFreedrawStroke,
+  type ActiveFreedrawStroke,
+} from "../freedrawPerf";
 import { textWysiwyg } from "../wysiwyg/textWysiwyg";
 import { isOverScrollBars } from "../scene/scrollbars";
 
@@ -681,12 +694,248 @@ class App extends React.Component<AppProps, AppState> {
   lastPointerMoveEvent: PointerEvent | null = null;
   lastPointerMoveCoords: { x: number; y: number } | null = null;
   lastViewportPosition = { x: 0, y: 0 };
+  private activeFreedrawStroke: ActiveFreedrawStroke | null = null;
 
   animationFrameHandler = new AnimationFrameHandler();
 
   laserTrails = new LaserTrails(this.animationFrameHandler, this);
   eraserTrail = new EraserTrail(this.animationFrameHandler, this);
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
+
+  private startActiveFreedrawStroke(element: ExcalidrawFreeDrawElement) {
+    if (!isFreedrawPerfV2Enabled()) {
+      this.activeFreedrawStroke = null;
+      return;
+    }
+
+    this.activeFreedrawStroke = createActiveFreedrawStroke(element);
+    markExcalidrawPerf("freedraw:stroke-start", {
+      elementId: element.id,
+    });
+  }
+
+  private cancelActiveFreedrawStroke() {
+    const activeElement = this.getActiveFreedrawElement();
+    if (this.activeFreedrawStroke && this.activeFreedrawStroke.rafId !== null) {
+      window.cancelAnimationFrame(this.activeFreedrawStroke.rafId);
+    }
+    if (activeElement) {
+      clearActiveFreedrawBounds(activeElement);
+    }
+    this.activeFreedrawStroke = null;
+  }
+
+  private getActiveFreedrawElement(): NonDeleted<ExcalidrawFreeDrawElement> | null {
+    const stroke = this.activeFreedrawStroke;
+    if (!stroke) {
+      return null;
+    }
+
+    const stateElement =
+      this.state.newElement?.id === stroke.elementId
+        ? this.state.newElement
+        : null;
+    const element =
+      stateElement ?? this.scene.getNonDeletedElement(stroke.elementId);
+
+    return element?.type === "freedraw" ? element : null;
+  }
+
+  private flushActiveFreedrawStroke = (finalize = false) => {
+    const stroke = this.activeFreedrawStroke;
+    const newElement = this.getActiveFreedrawElement();
+
+    if (!stroke || !newElement) {
+      return null;
+    }
+
+    if (newElement.id !== stroke.elementId) {
+      this.cancelActiveFreedrawStroke();
+      return null;
+    }
+
+    if (stroke.rafId !== null) {
+      window.cancelAnimationFrame(stroke.rafId);
+      stroke.rafId = null;
+    }
+
+    if (!stroke.dirty && !finalize) {
+      return newElement;
+    }
+
+    markExcalidrawPerf("freedraw:flush-start", {
+      finalize,
+      points: stroke.points.length,
+    });
+
+    if (finalize) {
+      this.scene.mutateElement(
+        newElement,
+        {
+          points: stroke.points.slice(),
+          pressures: newElement.simulatePressure
+            ? []
+            : stroke.pressures.slice(),
+          version: stroke.startVersion + 1,
+        },
+        {
+          informMutation: true,
+          isDragging: false,
+        },
+      );
+      clearActiveFreedrawBounds(newElement);
+    } else {
+      applyActiveFreedrawStroke(newElement, stroke);
+      ShapeCache.delete(newElement);
+    }
+
+    stroke.dirty = false;
+    this.setState({
+      newElement,
+    });
+
+    markExcalidrawPerf("freedraw:flush-end", {
+      finalize,
+      points: stroke.points.length,
+    });
+    measureExcalidrawPerf(
+      finalize ? "freedraw:final-flush" : "freedraw:raf-flush",
+      "freedraw:flush-start",
+      "freedraw:flush-end",
+    );
+
+    return newElement;
+  };
+
+  private scheduleActiveFreedrawFlush() {
+    const stroke = this.activeFreedrawStroke;
+    if (!stroke || stroke.rafId !== null) {
+      return;
+    }
+
+    stroke.rafId = window.requestAnimationFrame(() => {
+      if (this.activeFreedrawStroke === stroke) {
+        stroke.rafId = null;
+        this.flushActiveFreedrawStroke();
+      }
+    });
+  }
+
+  private appendActiveFreedrawPoint(
+    element: ExcalidrawFreeDrawElement,
+    event: PointerEvent,
+  ) {
+    const stroke = this.activeFreedrawStroke;
+    if (!stroke || stroke.elementId !== element.id) {
+      return false;
+    }
+
+    const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
+    this.lastPointerMoveEvent = event;
+    this.lastPointerMoveCoords = pointerCoords;
+
+    const point = pointFrom<LocalPoint>(
+      pointerCoords.x - element.x,
+      pointerCoords.y - element.y,
+    );
+
+    return appendFreedrawPoint(
+      stroke,
+      point,
+      event.pressure,
+      this.state.zoom.value,
+    );
+  }
+
+  private handleActiveFreedrawPointerMove(
+    event: PointerEvent,
+    pointerDownState: PointerDownState,
+  ) {
+    const newElement = this.getActiveFreedrawElement();
+    if (
+      !isFreedrawPerfV2Enabled() ||
+      !newElement ||
+      !this.activeFreedrawStroke
+    ) {
+      return false;
+    }
+
+    const events =
+      typeof event.getCoalescedEvents === "function"
+        ? event.getCoalescedEvents()
+        : [];
+    const pointerEvents = events.length ? events : [event];
+    let appended = false;
+
+    for (const pointerEvent of pointerEvents) {
+      appended =
+        this.appendActiveFreedrawPoint(newElement, pointerEvent) || appended;
+    }
+
+    const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
+    pointerDownState.lastCoords.x = pointerCoords.x;
+    pointerDownState.lastCoords.y = pointerCoords.y;
+
+    if (appended) {
+      pointerDownState.drag.hasOccurred = true;
+      this.scheduleActiveFreedrawFlush();
+    }
+
+    return true;
+  }
+
+  private finalizeActiveFreedrawStroke(
+    element: ExcalidrawFreeDrawElement,
+    event: PointerEvent,
+  ) {
+    const stroke = this.activeFreedrawStroke;
+    if (!stroke || stroke.elementId !== element.id) {
+      return null;
+    }
+
+    if (stroke.rafId !== null) {
+      window.cancelAnimationFrame(stroke.rafId);
+      stroke.rafId = null;
+    }
+
+    const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
+    let dx = pointerCoords.x - element.x;
+    let dy = pointerCoords.y - element.y;
+    const firstPoint = stroke.points[0];
+
+    // Allows dots to avoid being flagged as infinitely small.
+    if (
+      stroke.points.length === 1 &&
+      firstPoint &&
+      dx === firstPoint[0] &&
+      dy === firstPoint[1]
+    ) {
+      dx += 0.0001;
+      dy += 0.0001;
+      stroke.points.push(pointFrom<LocalPoint>(dx, dy));
+      if (!stroke.simulatePressure) {
+        stroke.pressures.push(event.pressure);
+      }
+      stroke.dirty = true;
+    } else {
+      appendFreedrawPoint(
+        stroke,
+        pointFrom<LocalPoint>(dx, dy),
+        event.pressure,
+        this.state.zoom.value,
+      );
+    }
+
+    const finalizedElement = this.flushActiveFreedrawStroke(true);
+    this.activeFreedrawStroke = null;
+
+    markExcalidrawPerf("freedraw:stroke-finalize", {
+      elementId: element.id,
+      points: stroke.points.length,
+    });
+
+    return finalizedElement;
+  }
 
   private snapHapticsController = createHapticsController();
 
@@ -3415,6 +3664,7 @@ class App extends React.Component<AppProps, AppState> {
     this.library.destroy();
     this.laserTrails.stop();
     this.eraserTrail.stop();
+    this.cancelActiveFreedrawStroke();
     this.onChangeEmitter.clear();
     this.store.onStoreIncrementEmitter.clear();
     this.store.onDurableIncrementEmitter.clear();
@@ -7752,6 +8002,7 @@ class App extends React.Component<AppProps, AppState> {
       this.state.newElement.type === "freedraw"
     ) {
       const element = this.state.newElement as ExcalidrawFreeDrawElement;
+      this.cancelActiveFreedrawStroke();
       this.updateScene({
         ...(element.points.length < 10
           ? {
@@ -9040,6 +9291,7 @@ class App extends React.Component<AppProps, AppState> {
     });
 
     this.scene.insertElement(element);
+    this.startActiveFreedrawStroke(element);
 
     this.setState((prevState) => {
       const nextSelectedElementIds = {
@@ -9054,14 +9306,16 @@ class App extends React.Component<AppProps, AppState> {
       };
     });
 
-    const boundElement = getHoveredElementForBinding(
-      pointFrom<GlobalPoint>(
-        pointerDownState.origin.x,
-        pointerDownState.origin.y,
-      ),
-      this.scene.getNonDeletedElements(),
-      this.scene.getNonDeletedElementsMap(),
-    );
+    const boundElement = isFreedrawPerfV2Enabled()
+      ? null
+      : getHoveredElementForBinding(
+          pointFrom<GlobalPoint>(
+            pointerDownState.origin.x,
+            pointerDownState.origin.y,
+          ),
+          this.scene.getNonDeletedElements(),
+          this.scene.getNonDeletedElementsMap(),
+        );
 
     this.setState({
       newElement: element,
@@ -9657,6 +9911,20 @@ class App extends React.Component<AppProps, AppState> {
   private onPointerMoveFromPointerDownHandler(
     pointerDownState: PointerDownState,
   ) {
+    if (isFreedrawPerfV2Enabled() && this.activeFreedrawStroke) {
+      return withBatchedUpdates((event: PointerEvent) => {
+        if (this.state.openDialog?.name === "elementLinkSelector") {
+          return;
+        }
+        if (this.state.activeLockedId) {
+          this.setState({
+            activeLockedId: null,
+          });
+        }
+        this.handleActiveFreedrawPointerMove(event, pointerDownState);
+      });
+    }
+
     return withBatchedUpdatesThrottled((event: PointerEvent) => {
       if (this.state.openDialog?.name === "elementLinkSelector") {
         return;
@@ -10552,7 +10820,11 @@ class App extends React.Component<AppProps, AppState> {
       this.removePointer(childEvent);
       pointerDownState.drag.blockDragging = false;
       if (pointerDownState.eventListeners.onMove) {
-        pointerDownState.eventListeners.onMove.flush();
+        (
+          pointerDownState.eventListeners.onMove as {
+            flush?: () => void;
+          }
+        ).flush?.();
       }
       const {
         newElement,
@@ -10763,29 +11035,33 @@ class App extends React.Component<AppProps, AppState> {
       );
 
       if (newElement?.type === "freedraw") {
-        const pointerCoords = viewportCoordsToSceneCoords(
-          childEvent,
-          this.state,
-        );
+        if (isFreedrawPerfV2Enabled()) {
+          this.finalizeActiveFreedrawStroke(newElement, childEvent);
+        } else {
+          const pointerCoords = viewportCoordsToSceneCoords(
+            childEvent,
+            this.state,
+          );
 
-        const points = newElement.points;
-        let dx = pointerCoords.x - newElement.x;
-        let dy = pointerCoords.y - newElement.y;
+          const points = newElement.points;
+          let dx = pointerCoords.x - newElement.x;
+          let dy = pointerCoords.y - newElement.y;
 
-        // Allows dots to avoid being flagged as infinitely small
-        if (dx === points[0][0] && dy === points[0][1]) {
-          dy += 0.0001;
-          dx += 0.0001;
+          // Allows dots to avoid being flagged as infinitely small
+          if (dx === points[0][0] && dy === points[0][1]) {
+            dy += 0.0001;
+            dx += 0.0001;
+          }
+
+          const pressures = newElement.simulatePressure
+            ? []
+            : [...newElement.pressures, childEvent.pressure];
+
+          this.scene.mutateElement(newElement, {
+            points: [...points, pointFrom<LocalPoint>(dx, dy)],
+            pressures,
+          });
         }
-
-        const pressures = newElement.simulatePressure
-          ? []
-          : [...newElement.pressures, childEvent.pressure];
-
-        this.scene.mutateElement(newElement, {
-          points: [...points, pointFrom<LocalPoint>(dx, dy)],
-          pressures,
-        });
 
         this.actionManager.executeAction(actionFinalize);
 

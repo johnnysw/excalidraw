@@ -5,7 +5,7 @@
 import { version as ReactVersion } from "react";
 import { unstable_batchedUpdates } from "react-dom";
 
-import { throttleRAF } from "@excalidraw/common";
+import { isDevEnv, throttleRAF } from "@excalidraw/common";
 
 export const withBatchedUpdates = <
   TFunction extends ((event: any) => void) | (() => void),
@@ -60,3 +60,45 @@ export const isRenderThrottlingEnabled = (() => {
     return false;
   };
 })();
+
+export const isFreedrawPerfV2Enabled = () =>
+  window.EXCALIDRAW_FREEDRAW_PERF_V2 === true;
+
+export const isExcalidrawPerfDebugEnabled = () =>
+  isDevEnv() && window.EXCALIDRAW_PERF_DEBUG === true;
+
+export const markExcalidrawPerf = (
+  name: string,
+  detail?: Record<string, unknown>,
+) => {
+  if (!isExcalidrawPerfDebugEnabled()) {
+    return;
+  }
+
+  try {
+    performance.mark(`excalidraw:${name}`, { detail });
+  } catch {
+    // Older browsers may not support structured mark details.
+    performance.mark(`excalidraw:${name}`);
+  }
+};
+
+export const measureExcalidrawPerf = (
+  name: string,
+  startMark: string,
+  endMark?: string,
+) => {
+  if (!isExcalidrawPerfDebugEnabled()) {
+    return;
+  }
+
+  try {
+    performance.measure(
+      `excalidraw:${name}`,
+      `excalidraw:${startMark}`,
+      endMark ? `excalidraw:${endMark}` : undefined,
+    );
+  } catch {
+    // Perf marks are best-effort diagnostics and must never affect drawing.
+  }
+};
