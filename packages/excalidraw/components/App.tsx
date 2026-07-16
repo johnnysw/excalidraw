@@ -190,6 +190,10 @@ import {
   updateFrameMembershipOfSelectedElements,
   isElementInFrame,
   getFrameLikeTitle,
+  getOrderedFrames as getOrderedFramesForScene,
+  getPresentationFrames as getPresentationFramesForScene,
+  mergePresentationFrameOrder,
+  isFrameExcludedFromPresentation,
   getElementsOverlappingFrame,
   filterElementsEligibleAsFrameChildren,
   hitElementBoundText,
@@ -1070,6 +1074,71 @@ class App extends React.Component<AppProps, AppState> {
       );
     };
 
+    const getCustomDataWithoutPresentationExclusion = (
+      customData: ExcalidrawElement["customData"],
+    ) => {
+      const {
+        excludeFromPresentation: _excludeFromPresentation,
+        ...remainingCustomData
+      } = customData ?? {};
+      return remainingCustomData;
+    };
+
+    const isOnlyPresentationExclusionChanged = (
+      prevElement: ExcalidrawElement,
+      nextElement: ExcalidrawElement,
+    ) =>
+      (prevElement.customData?.excludeFromPresentation === true) !==
+        (nextElement.customData?.excludeFromPresentation === true) &&
+      isShallowEqual(
+        getCustomDataWithoutPresentationExclusion(prevElement.customData),
+        getCustomDataWithoutPresentationExclusion(nextElement.customData),
+      );
+
+    const mergeAllowedPresentationFrameChanges = (
+      prevElement: ExcalidrawElement,
+      nextElement: ExcalidrawElement,
+    ): ExcalidrawElement => {
+      const allowedUpdates: {
+        isDeleted?: ExcalidrawElement["isDeleted"];
+        customData?: ExcalidrawElement["customData"];
+      } = {};
+      let hasAllowedChange = false;
+
+      if (prevElement.isDeleted !== nextElement.isDeleted) {
+        allowedUpdates.isDeleted = nextElement.isDeleted;
+        hasAllowedChange = true;
+      }
+
+      if (isOnlyPresentationExclusionChanged(prevElement, nextElement)) {
+        const customData = { ...(prevElement.customData ?? {}) };
+        if (nextElement.customData?.excludeFromPresentation === true) {
+          customData.excludeFromPresentation = true;
+        } else {
+          delete customData.excludeFromPresentation;
+        }
+        allowedUpdates.customData =
+          Object.keys(customData).length > 0 ? customData : undefined;
+        hasAllowedChange = true;
+      }
+
+      if (!hasAllowedChange) {
+        return prevElement;
+      }
+
+      if (nextElement.version > prevElement.version) {
+        return {
+          ...prevElement,
+          ...allowedUpdates,
+          version: nextElement.version,
+          versionNonce: nextElement.versionNonce,
+          updated: nextElement.updated,
+        } as ExcalidrawElement;
+      }
+
+      return newElementWith(prevElement, allowedUpdates as any, true);
+    };
+
     const presentationMutationGuards: SceneMutationGuards = {
       shouldAllowMutation: (element, updates) => {
         if (!this.state.presentationMode) {
@@ -1080,11 +1149,24 @@ class App extends React.Component<AppProps, AppState> {
         if (isPresentationAnnotation(element, sessionId)) {
           return true;
         }
-        // allow deleting only current session annotations (all others protected)
-        if ((updates as any)?.isDeleted) {
-          return false;
+
+        if (isFrameElement(element)) {
+          const updateKeys = Object.keys(updates as object);
+          if (
+            updateKeys.length === 1 &&
+            updateKeys[0] === "isDeleted" &&
+            (updates as any).isDeleted !== element.isDeleted
+          ) {
+            return true;
+          }
+          if (updateKeys.length === 1 && updateKeys[0] === "customData") {
+            return isOnlyPresentationExclusionChanged(element, {
+              ...element,
+              customData: (updates as any).customData,
+            });
+          }
         }
-        // block any other updates on non-annotation elements
+
         return false;
       },
       filterNextElements: (prevElements, nextElements) => {
@@ -1093,24 +1175,43 @@ class App extends React.Component<AppProps, AppState> {
         }
         const sessionId = this.state.presentationAnnotationSessionId;
         const prevById = new Map(prevElements.map((el) => [el.id, el]));
+        const nextById = new Map(nextElements.map((el) => [el.id, el]));
 
-        // keep all non-annotation elements as they were
-        // allow changes only for current session annotations
         const result: ExcalidrawElement[] = [];
         for (const prevEl of prevElements) {
           if (isPresentationAnnotation(prevEl, sessionId)) {
-            // will be handled by nextElements below
+            const nextEl = nextById.get(prevEl.id);
+            if (nextEl && isPresentationAnnotation(nextEl, sessionId)) {
+              result.push(nextEl);
+            }
             continue;
           }
+
+          if (isFrameElement(prevEl)) {
+            const nextEl = nextById.get(prevEl.id);
+            if (!nextEl) {
+              if (prevEl.isDeleted) {
+                result.push(prevEl);
+              }
+              continue;
+            }
+            if (isFrameElement(nextEl)) {
+              result.push(
+                mergeAllowedPresentationFrameChanges(prevEl, nextEl),
+              );
+              continue;
+            }
+          }
+
           result.push(prevEl);
         }
 
         for (const nextEl of nextElements) {
-          if (isPresentationAnnotation(nextEl, sessionId)) {
+          if (
+            isPresentationAnnotation(nextEl, sessionId) &&
+            !prevById.has(nextEl.id)
+          ) {
             result.push(nextEl);
-          } else if (!prevById.has(nextEl.id)) {
-            // ignore newly inserted non-annotation elements in presentation
-            continue;
           }
         }
 
@@ -2086,7 +2187,11 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private renderFrameNames = () => {
-    if (!this.state.frameRendering.enabled || !this.state.frameRendering.name) {
+    if (
+      this.state.presentationMode ||
+      !this.state.frameRendering.enabled ||
+      !this.state.frameRendering.name
+    ) {
       if (this.state.editingFrame) {
         this.resetEditingFrame(null);
       }
@@ -2095,6 +2200,12 @@ class App extends React.Component<AppProps, AppState> {
 
     const isDarkTheme = this.state.theme === THEME.DARK;
     const nonDeletedFramesLikes = this.scene.getNonDeletedFramesLikes();
+    const presentationFrameIndices = new Map(
+      getPresentationFramesForScene(
+        this.scene.getNonDeletedElements(),
+        this.state.slideOrder,
+      ).map((frame, index) => [frame.id, index + 1]),
+    );
 
     const focusedSearchMatch =
       nonDeletedFramesLikes.length > 0
@@ -2140,10 +2251,18 @@ class App extends React.Component<AppProps, AppState> {
 
       const frameName = getFrameLikeTitle(f);
 
-      // 获取 frame 在 slideOrder 中的序号
-      const slideOrder = (this.state as any).slideOrder as string[] | undefined;
-      const slideIndex = slideOrder?.indexOf(f.id) ?? -1;
-      const slideOrderLabel = slideIndex !== -1 ? `[${slideIndex + 1}]` : "[-]";
+      const slideIndex = this.state.slideOrder?.indexOf(f.id) ?? -1;
+      const isExcludedFrame = isFrameExcludedFromPresentation(f);
+      const slideOrderLabel = isFrameElement(f)
+        ? isExcludedFrame
+          ? "[-]"
+          : `[${presentationFrameIndices.get(f.id) ?? "-"}]`
+        : slideIndex !== -1
+        ? `[${slideIndex + 1}]`
+        : "[-]";
+      const slideOrderLabelColor = isExcludedFrame
+        ? "var(--color-gray-50)"
+        : "var(--color-primary)";
 
       if (f.id === this.state.editingFrame) {
         const frameNameInEdit = frameName;
@@ -2158,7 +2277,7 @@ class App extends React.Component<AppProps, AppState> {
           >
             <span
               className="frame-slide-order"
-              style={{ marginRight: 4, color: "var(--color-primary)" }}
+              style={{ marginRight: 4, color: slideOrderLabelColor }}
             >
               {slideOrderLabel}
             </span>
@@ -2206,7 +2325,10 @@ class App extends React.Component<AppProps, AppState> {
       } else {
         frameNameJSX = (
           <>
-            <span className="frame-slide-order" style={{ marginRight: 4, color: "var(--color-primary)" }}>
+            <span
+              className="frame-slide-order"
+              style={{ marginRight: 4, color: slideOrderLabelColor }}
+            >
               {slideOrderLabel}
             </span>
             {frameName}
@@ -2327,35 +2449,20 @@ class App extends React.Component<AppProps, AppState> {
       );
     };
 
-    const getPresentationFrames = () => {
-      const allFrames = this.scene
-        .getNonDeletedElements()
-        .filter((el) => isFrameElement(el)) as any[];
-
-      if (slideOrder && slideOrder.length > 0) {
-        const orderedFrames = slideOrder
-          .map((id) => allFrames.find((f) => f.id === id))
-          .filter((f): f is any => Boolean(f));
-
-        const remainingFrames = allFrames
-          .filter((f) => !slideOrder.includes(f.id))
-          .sort((a, b) => {
-            if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
-            return a.x - b.x;
-          });
-
-        return [...orderedFrames, ...remainingFrames];
-      }
-
-      return allFrames.sort((a, b) => {
-        if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
-        return a.x - b.x;
-      });
-    };
+    const sceneElements = this.scene.getNonDeletedElements();
+    const fullOrderedFrames = getOrderedFramesForScene(
+      sceneElements,
+      slideOrder,
+    );
+    const presentationFrames = getPresentationFramesForScene(
+      sceneElements,
+      slideOrder,
+    );
 
     const startPresentationFromFrame = (frameId: string) => {
-      const frames = getPresentationFrames();
-      const slideIndex = frames.findIndex((f) => f.id === frameId);
+      const slideIndex = presentationFrames.findIndex(
+        (frame) => frame.id === frameId,
+      );
       if (slideIndex === -1) {
         return;
       }
@@ -2372,21 +2479,22 @@ class App extends React.Component<AppProps, AppState> {
           presentationMode: true,
           _savedOpenSidebar: (state as any).openSidebar,
           openSidebar: null,
-          slideOrder: slideOrder ?? (state as any).slideOrder,
+          slideOrder: fullOrderedFrames.map((frame) => frame.id),
           presentationSlideIndex: slideIndex,
         }) as any,
       );
     };
 
     const openPresenterViewFromFrame = (frameId: string) => {
-      const frames = getPresentationFrames();
-      const slideIndex = frames.findIndex((f) => f.id === frameId);
+      const slideIndex = presentationFrames.findIndex(
+        (frame) => frame.id === frameId,
+      );
       if (slideIndex === -1) {
         return;
       }
 
-      const nextFrameId = frames[slideIndex + 1]?.id ?? null;
-      const total = frames.length;
+      const nextFrameId = presentationFrames[slideIndex + 1]?.id ?? null;
+      const total = presentationFrames.length;
 
       let presenterWindow: Window | null = null;
       presenterWindow = window.open(
@@ -2421,7 +2529,7 @@ class App extends React.Component<AppProps, AppState> {
         presentationMode: true,
         _savedOpenSidebar: (state as any).openSidebar,
         openSidebar: null,
-        slideOrder: slideOrder ?? (state as any).slideOrder,
+        slideOrder: fullOrderedFrames.map((frame) => frame.id),
         presentationSlideIndex: slideIndex,
       }) as any);
 
@@ -2441,55 +2549,33 @@ class App extends React.Component<AppProps, AppState> {
 
     // 获取当前 frame 在 slideOrder 中的顺序 (1-indexed)
     const getFrameSlideOrder = (frameId: string): number | null => {
-      if (!slideOrder || slideOrder.length === 0) {
-        return null;
-      }
-      const index = slideOrder.indexOf(frameId);
+      const index = presentationFrames.findIndex(
+        (frame) => frame.id === frameId,
+      );
       return index === -1 ? null : index + 1;
     };
 
     // 更新 frame 在 slideOrder 中的顺序
     const updateFrameSlideOrder = (frameId: string, newOrder: number) => {
-      const allFrames = this.scene
-        .getNonDeletedElements()
-        .filter((el) => isFrameElement(el));
-      const totalFrames = allFrames.length;
-
-      // 确保 newOrder 在有效范围内
-      const clampedOrder = Math.max(1, Math.min(newOrder, totalFrames));
-
-      // 创建或更新 slideOrder
-      let newSlideOrder: string[] = [];
-
-      if (slideOrder && slideOrder.length > 0) {
-        // 复制现有顺序
-        newSlideOrder = [...slideOrder];
-        // 移除当前 frame（如果存在）
-        const currentIndex = newSlideOrder.indexOf(frameId);
-        if (currentIndex !== -1) {
-          newSlideOrder.splice(currentIndex, 1);
-        }
-      } else {
-        // 如果没有 slideOrder，根据位置创建初始顺序
-        newSlideOrder = allFrames
-          .sort((a, b) => {
-            if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
-            return a.x - b.x;
-          })
-          .map((f) => f.id)
-          .filter((id) => id !== frameId);
+      const presentationFrameIds = presentationFrames.map(
+        (frame) => frame.id,
+      );
+      const currentIndex = presentationFrameIds.indexOf(frameId);
+      if (currentIndex === -1) {
+        return;
       }
 
-      // 确保所有 frame 都在列表中
-      for (const frame of allFrames) {
-        if (frame.id !== frameId && !newSlideOrder.includes(frame.id)) {
-          newSlideOrder.push(frame.id);
-        }
-      }
+      const clampedOrder = Math.max(
+        1,
+        Math.min(newOrder, presentationFrameIds.length),
+      );
+      presentationFrameIds.splice(currentIndex, 1);
+      presentationFrameIds.splice(clampedOrder - 1, 0, frameId);
 
-      // 在新位置插入 frame
-      const insertIndex = clampedOrder - 1;
-      newSlideOrder.splice(insertIndex, 0, frameId);
+      const newSlideOrder = mergePresentationFrameOrder(
+        fullOrderedFrames.map((frame) => frame.id),
+        presentationFrameIds,
+      );
 
       // 更新 appState
       this.setAppState((state) =>
@@ -2613,74 +2699,80 @@ class App extends React.Component<AppProps, AppState> {
                               element={firstSelectedElement}
                               elementsMap={elementsMap}
                             >
-                              <ElementCanvasButton
-                                title="从此播放"
-                                icon={Presentation05Icon}
-                                checked={false}
-                                onChange={() =>
-                                  startPresentationFromFrame(
-                                    firstSelectedElement.id,
-                                  )
-                                }
-                              />
-                              <ElementCanvasButton
-                                title="演讲者视图"
-                                icon={PresenterModeIcon}
-                                checked={false}
-                                onChange={() =>
-                                  openPresenterViewFromFrame(
-                                    firstSelectedElement.id,
-                                  )
-                                }
-                              />
-                              <ElementCanvasButton
-                                title={
-                                  hasFrameSlideNote(firstSelectedElement)
-                                    ? "查看/编辑注释"
-                                    : "添加注释"
-                                }
-                                icon={
-                                  <>
-                                    {Comment01Icon}
-                                    <span
-                                      className={
-                                        hasFrameSlideNote(firstSelectedElement)
-                                          ? "has-note-dot"
-                                          : "no-note-dot"
-                                      }
-                                      aria-hidden
-                                    />
-                                  </>
-                                }
-                                checked={false}
-                                onChange={() => {
-                                  const noteHtml =
-                                    getFrameSlideNoteHtml(firstSelectedElement);
-                                  const event = new CustomEvent(
-                                    "excalidraw:editSlideNote",
-                                    {
-                                      detail: {
-                                        frameId: firstSelectedElement.id,
-                                        note: noteHtml,
-                                      },
-                                      bubbles: true,
-                                    },
-                                  );
-                                  document.dispatchEvent(event);
-                                }}
-                              />
-                              <SlideOrderButton
-                                frameId={firstSelectedElement.id}
-                                currentOrder={getFrameSlideOrder(
-                                  firstSelectedElement.id,
-                                )}
-                                totalSlides={
-                                  this.scene
-                                    .getNonDeletedElements()
-                                    .filter((el) => isFrameElement(el)).length
-                                }
-                                onOrderChange={updateFrameSlideOrder}
-                              />
+                              {!isFrameExcludedFromPresentation(
+                                firstSelectedElement,
+                              ) && (
+                                <>
+                                  <ElementCanvasButton
+                                    title="从此播放"
+                                    icon={Presentation05Icon}
+                                    checked={false}
+                                    onChange={() =>
+                                      startPresentationFromFrame(
+                                        firstSelectedElement.id,
+                                      )
+                                    }
+                                  />
+                                  <ElementCanvasButton
+                                    title="演讲者视图"
+                                    icon={PresenterModeIcon}
+                                    checked={false}
+                                    onChange={() =>
+                                      openPresenterViewFromFrame(
+                                        firstSelectedElement.id,
+                                      )
+                                    }
+                                  />
+                                  <ElementCanvasButton
+                                    title={
+                                      hasFrameSlideNote(firstSelectedElement)
+                                        ? "查看/编辑注释"
+                                        : "添加注释"
+                                    }
+                                    icon={
+                                      <>
+                                        {Comment01Icon}
+                                        <span
+                                          className={
+                                            hasFrameSlideNote(
+                                              firstSelectedElement,
+                                            )
+                                              ? "has-note-dot"
+                                              : "no-note-dot"
+                                          }
+                                          aria-hidden
+                                        />
+                                      </>
+                                    }
+                                    checked={false}
+                                    onChange={() => {
+                                      const noteHtml =
+                                        getFrameSlideNoteHtml(
+                                          firstSelectedElement,
+                                        );
+                                      const event = new CustomEvent(
+                                        "excalidraw:editSlideNote",
+                                        {
+                                          detail: {
+                                            frameId: firstSelectedElement.id,
+                                            note: noteHtml,
+                                          },
+                                          bubbles: true,
+                                        },
+                                      );
+                                      document.dispatchEvent(event);
+                                    }}
+                                  />
+                                  <SlideOrderButton
+                                    frameId={firstSelectedElement.id}
+                                    currentOrder={getFrameSlideOrder(
+                                      firstSelectedElement.id,
+                                    )}
+                                    totalSlides={presentationFrames.length}
+                                    onOrderChange={updateFrameSlideOrder}
+                                  />
+                                </>
+                              )}
                               <ElementCanvasButton
                                 title="Frame 设置"
                                 icon={SlideBackgroundIcon}

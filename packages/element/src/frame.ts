@@ -34,6 +34,7 @@ import type {
   ElementsMap,
   ElementsMapOrArray,
   ExcalidrawElement,
+  ExcalidrawFrameElement,
   ExcalidrawFrameLikeElement,
   NonDeleted,
   NonDeletedExcalidrawElement,
@@ -211,6 +212,124 @@ export const groupsAreCompletelyOutOfFrame = (
 };
 
 // --------------------------- Frame Utils ------------------------------------
+
+export const isFrameExcludedFromPresentation = (element: ExcalidrawElement) =>
+  isFrameElement(element) &&
+  element.customData?.excludeFromPresentation === true;
+
+export const isPresentationFrame = (
+  element: ExcalidrawElement,
+): element is NonDeleted<ExcalidrawFrameElement> =>
+  isFrameElement(element) &&
+  !element.isDeleted &&
+  !isFrameExcludedFromPresentation(element);
+
+const compareFrameIds = (
+  frameA: ExcalidrawFrameElement,
+  frameB: ExcalidrawFrameElement,
+) => {
+  if (frameA.id < frameB.id) {
+    return -1;
+  }
+  if (frameA.id > frameB.id) {
+    return 1;
+  }
+  return 0;
+};
+
+const compareFramesByPosition = (
+  frameA: ExcalidrawFrameElement,
+  frameB: ExcalidrawFrameElement,
+) =>
+  frameA.y - frameB.y || frameA.x - frameB.x || compareFrameIds(frameA, frameB);
+
+const compareFramesWithinRow = (
+  frameA: ExcalidrawFrameElement,
+  frameB: ExcalidrawFrameElement,
+) =>
+  frameA.x - frameB.x || frameA.y - frameB.y || compareFrameIds(frameA, frameB);
+
+const sortFramesByPosition = (
+  frames: readonly NonDeleted<ExcalidrawFrameElement>[],
+): NonDeleted<ExcalidrawFrameElement>[] => {
+  const rows: {
+    anchorY: number;
+    frames: NonDeleted<ExcalidrawFrameElement>[];
+  }[] = [];
+
+  for (const frame of [...frames].sort(compareFramesByPosition)) {
+    const currentRow = rows[rows.length - 1];
+    if (!currentRow || frame.y - currentRow.anchorY > 10) {
+      rows.push({ anchorY: frame.y, frames: [frame] });
+    } else {
+      currentRow.frames.push(frame);
+    }
+  }
+
+  return rows.flatMap((row) => row.frames.sort(compareFramesWithinRow));
+};
+
+export const getOrderedFrames = (
+  elements: readonly ExcalidrawElement[],
+  slideOrder?: readonly ExcalidrawElement["id"][],
+): NonDeleted<ExcalidrawFrameElement>[] => {
+  const frames = elements.filter(
+    (element): element is NonDeleted<ExcalidrawFrameElement> =>
+      isFrameElement(element) && !element.isDeleted,
+  );
+  const framesById = arrayToMap(frames);
+  const orderedFrames: NonDeleted<ExcalidrawFrameElement>[] = [];
+  const orderedFrameIds = new Set<ExcalidrawFrameElement["id"]>();
+
+  for (const frameId of slideOrder ?? []) {
+    const frame = framesById.get(frameId);
+    if (frame && !orderedFrameIds.has(frameId)) {
+      orderedFrames.push(frame);
+      orderedFrameIds.add(frameId);
+    }
+  }
+
+  const remainingFrames = sortFramesByPosition(
+    frames.filter((frame) => !orderedFrameIds.has(frame.id)),
+  );
+
+  return [...orderedFrames, ...remainingFrames];
+};
+
+export const getPresentationFrames = (
+  elements: readonly ExcalidrawElement[],
+  slideOrder?: readonly ExcalidrawElement["id"][],
+): NonDeleted<ExcalidrawFrameElement>[] =>
+  getOrderedFrames(elements, slideOrder).filter(
+    (frame) => !isFrameExcludedFromPresentation(frame),
+  );
+
+export const mergePresentationFrameOrder = (
+  fullOrder: readonly ExcalidrawFrameElement["id"][],
+  reorderedPresentationIds: readonly ExcalidrawFrameElement["id"][],
+): ExcalidrawFrameElement["id"][] => {
+  const fullOrderIds = new Set(fullOrder);
+  const reorderedIds: ExcalidrawFrameElement["id"][] = [];
+  const reorderedIdSet = new Set<ExcalidrawFrameElement["id"]>();
+
+  for (const frameId of reorderedPresentationIds) {
+    if (fullOrderIds.has(frameId) && !reorderedIdSet.has(frameId)) {
+      reorderedIds.push(frameId);
+      reorderedIdSet.add(frameId);
+    }
+  }
+
+  let reorderedIndex = 0;
+  const replacedFrameIds = new Set<ExcalidrawFrameElement["id"]>();
+  return fullOrder.map((frameId) => {
+    if (replacedFrameIds.has(frameId) || !reorderedIdSet.has(frameId)) {
+      return frameId;
+    }
+
+    replacedFrameIds.add(frameId);
+    return reorderedIds[reorderedIndex++] ?? frameId;
+  });
+};
 
 /**
  * Returns a map of frameId to frame elements. Includes empty frames.

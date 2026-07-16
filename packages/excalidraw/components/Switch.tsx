@@ -27,11 +27,6 @@ export const Switch = ({
         checked={checked}
         disabled={disabled}
         onChange={() => onChange(!checked)}
-        onKeyDown={(event) => {
-          if (event.key === " ") {
-            onChange(!checked);
-          }
-        }}
       />
     </div>
   );

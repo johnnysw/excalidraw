@@ -35,13 +35,17 @@ import {
   canHaveArrowheads,
   toolIsArrow,
   isFreeDrawElement,
+  isFrameElement,
+  isFrameExcludedFromPresentation,
 } from "@excalidraw/element";
 import { alignActionsPredicate } from "../actions/actionAlign";
+import { actionSetFrameExcludedFromPresentation } from "../actions/actionFramePresentation";
 import { isTextFormatBrushActive } from "../actions/actionStyles";
 import { t } from "../i18n";
 import { NumberInput } from "./NumberInput";
 import { actionChangeStrokeWidth } from "../actions/actionProperties";
 import { ColorPicker } from "./ColorPicker/ColorPicker";
+import { Switch } from "./Switch";
 import "./PropertiesMenu.scss";
 
 import type { ExcalidrawElement } from "@excalidraw/element/types";
@@ -132,6 +136,10 @@ export const PropertiesMenu: React.FC = () => {
 
   // 获取选中的元素
   const selectedElements = getSelectedElements(elements, app.state);
+  const selectedFrame =
+    selectedElements.length === 1 && isFrameElement(selectedElements[0])
+      ? selectedElements[0]
+      : null;
   const elementsMap = app.scene.getNonDeletedElementsMap();
   const targetElements = getTargetElements(elementsMap, app.state);
   const isRTL = document.documentElement.getAttribute("dir") === "rtl";
@@ -320,6 +328,31 @@ export const PropertiesMenu: React.FC = () => {
 
   return (
     <div className="PropertiesMenu properties-content">
+      {selectedFrame && (
+        <div className="PropertiesMenu__section">
+          <div className="PropertiesMenu__section-title">幻灯片</div>
+          <label
+            className="PropertiesMenu__presentation-row"
+            htmlFor={`exclude-frame-${selectedFrame.id}-from-presentation`}
+          >
+            <span className="PropertiesMenu__presentation-label">
+              不作为 PPT 幻灯片
+            </span>
+            <Switch
+              name={`exclude-frame-${selectedFrame.id}-from-presentation`}
+              checked={isFrameExcludedFromPresentation(selectedFrame)}
+              onChange={(excluded) => {
+                actionManager.executeAction(
+                  actionSetFrameExcludedFromPresentation,
+                  "ui",
+                  excluded,
+                );
+              }}
+            />
+          </label>
+        </div>
+      )}
+
       {/* 边框色 */}
       {canEditStrokeColor && (
         <div className="PropertiesMenu__section">

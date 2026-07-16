@@ -4,7 +4,7 @@ import { useApp, useAppProps, useExcalidrawAppState, useExcalidrawElements, useE
 import { ArrowRightIcon, CloseIcon, pencilIcon, EraserIcon, ClearCanvasIcon, HighlighterIcon, ExitPresentationIcon } from "../icons";
 import { KEYS, randomId } from "@excalidraw/common";
 import type { ExcalidrawFrameLikeElement, ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
-import { CaptureUpdateAction, newFreeDrawElement, syncInvalidIndices } from "@excalidraw/element";
+import { CaptureUpdateAction, getPresentationFrames, newFreeDrawElement, syncInvalidIndices } from "@excalidraw/element";
 import type { LocalPoint } from "@excalidraw/math";
 import {
     getAnimationStepConfig,
@@ -70,6 +70,28 @@ const isElementInFrame = (el: any, frame: ExcalidrawFrameLikeElement) => {
     );
 };
 
+export const reconcilePresentationFrameIndex = (
+    previousFrames: readonly Pick<ExcalidrawFrameLikeElement, "id">[],
+    currentFrames: readonly Pick<ExcalidrawFrameLikeElement, "id">[],
+    previousIndex: number,
+): number | null => {
+    if (currentFrames.length === 0) {
+        return null;
+    }
+
+    const previousFrameId = previousFrames[previousIndex]?.id;
+    if (previousFrameId) {
+        const currentIndex = currentFrames.findIndex(
+            (frame) => frame.id === previousFrameId,
+        );
+        if (currentIndex !== -1) {
+            return currentIndex;
+        }
+    }
+
+    return Math.min(Math.max(previousIndex, 0), currentFrames.length - 1);
+};
+
 const Presentation = () => {
     const appState = useExcalidrawAppState();
     const setAppState = useExcalidrawSetAppState();
@@ -78,8 +100,25 @@ const Presentation = () => {
     const appProps = useAppProps();
     const appPropsRef = useRef(appProps);
 
-    const [frames, setFrames] = useState<ExcalidrawFrameLikeElement[]>([]);
-    const [currentIndex, setCurrentIndex] = useState(0);
+    const frames = useMemo(
+        () => getPresentationFrames(elements, appState.slideOrder),
+        [appState.slideOrder, elements],
+    );
+    const initialSlideIndex = (appState as any).presentationSlideIndex;
+    const [storedCurrentIndex, setCurrentIndex] = useState(() =>
+        typeof initialSlideIndex === "number" &&
+        initialSlideIndex >= 0 &&
+        initialSlideIndex < frames.length
+            ? initialSlideIndex
+            : 0,
+    );
+    const previousFramesRef = useRef(frames);
+    const effectiveCurrentIndex = reconcilePresentationFrameIndex(
+        previousFramesRef.current,
+        frames,
+        storedCurrentIndex,
+    );
+    const currentIndex = effectiveCurrentIndex ?? 0;
     const [activePresentationTool, setActivePresentationTool] = useState<"none" | "pen" | "highlighter" | "eraser">("none");
     const [showPenColors, setShowPenColors] = useState(false);
     const [showHighlighterColors, setShowHighlighterColors] = useState(false);
@@ -100,9 +139,6 @@ const Presentation = () => {
 
     // Track element IDs that existed before presentation mode started
     const presentationActiveRef = useRef(false);
-    // Track if we've applied the initial slide index
-    const initialSlideAppliedRef = useRef(false);
-
     // BroadcastChannel ref for receiving drawing data from presenter view
     const presenterChannelRef = useRef<BroadcastChannel | null>(null);
 
@@ -216,6 +252,10 @@ const Presentation = () => {
     }, [setAppState, app, clearPresentationPlayback]);
 
     useEffect(() => {
+        if (appState.presentationMode && frames.length === 0) {
+            void exitPresentation();
+            return;
+        }
         if (appState.presentationMode && !presentationActiveRef.current) {
             presentationActiveRef.current = true;
             savedViewportRef.current = {
@@ -223,7 +263,6 @@ const Presentation = () => {
                 scrollY: (appState as any).scrollY,
                 zoom: (appState as any).zoom,
             };
-            initialSlideAppliedRef.current = false; // Reset for new presentation
             // Reset presentationStep when entering presentation mode
             // Save existing element IDs to prevent erasing them in presentation mode
             setAppState({
@@ -246,54 +285,46 @@ const Presentation = () => {
                 }),
             );
         }
-    }, [appState.presentationMode, frames.length]);
-
-    // Get custom slide order from appState
-    const customSlideOrder = (appState as any).slideOrder as string[] | undefined;
+    }, [appState.presentationMode, exitPresentation, frames.length]);
 
     const getMaxStepsForFrame = (frame: ExcalidrawFrameLikeElement) => {
         const frameElements = elements.filter(el => isElementInFrame(el, frame) && !el.isDeleted);
         return getMaxAnimationStep(frameElements as any);
     };
 
-    useEffect(() => {
-        const allFrames = elements.filter((el) => el.type === "frame" && !el.isDeleted) as ExcalidrawFrameLikeElement[];
-
-        if (customSlideOrder && customSlideOrder.length > 0) {
-            // Use custom order from PresentationMenu
-            const orderedFrames = customSlideOrder
-                .map(id => allFrames.find(f => f.id === id))
-                .filter((f): f is ExcalidrawFrameLikeElement => f != null);
-
-            // Add any new frames that weren't in the custom order (at the end)
-            const remainingFrames = allFrames.filter(f => !customSlideOrder.includes(f.id));
-            remainingFrames.sort((a, b) => {
-                if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
-                return a.x - b.x;
-            });
-
-            setFrames([...orderedFrames, ...remainingFrames]);
-        } else {
-            // Default: sort by Y position
-            allFrames.sort((a, b) => {
-                if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
-                return a.x - b.x;
-            });
-            setFrames(allFrames);
+    useLayoutEffect(() => {
+        if (!appState.presentationMode) {
+            previousFramesRef.current = frames;
+            return;
         }
-    }, [elements, customSlideOrder]);
 
-    // Apply initial slide index when frames are ready and presentation starts
-    useEffect(() => {
-        if (appState.presentationMode && frames.length > 0 && !initialSlideAppliedRef.current) {
-            const startIndex = (appState as any).presentationSlideIndex;
-            if (typeof startIndex === 'number' && startIndex >= 0 && startIndex < frames.length) {
-                setCurrentIndex(startIndex);
-                currentIndexRef.current = startIndex;
-            }
-            initialSlideAppliedRef.current = true;
+        const previousFrames = previousFramesRef.current;
+        const previousIndex = storedCurrentIndex;
+        const previousFrameId = previousFrames[previousIndex]?.id ?? null;
+        const nextIndex = effectiveCurrentIndex;
+        previousFramesRef.current = frames;
+
+        if (nextIndex === null) {
+            void exitPresentation();
+            return;
         }
-    }, [appState.presentationMode, frames.length, (appState as any).presentationSlideIndex]);
+
+        const nextFrameId = frames[nextIndex]?.id ?? null;
+        if (nextIndex !== previousIndex) {
+            currentIndexRef.current = nextIndex;
+            setCurrentIndex(nextIndex);
+        }
+        if (nextFrameId !== previousFrameId) {
+            setAppState({ presentationStep: 0 });
+        }
+    }, [
+        appState.presentationMode,
+        effectiveCurrentIndex,
+        exitPresentation,
+        frames,
+        setAppState,
+        storedCurrentIndex,
+    ]);
 
     // Zoom to fit frame with full viewport coverage when index changes
     useEffect(() => {
@@ -916,7 +947,7 @@ const Presentation = () => {
         };
     }, [appState.presentationMode, app]);
 
-    if (!appState.presentationMode) return null;
+    if (!appState.presentationMode || frames.length === 0) return null;
 
     // Get current frame for overlay calculation
     const currentFrame = frames[currentIndex];

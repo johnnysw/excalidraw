@@ -20,12 +20,14 @@ const Footer = ({
   actionManager,
   showExitZenModeBtn,
   renderWelcomeScreen,
+  canPresent,
   onPresent,
 }: {
   appState: UIAppState;
   actionManager: ActionManager;
   showExitZenModeBtn: boolean;
   renderWelcomeScreen: boolean;
+  canPresent: boolean;
   onPresent: (mode: "viewer" | "presenter") => void;
 }) => {
   const { FooterCenterTunnel, WelcomeScreenHelpHintTunnel } = useTunnels();
@@ -43,6 +45,12 @@ const Footer = ({
       : !appState.viewModeEnabled || showPresentationInViewMode;
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!canPresent) {
+      setMenuOpen(false);
+    }
+  }, [canPresent]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -106,8 +114,16 @@ const Footer = ({
               <button
                 ref={triggerRef}
                 className={clsx("App-menu__left-btn", "help-icon")}
-                onClick={() => setMenuOpen((open) => !open)}
-                title="演示模式"
+                disabled={!canPresent}
+                onClick={() => {
+                  if (canPresent) {
+                    setMenuOpen((open) => !open);
+                  }
+                }}
+                title={canPresent ? "演示模式" : "没有可播放的幻灯片"}
+                aria-label={
+                  canPresent ? "演示模式" : "没有可播放的幻灯片"
+                }
               >
                 {PlaySquareIcon}
               </button>
@@ -140,6 +156,9 @@ const Footer = ({
                     <button
                       key={item.key}
                       onClick={() => {
+                        if (!canPresent) {
+                          return;
+                        }
                         onPresent(item.key);
                         setMenuOpen(false);
                       }}

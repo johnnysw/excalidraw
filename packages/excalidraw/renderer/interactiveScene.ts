@@ -29,6 +29,7 @@ import {
   hasBoundingBox,
   isElbowArrow,
   isFrameLikeElement,
+  isFrameExcludedFromPresentation,
   isImageElement,
   isLinearElement,
   isLineElement,
@@ -1196,6 +1197,33 @@ const _renderInteractiveScene = ({
       }
     }
   });
+
+  if (!appState.presentationMode) {
+    context.save();
+    context.lineWidth = 1.5 / appState.zoom.value;
+    context.setLineDash([8 / appState.zoom.value, 6 / appState.zoom.value]);
+    context.strokeStyle =
+      appState.theme === THEME.DARK ? "#adb5bd" : "#868e96";
+
+    visibleElements.forEach((element) => {
+      if (!isFrameExcludedFromPresentation(element)) {
+        return;
+      }
+
+      const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(element, elementsMap);
+      strokeRectWithRotation_simple(
+        context,
+        x1 + appState.scrollX,
+        y1 + appState.scrollY,
+        x2 - x1,
+        y2 - y1,
+        cx + appState.scrollX,
+        cy + appState.scrollY,
+        element.angle,
+      );
+    });
+    context.restore();
+  }
 
   if (editingLinearElement) {
     renderLinearPointHandles(

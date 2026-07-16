@@ -134,6 +134,7 @@ export type ActionName =
   | "selectAllElementsInFrame"
   | "removeAllElementsFromFrame"
   | "updateFrameRendering"
+  | "setFrameExcludedFromPresentation"
   | "setFrameAsActiveTool"
   | "setEmbeddableAsActiveTool"
   | "createContainerFromText"

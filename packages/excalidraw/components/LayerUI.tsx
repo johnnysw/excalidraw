@@ -11,7 +11,11 @@ import {
   isShallowEqual,
 } from "@excalidraw/common";
 
-import { mutateElement } from "@excalidraw/element";
+import {
+  getOrderedFrames,
+  getPresentationFrames,
+  mutateElement,
+} from "@excalidraw/element";
 
 import { showSelectedShapeActions } from "@excalidraw/element";
 
@@ -178,6 +182,14 @@ const LayerUI = ({
   const isSidebarVisible = shareModePermissions?.sidebar?.visible ?? true;
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
+  const fullFrameOrder = React.useMemo(
+    () => getOrderedFrames(elements, appState.slideOrder),
+    [appState.slideOrder, elements],
+  );
+  const canPresent = React.useMemo(
+    () => getPresentationFrames(elements, appState.slideOrder).length > 0,
+    [appState.slideOrder, elements],
+  );
 
   const spacing = isCompactStylesPanel
     ? {
@@ -746,7 +758,11 @@ const LayerUI = ({
               actionManager={actionManager}
               showExitZenModeBtn={showExitZenModeBtn}
               renderWelcomeScreen={renderWelcomeScreen}
+              canPresent={canPresent}
               onPresent={(mode) => {
+                if (!canPresent) {
+                  return;
+                }
                 let presenterWindow: Window | null = null;
                 if (mode === "presenter") {
                   // 在用户点击手势中打开窗口，避免被浏览器拦截
@@ -784,6 +800,7 @@ const LayerUI = ({
                   presentationMode: true,
                   presentationSlideIndex: 0,
                   presentationStep: 0,
+                  slideOrder: fullFrameOrder.map((frame) => frame.id),
                 } as any);
                 const event = new CustomEvent("excalidraw:startPresentation", {
                   detail: { mode, presenterWindow },

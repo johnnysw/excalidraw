@@ -75,6 +75,25 @@
     margin-bottom: 0.5rem;
   }
 
+  &__presentation-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: 44px;
+    min-width: 0;
+    cursor: pointer;
+
+    .Switch {
+      flex: 0 0 40px;
+    }
+  }
+
+  &__presentation-label {
+    flex: 1;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   // Color row
   &__color-row {
     // Color picker styling
