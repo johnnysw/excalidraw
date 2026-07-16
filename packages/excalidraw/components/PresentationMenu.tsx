@@ -748,16 +748,6 @@ const PresentationMenuContent: React.FC = () => {
                                     </button>
                                 )}
                                 <button
-                                    className="PresentationMenu__background-btn"
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditBackground(slide.id);
-                                    }}
-                                    title="Frame 设置"
-                                >
-                                    {SlideBackgroundIcon}
-                                </button>
-                                <button
                                     className="PresentationMenu__note-btn"
                                     onClick={(e) => {
                                         e.stopPropagation();
@@ -772,6 +762,16 @@ const PresentationMenuContent: React.FC = () => {
                                             aria-hidden
                                         />
                                     </span>
+                                </button>
+                                <button
+                                    className="PresentationMenu__background-btn"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditBackground(slide.id);
+                                    }}
+                                    title="Frame 设置"
+                                >
+                                    {SlideBackgroundIcon}
                                 </button>
                             </div>
                         </div>

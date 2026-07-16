@@ -2723,46 +2723,6 @@ class App extends React.Component<AppProps, AppState> {
                                       )
                                     }
                                   />
-                                  <ElementCanvasButton
-                                    title={
-                                      hasFrameSlideNote(firstSelectedElement)
-                                        ? "查看/编辑注释"
-                                        : "添加注释"
-                                    }
-                                    icon={
-                                      <>
-                                        {Comment01Icon}
-                                        <span
-                                          className={
-                                            hasFrameSlideNote(
-                                              firstSelectedElement,
-                                            )
-                                              ? "has-note-dot"
-                                              : "no-note-dot"
-                                          }
-                                          aria-hidden
-                                        />
-                                      </>
-                                    }
-                                    checked={false}
-                                    onChange={() => {
-                                      const noteHtml =
-                                        getFrameSlideNoteHtml(
-                                          firstSelectedElement,
-                                        );
-                                      const event = new CustomEvent(
-                                        "excalidraw:editSlideNote",
-                                        {
-                                          detail: {
-                                            frameId: firstSelectedElement.id,
-                                            note: noteHtml,
-                                          },
-                                          bubbles: true,
-                                        },
-                                      );
-                                      document.dispatchEvent(event);
-                                    }}
-                                  />
                                   <SlideOrderButton
                                     frameId={firstSelectedElement.id}
                                     currentOrder={getFrameSlideOrder(
@@ -2773,6 +2733,42 @@ class App extends React.Component<AppProps, AppState> {
                                   />
                                 </>
                               )}
+                              <ElementCanvasButton
+                                title={
+                                  hasFrameSlideNote(firstSelectedElement)
+                                    ? "查看/编辑注释"
+                                    : "添加注释"
+                                }
+                                icon={
+                                  <>
+                                    {Comment01Icon}
+                                    <span
+                                      className={
+                                        hasFrameSlideNote(firstSelectedElement)
+                                          ? "has-note-dot"
+                                          : "no-note-dot"
+                                      }
+                                      aria-hidden
+                                    />
+                                  </>
+                                }
+                                checked={false}
+                                onChange={() => {
+                                  const noteHtml =
+                                    getFrameSlideNoteHtml(firstSelectedElement);
+                                  const event = new CustomEvent(
+                                    "excalidraw:editSlideNote",
+                                    {
+                                      detail: {
+                                        frameId: firstSelectedElement.id,
+                                        note: noteHtml,
+                                      },
+                                      bubbles: true,
+                                    },
+                                  );
+                                  document.dispatchEvent(event);
+                                }}
+                              />
                               <ElementCanvasButton
                                 title="Frame 设置"
                                 icon={SlideBackgroundIcon}

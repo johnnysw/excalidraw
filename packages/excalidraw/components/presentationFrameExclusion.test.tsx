@@ -45,17 +45,32 @@ describe("presentation frame exclusion", () => {
     delete (HTMLElement.prototype as Partial<HTMLElement>).requestFullscreen;
   });
 
-  it("shows only Frame settings when the selected frame is excluded", () => {
+  it("keeps slide notes available when the selected frame is excluded", () => {
     const excluded = createFrame("frame-b", { excluded: true });
     API.setElements([excluded]);
     API.setSelectedElements([excluded]);
 
     expect(screen.queryByTitle("从此播放")).not.toBeInTheDocument();
     expect(screen.queryByTitle("演讲者视图")).not.toBeInTheDocument();
-    expect(screen.queryByTitle("添加注释")).not.toBeInTheDocument();
+    expect(screen.getByTitle("添加注释")).toBeInTheDocument();
     expect(screen.queryByTitle("查看/编辑注释")).not.toBeInTheDocument();
     expect(screen.queryByTitle("设置播放顺序")).not.toBeInTheDocument();
     expect(screen.getByTitle("Frame 设置")).toBeInTheDocument();
+  });
+
+  it("keeps existing slide notes editable when the frame is excluded", () => {
+    const excluded = {
+      ...createFrame("frame-b", { excluded: true }),
+      customData: {
+        excludeFromPresentation: true,
+        slideNoteHtml: "<p>Speaker note</p>",
+      },
+    };
+    API.setElements([excluded]);
+    API.setSelectedElements([excluded]);
+
+    expect(screen.getByTitle("查看/编辑注释")).toBeInTheDocument();
+    expect(screen.queryByTitle("添加注释")).not.toBeInTheDocument();
   });
 
   it("uses the compact placeholder for an excluded frame label", () => {
@@ -161,6 +176,34 @@ describe("presentation frame exclusion", () => {
     expect(screen.queryByTitle("Magic")).not.toBeInTheDocument();
     expect(screen.getByText("2 张")).toBeInTheDocument();
     expect(h.state.slideOrder).toEqual([last.id, excluded.id, first.id]);
+  });
+
+  it("places Frame settings last in each slide card action row", async () => {
+    const frame = { ...createFrame("frame-a"), name: "Only slide" };
+    API.setElements([frame]);
+    API.setAppState({
+      openSidebar: {
+        name: DEFAULT_SIDEBAR.name,
+        tab: PRESENTATION_SIDEBAR_TAB,
+      },
+    });
+
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll(
+          ".PresentationMenu__slide-actions > button",
+        ),
+      ).toHaveLength(4);
+    });
+
+    expect(
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>(
+          ".PresentationMenu__slide-actions > button",
+        ),
+        (button) => button.title,
+      ),
+    ).toEqual(["从此播放", "演讲者视图", "添加注释", "Frame 设置"]);
   });
 
   it("keeps a visible drag reorder after persisting the complete order", async () => {
