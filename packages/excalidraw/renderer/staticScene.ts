@@ -24,7 +24,14 @@ import type {
   ExcalidrawFrameLikeElement,
   NonDeletedExcalidrawElement,
 } from "@excalidraw/element/types";
-import type { AnimationTarget } from "../components/AnimationMenu/types";
+import type {
+  AnimationTarget,
+  AnimationType,
+} from "../components/AnimationMenu/types";
+import {
+  getAnimatedElementOpacity,
+  getAnimationSlideOffset,
+} from "../components/AnimationMenu/animationPlayback";
 
 import {
   EXTERNAL_LINK_IMG,
@@ -621,6 +628,7 @@ const _renderStaticScene = ({
 
         // 默认用于渲染的元素（对于文本变色动画，会在下方生成一个带有插值颜色的拷贝）
         let elementForRender: any = element;
+        let animationAlpha = 1;
 
         // Apply animation effects for elements appearing in current step
         // Support both presentationMode and isPlayingAnimation
@@ -653,28 +661,34 @@ const _renderStaticScene = ({
 
         if (shouldApplyAnimation && activeAnimation) {
           const progress = appState.animationProgress ?? 1;
-          const animType = activeAnimation.type || 'fadeIn';
-          const slideOffset = 100; // pixels
+          const animType = (activeAnimation.type || "fadeIn") as AnimationType;
+          const animationFrame = frameId
+            ? (elementsMap.get(frameId) as ExcalidrawFrameLikeElement | undefined)
+            : undefined;
+          const slideOffset = getAnimationSlideOffset(animType, {
+            width: animationFrame?.width ?? 0,
+            height: animationFrame?.height ?? 0,
+          });
 
           switch (animType) {
             case 'fadeIn':
-              context.globalAlpha = progress;
+              animationAlpha = progress;
               break;
             case 'slideInLeft':
-              context.translate(-slideOffset * (1 - progress), 0);
-              context.globalAlpha = progress;
+              context.translate(slideOffset.x * (1 - progress), 0);
+              animationAlpha = progress;
               break;
             case 'slideInRight':
-              context.translate(slideOffset * (1 - progress), 0);
-              context.globalAlpha = progress;
+              context.translate(slideOffset.x * (1 - progress), 0);
+              animationAlpha = progress;
               break;
             case 'slideInTop':
-              context.translate(0, -slideOffset * (1 - progress));
-              context.globalAlpha = progress;
+              context.translate(0, slideOffset.y * (1 - progress));
+              animationAlpha = progress;
               break;
             case 'slideInBottom':
-              context.translate(0, slideOffset * (1 - progress));
-              context.globalAlpha = progress;
+              context.translate(0, slideOffset.y * (1 - progress));
+              animationAlpha = progress;
               break;
             case 'textColor': {
               // 文本变色动画：不改变透明度与位置，从黑色渐变到当前文本颜色
@@ -688,6 +702,16 @@ const _renderStaticScene = ({
               }
               break;
             }
+          }
+
+          if (animationAlpha < 1) {
+            elementForRender = {
+              ...elementForRender,
+              opacity: getAnimatedElementOpacity(
+                elementForRender.opacity,
+                animationAlpha,
+              ),
+            };
           }
         }
 
@@ -720,7 +744,7 @@ const _renderStaticScene = ({
           );
         } else {
           renderElement(
-            element,
+            elementForRender,
             elementsMap,
             allElementsMap,
             rc,
@@ -732,8 +756,18 @@ const _renderStaticScene = ({
 
         const boundTextElement = getBoundTextElement(element, elementsMap);
         if (boundTextElement) {
+          const boundTextElementForRender =
+            animationAlpha < 1
+              ? {
+                  ...boundTextElement,
+                  opacity: getAnimatedElementOpacity(
+                    boundTextElement.opacity,
+                    animationAlpha,
+                  ),
+                }
+              : boundTextElement;
           renderElement(
-            boundTextElement,
+            boundTextElementForRender,
             elementsMap,
             allElementsMap,
             rc,

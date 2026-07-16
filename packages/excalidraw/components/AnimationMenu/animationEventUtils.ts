@@ -6,6 +6,10 @@
  * - eventsToElements: 把 AnimationEvent[] 写回到 elements
  */
 
+import { newElementWith } from "@excalidraw/element";
+
+import { normalizeAnimationDuration } from "./animationPlayback";
+import { DEFAULT_EVENT } from "./types";
 import type {
   AnimationEvent,
   AnimationType,
@@ -13,7 +17,6 @@ import type {
   ElementAnimation,
   AnimationTarget,
 } from "./types";
-import { DEFAULT_EVENT } from "./types";
 
 /**
  * 带动画字段的元素类型
@@ -126,7 +129,7 @@ export function elementsToEvents(
       order: i + 1,
       elements: Array.from(new Set(groupElements.map((el) => el.id))),
       type: (animation.type as AnimationType) || "fadeIn",
-      duration: animation.duration || 500,
+      duration: normalizeAnimationDuration(animation.duration),
       startMode,
       trigger: animation.trigger || "click",
       animationTarget: animation.animationTarget,
@@ -161,6 +164,35 @@ export function eventsToElements(
     }
   }
 
+  const areAnimationsEqual = (
+    previous: ElementAnimation | ElementAnimation[] | undefined,
+    next: ElementAnimation | ElementAnimation[],
+  ) => {
+    const byPlaybackOrder = (a: ElementAnimation, b: ElementAnimation) =>
+      (a.order ?? a.stepGroup ?? 0) - (b.order ?? b.stepGroup ?? 0);
+    const previousAnimations = [...normalizeAnimations(previous)].sort(
+      byPlaybackOrder,
+    );
+    const nextAnimations = [...normalizeAnimations(next)].sort(byPlaybackOrder);
+    if (previousAnimations.length !== nextAnimations.length) {
+      return false;
+    }
+
+    return previousAnimations.every((animation, index) => {
+      const nextAnimation = nextAnimations[index];
+      return (
+        animation.type === nextAnimation.type &&
+        animation.duration === nextAnimation.duration &&
+        animation.stepGroup === nextAnimation.stepGroup &&
+        animation.trigger === nextAnimation.trigger &&
+        animation.startMode === nextAnimation.startMode &&
+        animation.eventId === nextAnimation.eventId &&
+        animation.order === nextAnimation.order &&
+        animation.animationTarget === nextAnimation.animationTarget
+      );
+    });
+  };
+
   // 建立 elementId -> event 的映射
   const elementEventMap = new Map<string, AnimationEvent[]>();
   for (const event of sortedEvents) {
@@ -179,11 +211,12 @@ export function eventsToElements(
       if (frameId && el.frameId !== frameId) {
         return el;
       }
-      if (el.animation) {
-        return {
-          ...el,
-          animation: undefined,
-        };
+      if (normalizeAnimations(el.animation).length > 0) {
+        return newElementWith(
+          el as any,
+          { animation: undefined } as any,
+          true,
+        ) as ElementWithAnimation;
       }
       return el;
     }
@@ -193,13 +226,15 @@ export function eventsToElements(
         const stepGroup = eventStepGroups.get(event.id)!;
         return {
           type: event.type,
-          duration: event.duration,
+          duration: normalizeAnimationDuration(event.duration),
           stepGroup,
           trigger: event.trigger || "click",
           startMode: event.startMode,
           eventId: event.id,
           order: event.order,
-          animationTarget: event.animationTarget,
+          ...(event.animationTarget
+            ? { animationTarget: event.animationTarget }
+            : {}),
         } as ElementAnimation;
       })
       .sort((a, b) => {
@@ -208,10 +243,14 @@ export function eventsToElements(
         return aOrder - bOrder;
       });
 
-    return {
-      ...el,
-      animation: animations.length === 1 ? animations[0] : animations,
-    };
+    const nextAnimation = animations.length === 1 ? animations[0] : animations;
+    if (areAnimationsEqual(el.animation, nextAnimation)) {
+      return el;
+    }
+
+    return newElementWith(el as any, {
+      animation: nextAnimation,
+    } as any) as ElementWithAnimation;
   });
 }
 

@@ -97,7 +97,7 @@ export const ANIMATION_TARGET_OPTIONS: {
 /** 默认动画配置 */
 export const DEFAULT_ANIMATION: ElementAnimation = {
   type: "fadeIn",
-  duration: 500,
+  duration: 800,
   stepGroup: 1,
   trigger: "click",
 };
@@ -106,7 +106,7 @@ export const DEFAULT_ANIMATION: ElementAnimation = {
 export const DEFAULT_EVENT: Omit<AnimationEvent, "id" | "order" | "elements"> =
   {
     type: "fadeIn",
-    duration: 500,
+    duration: 800,
     startMode: "onClick",
     trigger: "click",
   };

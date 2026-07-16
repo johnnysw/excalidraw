@@ -301,6 +301,15 @@ export { LiveCollaborationTrigger };
 export { Stats } from "./components/Stats";
 
 export { DefaultSidebar } from "./components/DefaultSidebar";
+export {
+  ANIMATION_DEFAULT_DURATION_MS,
+  ANIMATION_MIN_DURATION_MS,
+  ANIMATION_MAX_DURATION_MS,
+  ANIMATION_PREVIEW_CLICK_GAP_MS,
+  easeInOutCubic,
+  getAnimationSlideOffset,
+  normalizeAnimationDuration,
+} from "./components/AnimationMenu/animationPlayback";
 export { TTDDialog } from "./components/TTDDialog/TTDDialog";
 export { TTDDialogTrigger } from "./components/TTDDialog/TTDDialogTrigger";
 

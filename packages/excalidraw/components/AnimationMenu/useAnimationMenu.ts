@@ -9,18 +9,20 @@ import {
   useExcalidrawSetAppState,
 } from "../App";
 import { getSelectedElements } from "../../scene";
-import { isFrameLikeElement, syncInvalidIndices } from "@excalidraw/element";
+import {
+  CaptureUpdateAction,
+  isFrameLikeElement,
+  syncInvalidIndices,
+} from "@excalidraw/element";
 import type {
   ExcalidrawElement,
   ExcalidrawFrameLikeElement,
 } from "@excalidraw/element/types";
 import type {
   AnimationEvent,
-  AnimationType,
   ElementAnimation,
   AnimationTarget,
 } from "./types";
-import { DEFAULT_EVENT } from "./types";
 import {
   elementsToEvents,
   eventsToElements,
@@ -232,7 +234,10 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
       currentFrame?.id,
     );
 
-    app.scene.replaceAllElements(syncInvalidIndices(updatedElements as any));
+    app.syncActionResult({
+      elements: syncInvalidIndices(updatedElements as any),
+      captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+    });
     setSelectedEventId(newEvent.id);
   }, [selectedElements, events, elements, currentFrame?.id, app]);
 
@@ -247,7 +252,10 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
         currentFrame?.id,
       );
 
-      app.scene.replaceAllElements(syncInvalidIndices(updatedElements as any));
+      app.syncActionResult({
+        elements: syncInvalidIndices(updatedElements as any),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
 
       if (selectedEventId === eventId) {
         setSelectedEventId(null);
@@ -274,7 +282,10 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
         currentFrame?.id,
       );
 
-      app.scene.replaceAllElements(syncInvalidIndices(updatedElements as any));
+      app.syncActionResult({
+        elements: syncInvalidIndices(updatedElements as any),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
     },
     [events, elements, currentFrame?.id, app],
   );
@@ -299,7 +310,10 @@ export function useAnimationMenu(): UseAnimationMenuReturn {
         currentFrame?.id,
       );
 
-      app.scene.replaceAllElements(syncInvalidIndices(updatedElements as any));
+      app.syncActionResult({
+        elements: syncInvalidIndices(updatedElements as any),
+        captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+      });
     },
     [events, elements, currentFrame?.id, app],
   );

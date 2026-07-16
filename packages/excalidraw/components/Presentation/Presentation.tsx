@@ -1,11 +1,18 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useState, useRef, useCallback } from "react";
 import "./Presentation.scss";
 import { useApp, useAppProps, useExcalidrawAppState, useExcalidrawElements, useExcalidrawSetAppState } from "../App";
 import { ArrowRightIcon, CloseIcon, pencilIcon, EraserIcon, ClearCanvasIcon, HighlighterIcon, ExitPresentationIcon } from "../icons";
 import { KEYS, randomId } from "@excalidraw/common";
-import { ExcalidrawFrameLikeElement, ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
+import type { ExcalidrawFrameLikeElement, ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
 import { CaptureUpdateAction, newFreeDrawElement, syncInvalidIndices } from "@excalidraw/element";
 import type { LocalPoint } from "@excalidraw/math";
+import {
+    getAnimationStepConfig,
+    getMaxAnimationStep,
+    getPresentationAutoAdvanceDelay,
+    runAnimationProgress,
+    schedulePresentationAutoAdvance,
+} from "../AnimationMenu/animationPlayback";
 
 const PRESENTER_CHANNEL_NAME = 'presenter-drawing';
 
@@ -50,6 +57,18 @@ const STROKE_WIDTHS = [
 // Highlighter opacity range (20-80%)
 const MIN_OPACITY = 20;
 const MAX_OPACITY = 80;
+
+const isElementInFrame = (el: any, frame: ExcalidrawFrameLikeElement) => {
+    if (el.frameId === frame.id) return true;
+    const elCenterX = el.x + (el.width || 0) / 2;
+    const elCenterY = el.y + (el.height || 0) / 2;
+    return (
+        elCenterX >= frame.x &&
+        elCenterX <= frame.x + frame.width &&
+        elCenterY >= frame.y &&
+        elCenterY <= frame.y + frame.height
+    );
+};
 
 const Presentation = () => {
     const appState = useExcalidrawAppState();
@@ -100,6 +119,8 @@ const Presentation = () => {
     const appStateRef = useRef(appState);
     const isExitingPresentationRef = useRef(false);
     const shouldDiscardPresentationInkOnCleanupRef = useRef(true);
+    const cancelAnimationProgressRef = useRef<(() => void) | null>(null);
+    const cancelAutoAdvanceRef = useRef<(() => void) | null>(null);
     currentIndexRef.current = currentIndex;
     framesLengthRef.current = frames.length;
     framesRef.current = frames;
@@ -107,11 +128,19 @@ const Presentation = () => {
     appStateRef.current = appState;
     appPropsRef.current = appProps;
 
+    const clearPresentationPlayback = useCallback(() => {
+        cancelAnimationProgressRef.current?.();
+        cancelAnimationProgressRef.current = null;
+        cancelAutoAdvanceRef.current?.();
+        cancelAutoAdvanceRef.current = null;
+    }, []);
+
     const exitPresentation = useCallback(async () => {
         if (isExitingPresentationRef.current) {
             return;
         }
         isExitingPresentationRef.current = true;
+        clearPresentationPlayback();
         setShowPenColors(false);
         setShowHighlighterColors(false);
 
@@ -184,7 +213,7 @@ const Presentation = () => {
                 }
                 : {}),
         } as any));
-    }, [setAppState, app]);
+    }, [setAppState, app, clearPresentationPlayback]);
 
     useEffect(() => {
         if (appState.presentationMode && !presentationActiveRef.current) {
@@ -222,51 +251,9 @@ const Presentation = () => {
     // Get custom slide order from appState
     const customSlideOrder = (appState as any).slideOrder as string[] | undefined;
 
-    // Check if element is inside frame bounds (fallback when frameId is not set)
-    const isElementInFrame = (el: any, frame: ExcalidrawFrameLikeElement) => {
-        if (el.frameId === frame.id) return true;
-        // Geometric check: element center point within frame bounds
-        const elCenterX = el.x + (el.width || 0) / 2;
-        const elCenterY = el.y + (el.height || 0) / 2;
-        return (
-            elCenterX >= frame.x &&
-            elCenterX <= frame.x + frame.width &&
-            elCenterY >= frame.y &&
-            elCenterY <= frame.y + frame.height
-        );
-    };
-
-    const normalizeAnimations = (animation: any) => {
-        if (!animation) return [];
-        return Array.isArray(animation) ? animation : [animation];
-    };
-
     const getMaxStepsForFrame = (frame: ExcalidrawFrameLikeElement) => {
         const frameElements = elements.filter(el => isElementInFrame(el, frame) && !el.isDeleted);
-        let max = 0;
-        for (const el of frameElements) {
-            const animations = normalizeAnimations((el as any).animation);
-            for (const anim of animations) {
-                if (anim?.stepGroup) {
-                    max = Math.max(max, anim.stepGroup);
-                }
-            }
-        }
-        return max;
-    };
-
-    // Get the startMode for a specific step in a frame
-    const getStepStartMode = (frame: ExcalidrawFrameLikeElement, step: number): string => {
-        const frameElements = elements.filter(el => isElementInFrame(el, frame) && !el.isDeleted);
-        // Find an element with this stepGroup and get its startMode
-        for (const el of frameElements) {
-            const animations = normalizeAnimations((el as any).animation);
-            const matched = animations.find((anim: any) => anim?.stepGroup === step);
-            if (matched) {
-                return matched.startMode || 'onClick';
-            }
-        }
-        return 'onClick';
+        return getMaxAnimationStep(frameElements as any);
     };
 
     useEffect(() => {
@@ -375,13 +362,11 @@ const Presentation = () => {
                 if (currentStep < maxSteps) {
                     setAppState({
                         presentationStep: currentStep + 1,
-                        animationProgress: 0 // Reset animation progress immediately to prevent flash
                     } as any);
                 } else if (currentIndex < frames.length - 1) {
                     setCurrentIndex(currentIndex + 1);
                     setAppState({
                         presentationStep: 0,
-                        animationProgress: 0
                     } as any);
                 }
             } else if (event.key === KEYS.ARROW_LEFT) {
@@ -407,60 +392,123 @@ const Presentation = () => {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [currentIndex, frames, setAppState, showPenColors, showHighlighterColors, appState.presentationMode, appState.presentationStep, elements, exitPresentation]);
 
-    // Animation progress effect - animate from 0 to 1 when presentationStep changes
-    const prevStepRef = useRef(appState.presentationStep);
-    useEffect(() => {
-        const currentStep = appState.presentationStep || 0;
-        const currentFrame = frames[currentIndex];
-
-        // Only animate forward (new step appearing)
-        if (currentStep > prevStepRef.current) {
-            // Start animation from 0
-            setAppState({ animationProgress: 0 } as any);
-
-            const startTime = performance.now();
-            const duration = 400; // ms
-
-            const animate = (now: number) => {
-                const elapsed = now - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-
-                // Easing function (ease-out)
-                const eased = 1 - Math.pow(1 - progress, 3);
-
-                setAppState({ animationProgress: eased } as any);
-
-                if (progress < 1) {
-                    requestAnimationFrame(animate);
-                } else {
-                    // Animation complete - check if next step should auto-play
-                    if (currentFrame) {
-                        const maxSteps = getMaxStepsForFrame(currentFrame);
-                        const nextStep = currentStep + 1;
-                        if (nextStep <= maxSteps) {
-                            const nextStartMode = getStepStartMode(currentFrame, nextStep);
-                            if (nextStartMode === 'afterPrevious') {
-                                // Auto-advance to next step after a brief delay
-                                setTimeout(() => {
-                                    setAppState({
-                                        presentationStep: nextStep,
-                                        animationProgress: 0
-                                    } as any);
-                                }, 50);
-                            }
-                        }
-                    }
-                }
+    const playbackStep = appState.presentationStep || 0;
+    const playbackConfig = useMemo(() => {
+        const frame = frames[currentIndex];
+        if (!frame) {
+            return {
+                frameId: null as string | null,
+                duration: 0,
+                maxStep: 0,
+                nextAutoAdvanceDelay: null as number | null,
             };
-
-            requestAnimationFrame(animate);
-        } else if ((appState as any).animationProgress !== 1) {
-            // Going backward or staying same - no animation
-            setAppState({ animationProgress: 1 } as any);
         }
 
-        prevStepRef.current = currentStep;
-    }, [appState.presentationStep, (appState as any).animationProgress, setAppState, currentIndex]);
+        const frameElements = elements.filter(
+            (element) => isElementInFrame(element, frame) && !element.isDeleted,
+        );
+        const currentStepConfig = getAnimationStepConfig(
+            frameElements as any,
+            playbackStep,
+        );
+        const nextStepConfig = getAnimationStepConfig(
+            frameElements as any,
+            playbackStep + 1,
+        );
+
+        return {
+            frameId: frame.id,
+            duration: currentStepConfig.duration,
+            maxStep: getMaxAnimationStep(frameElements as any),
+            nextAutoAdvanceDelay: getPresentationAutoAdvanceDelay(
+                nextStepConfig.startMode,
+            ),
+        };
+    }, [currentIndex, elements, frames, playbackStep]);
+
+    // Layout timing ensures the runner's synchronous progress=0 update lands before paint.
+    const previousPlaybackRef = useRef({
+        frameId: playbackConfig.frameId,
+        step: playbackStep,
+    });
+    useLayoutEffect(() => {
+        const previousPlayback = previousPlaybackRef.current;
+        const isForwardStep =
+            playbackConfig.frameId === previousPlayback.frameId &&
+            playbackStep > previousPlayback.step;
+
+        clearPresentationPlayback();
+        previousPlaybackRef.current = {
+            frameId: playbackConfig.frameId,
+            step: playbackStep,
+        };
+
+        const scheduleNextStep = () => {
+            const nextStep = playbackStep + 1;
+            if (
+                nextStep > playbackConfig.maxStep ||
+                playbackConfig.nextAutoAdvanceDelay === null
+            ) {
+                return;
+            }
+
+            cancelAutoAdvanceRef.current = schedulePresentationAutoAdvance(
+                playbackConfig.nextAutoAdvanceDelay,
+                () => {
+                    cancelAutoAdvanceRef.current = null;
+                    if (
+                        presentationStepRef.current === playbackStep &&
+                        currentIndexRef.current === currentIndex
+                    ) {
+                        setAppState({ presentationStep: nextStep });
+                    }
+                },
+            );
+        };
+
+        if (!appState.presentationMode || !playbackConfig.frameId) {
+            setAppState({ animationProgress: 1 } as any);
+            return clearPresentationPlayback;
+        }
+
+        if (!isForwardStep) {
+            setAppState({ animationProgress: 1 } as any);
+            if (playbackStep === 0) {
+                scheduleNextStep();
+            }
+            return clearPresentationPlayback;
+        }
+
+        cancelAnimationProgressRef.current = runAnimationProgress({
+            duration: playbackConfig.duration,
+            onProgress: (progress) => {
+                setAppState({ animationProgress: progress } as any);
+            },
+            onComplete: () => {
+                cancelAnimationProgressRef.current = null;
+                if (
+                    presentationStepRef.current !== playbackStep ||
+                    currentIndexRef.current !== currentIndex
+                ) {
+                    return;
+                }
+
+                scheduleNextStep();
+            },
+        });
+
+        return clearPresentationPlayback;
+    }, [
+        appState.presentationMode,
+        clearPresentationPlayback,
+        currentIndex,
+        playbackConfig.duration,
+        playbackConfig.frameId,
+        playbackConfig.maxStep,
+        playbackConfig.nextAutoAdvanceDelay,
+        playbackStep,
+        setAppState,
+    ]);
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -837,13 +885,11 @@ const Presentation = () => {
                     if (currentStep < maxSteps) {
                         setAppState({
                             presentationStep: currentStep + 1,
-                            animationProgress: 0
                         } as any);
                     } else if (idx < len - 1) {
                         setCurrentIndex(idx + 1);
                         setAppState({
                             presentationStep: 0,
-                            animationProgress: 0
                         } as any);
                     }
                 } else if (direction === 'prev') {
@@ -1056,13 +1102,11 @@ const Presentation = () => {
                     if (currentStep < maxSteps) {
                         setAppState({
                             presentationStep: currentStep + 1,
-                            animationProgress: 0
                         } as any);
                     } else if (currentIndex < frames.length - 1) {
                         setCurrentIndex(currentIndex + 1);
                         setAppState({
                             presentationStep: 0,
-                            animationProgress: 0
                         } as any);
                     }
                 }}>

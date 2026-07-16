@@ -12,6 +12,7 @@ import { Icon } from "@iconify/react";
 import { useAnimationMenu } from "./useAnimationMenu";
 import { useDragSort } from "./useDragSort";
 import { useAnimationPreview } from "./useAnimationPreview";
+import { DurationInput } from "./DurationInput";
 import {
   ANIMATION_TYPE_OPTIONS,
   START_MODE_OPTIONS,
@@ -331,21 +332,12 @@ export const AnimationMenu: React.FC = () => {
                           {/* 持续时间 */}
                           <div className="AnimationMenu__prop">
                             <label>持续时间</label>
-                            <div className="AnimationMenu__duration-input">
-                              <input
-                                type="number"
-                                min={100}
-                                max={3000}
-                                step={100}
-                                value={event.duration}
-                                onChange={(e) =>
-                                  updateEvent(event.id, {
-                                    duration: Number(e.target.value),
-                                  })
-                                }
-                              />
-                              <span>ms</span>
-                            </div>
+                            <DurationInput
+                              value={event.duration}
+                              onCommit={(duration) =>
+                                updateEvent(event.id, { duration })
+                              }
+                            />
                           </div>
 
                           {/* 动画目标（仅对带装饰的文字组显示） */}

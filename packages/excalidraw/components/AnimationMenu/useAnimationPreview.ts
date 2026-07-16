@@ -7,6 +7,11 @@
 import { useCallback, useRef, useEffect, useState } from "react";
 import { useApp, useExcalidrawSetAppState } from "../App";
 import { elementsToEvents } from "./animationEventUtils";
+import {
+  buildAnimationPlaybackSteps,
+  getAnimationPreviewInitialDelay,
+  runAnimationProgress,
+} from "./animationPlayback";
 
 interface UseAnimationPreviewReturn {
   /** 开始预览动画，可选传入 stepGroup 只预览该步 */
@@ -17,12 +22,6 @@ interface UseAnimationPreviewReturn {
   isPlaying: boolean;
 }
 
-interface PlayStep {
-  stepIndex: number;
-  duration: number;
-  startMode: string;
-}
-
 export function useAnimationPreview(): UseAnimationPreviewReturn {
   const app = useApp();
   const setAppState = useExcalidrawSetAppState();
@@ -31,15 +30,16 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
   // 预览状态管理
   const previewRef = useRef<{
     isPlaying: boolean;
-    rafId: number;
+    cancelProgress: (() => void) | null;
     timeoutIds: number[];
-  }>({ isPlaying: false, rafId: 0, timeoutIds: [] });
+  }>({ isPlaying: false, cancelProgress: null, timeoutIds: [] });
 
   // 停止预览
   const stopPreview = useCallback(() => {
     previewRef.current.isPlaying = false;
     setIsPlaying(false);
-    cancelAnimationFrame(previewRef.current.rafId);
+    previewRef.current.cancelProgress?.();
+    previewRef.current.cancelProgress = null;
     previewRef.current.timeoutIds.forEach(clearTimeout);
     previewRef.current.timeoutIds = [];
 
@@ -82,30 +82,7 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
       const events = elementsToEvents(elements as any, currentFrameId);
       if (events.length === 0) return;
 
-      events.sort((a, b) => a.order - b.order);
-
-      // 构建播放步骤
-      const playSteps: PlayStep[] = [];
-      let currentPlayStep: PlayStep | null = null;
-      let stepCounter = 1;
-
-      events.forEach((event, index) => {
-        if (index === 0 || event.startMode !== "withPrevious") {
-          currentPlayStep = {
-            stepIndex: stepCounter++,
-            duration: event.duration,
-            startMode: event.startMode,
-          };
-          playSteps.push(currentPlayStep);
-        } else {
-          if (currentPlayStep) {
-            currentPlayStep.duration = Math.max(
-              currentPlayStep.duration,
-              event.duration,
-            );
-          }
-        }
-      });
+      const playSteps = buildAnimationPlaybackSteps(events);
 
       // 停止之前的预览并开始新预览
       stopPreview();
@@ -121,36 +98,33 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
       } as any);
 
       // 执行单步动画
-      const runStepAnimation = (step: PlayStep, onComplete: () => void) => {
-        const startTime = performance.now();
-        const { duration, stepIndex } = step;
-
-        const tick = (now: number) => {
-          if (!previewRef.current.isPlaying) return;
-          const elapsed = now - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-
-          setAppState({
-            presentationStep: stepIndex,
-            animationProgress: progress,
-            isPlayingAnimation: true,
-            isPlayingAnimationFrameId: currentFrameId,
-          } as any);
-
-          if (progress < 1) {
-            previewRef.current.rafId = requestAnimationFrame(tick);
-          } else {
+      const runStepAnimation = (
+        step: (typeof playSteps)[number],
+        onComplete: () => void,
+      ) => {
+        previewRef.current.cancelProgress = runAnimationProgress({
+          duration: step.duration,
+          onProgress: (progress) => {
+            if (!previewRef.current.isPlaying) return;
+            setAppState({
+              presentationStep: step.stepGroup,
+              animationProgress: progress,
+              isPlayingAnimation: true,
+              isPlayingAnimationFrameId: currentFrameId,
+            } as any);
+          },
+          onComplete: () => {
+            previewRef.current.cancelProgress = null;
+            if (!previewRef.current.isPlaying) return;
             onComplete();
-          }
-        };
-
-        previewRef.current.rafId = requestAnimationFrame(tick);
+          },
+        });
       };
 
       // 如果指定了 stepGroup，只播放该步
       if (targetStepGroup !== undefined) {
         const targetStep = playSteps.find(
-          (p) => p.stepIndex === targetStepGroup,
+          (step) => step.stepGroup === targetStepGroup,
         );
         if (targetStep) {
           const tid = window.setTimeout(() => {
@@ -178,8 +152,10 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
         runStepAnimation(step, () => {
           if (currentPlayIndex < playSteps.length) {
             const nextStep = playSteps[currentPlayIndex];
-            const delay = nextStep.startMode === "afterPrevious" ? 0 : 500;
-            const tid = window.setTimeout(playNextStep, delay);
+            const tid = window.setTimeout(
+              playNextStep,
+              nextStep.previewGap,
+            );
             previewRef.current.timeoutIds.push(tid);
           } else {
             stopPreview();
@@ -187,7 +163,10 @@ export function useAnimationPreview(): UseAnimationPreviewReturn {
         });
       };
 
-      const tid = window.setTimeout(playNextStep, 100);
+      const tid = window.setTimeout(
+        playNextStep,
+        getAnimationPreviewInitialDelay(playSteps),
+      );
       previewRef.current.timeoutIds.push(tid);
     },
     [app, stopPreview, setAppState],
