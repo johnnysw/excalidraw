@@ -90,6 +90,329 @@ type TextUndoState = {
   selectionEnd: number;
 };
 
+type ContentEditableInputOptions = {
+  inputType?: string;
+  previousText?: string;
+  selectionStart?: number;
+  selectionEnd?: number;
+};
+
+export const normalizeContentEditableInput = (
+  rawText: string,
+  options?: ContentEditableInputOptions,
+) => {
+  const normalized = normalizeText(rawText);
+  const previousText = options?.previousText;
+  const unchangedInput = { text: normalized, selection: null };
+
+  if (previousText == null || options?.selectionStart == null) {
+    return unchangedInput;
+  }
+
+  const normalizedPreviousText = normalizeText(previousText);
+  const selectionStart = options.selectionStart;
+  const selectionEnd = options.selectionEnd ?? selectionStart;
+  const isCollapsedSelection = selectionStart === selectionEnd;
+  if (!isCollapsedSelection) {
+    return unchangedInput;
+  }
+
+  const countTrailingNewlines = (text: string) => {
+    let count = 0;
+    for (
+      let index = text.length - 1;
+      index >= 0 && text[index] === "\n";
+      index--
+    ) {
+      count++;
+    }
+    return count;
+  };
+
+  const previousTrailingNewlines = countTrailingNewlines(
+    normalizedPreviousText,
+  );
+  const trailingNewlines = countTrailingNewlines(normalized);
+  const previousContent = normalizedPreviousText.slice(
+    0,
+    normalizedPreviousText.length - previousTrailingNewlines,
+  );
+  const content = normalized.slice(0, normalized.length - trailingNewlines);
+
+  if (content !== previousContent) {
+    return unchangedInput;
+  }
+
+  const isTrailingParagraphInsertion =
+    (options.inputType === "insertParagraph" ||
+      options.inputType === "insertLineBreak") &&
+    selectionStart === normalizedPreviousText.length;
+
+  if (isTrailingParagraphInsertion) {
+    const caretOffset = selectionStart + 1;
+    return {
+      text: `${content}${"\n".repeat(previousTrailingNewlines + 1)}`,
+      selection: { start: caretOffset, end: caretOffset },
+    };
+  }
+
+  const isTrailingNewlineDeletion =
+    previousTrailingNewlines > 0 &&
+    ((options.inputType === "deleteContentBackward" &&
+      selectionStart === normalizedPreviousText.length) ||
+      (options.inputType === "deleteContentForward" &&
+        selectionStart >= previousContent.length &&
+        selectionStart < normalizedPreviousText.length));
+
+  if (isTrailingNewlineDeletion) {
+    const caretOffset =
+      options.inputType === "deleteContentBackward"
+        ? Math.max(0, selectionStart - 1)
+        : selectionStart;
+    return {
+      text: `${content}${"\n".repeat(previousTrailingNewlines - 1)}`,
+      selection: { start: caretOffset, end: caretOffset },
+    };
+  }
+
+  return unchangedInput;
+};
+
+export const normalizeContentEditableText = (
+  rawText: string,
+  options?: ContentEditableInputOptions,
+) => normalizeContentEditableInput(rawText, options).text;
+
+const TRAILING_CARET_SENTINEL = "\u200B";
+const TRAILING_CARET_SENTINEL_SELECTOR =
+  "[data-excalidraw-caret-sentinel='true']";
+
+export const appendTrailingCaretSentinel = (
+  editable: HTMLElement,
+  text: string,
+) => {
+  if (!text.endsWith("\n")) {
+    return null;
+  }
+
+  const sentinel = document.createElement("span");
+  sentinel.dataset.excalidrawCaretSentinel = "true";
+  sentinel.setAttribute("aria-hidden", "true");
+  sentinel.textContent = TRAILING_CARET_SENTINEL;
+  editable.appendChild(sentinel);
+  return sentinel;
+};
+
+export const readContentEditableText = (editable: HTMLElement) => {
+  const readText = () =>
+    editable.isConnected
+      ? editable.innerText || ""
+      : editable.textContent || "";
+  const sentinel = editable.querySelector(TRAILING_CARET_SENTINEL_SELECTOR);
+  if (!sentinel) {
+    return readText();
+  }
+
+  const walker = document.createTreeWalker(sentinel, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+
+  while (node) {
+    const textNode = node as Text;
+    const sentinelIndex = textNode.data.indexOf(TRAILING_CARET_SENTINEL);
+    if (sentinelIndex !== -1) {
+      textNode.deleteData(sentinelIndex, TRAILING_CARET_SENTINEL.length);
+      try {
+        return readText();
+      } finally {
+        textNode.insertData(sentinelIndex, TRAILING_CARET_SENTINEL);
+      }
+    }
+    node = walker.nextNode();
+  }
+
+  return readText();
+};
+
+export const applyContentEditableLineInput = (
+  text: string,
+  options: {
+    inputType: string;
+    data?: string | null;
+    selectionStart: number;
+    selectionEnd: number;
+  },
+): {
+  text: string;
+  selection: { start: number; end: number };
+} | null => {
+  const { inputType, data, selectionStart, selectionEnd } = options;
+  if (
+    selectionStart < 0 ||
+    selectionEnd < selectionStart ||
+    selectionEnd > text.length
+  ) {
+    return null;
+  }
+
+  const isLineInsertion =
+    inputType === "insertParagraph" ||
+    inputType === "insertLineBreak" ||
+    (inputType === "insertText" && (data === "\n" || data === "\r"));
+
+  if (isLineInsertion) {
+    const caretOffset = selectionStart + 1;
+    return {
+      text: `${text.slice(0, selectionStart)}\n${text.slice(selectionEnd)}`,
+      selection: { start: caretOffset, end: caretOffset },
+    };
+  }
+
+  const isDeletion =
+    inputType === "deleteContentBackward" ||
+    inputType === "deleteContentForward";
+
+  if (
+    isDeletion &&
+    selectionStart !== selectionEnd &&
+    text.slice(selectionStart, selectionEnd).includes("\n")
+  ) {
+    return {
+      text: `${text.slice(0, selectionStart)}${text.slice(selectionEnd)}`,
+      selection: { start: selectionStart, end: selectionStart },
+    };
+  }
+
+  if (
+    selectionStart === selectionEnd &&
+    inputType === "deleteContentBackward" &&
+    selectionStart > 0 &&
+    text[selectionStart - 1] === "\n"
+  ) {
+    const caretOffset = selectionStart - 1;
+    return {
+      text: `${text.slice(0, caretOffset)}${text.slice(selectionStart)}`,
+      selection: { start: caretOffset, end: caretOffset },
+    };
+  }
+
+  if (
+    selectionStart === selectionEnd &&
+    inputType === "deleteContentForward" &&
+    text[selectionStart] === "\n"
+  ) {
+    return {
+      text: `${text.slice(0, selectionStart)}${text.slice(selectionStart + 1)}`,
+      selection: { start: selectionStart, end: selectionStart },
+    };
+  }
+
+  return null;
+};
+
+const CONTENT_EDITABLE_BLOCK_ELEMENTS = new Set([
+  "DIV",
+  "P",
+  "LI",
+  "UL",
+  "OL",
+  "BLOCKQUOTE",
+  "H1",
+  "H2",
+  "H3",
+  "H4",
+  "H5",
+  "H6",
+]);
+
+export const getContentEditableSelectionOffsets = (
+  editable: HTMLElement,
+  range: {
+    startContainer: Node;
+    startOffset: number;
+    endContainer: Node;
+    endOffset: number;
+  },
+): { start: number; end: number } | null => {
+  let start = -1;
+  let end = -1;
+  let currentLength = 0;
+
+  const traverse = (node: Node) => {
+    if (start !== -1 && end !== -1) {
+      return;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || "";
+      const sentinelIndex = node.parentElement?.closest(
+        TRAILING_CARET_SENTINEL_SELECTOR,
+      )
+        ? text.indexOf(TRAILING_CARET_SENTINEL)
+        : -1;
+      const toModelOffset = (offset: number) =>
+        currentLength +
+        offset -
+        (sentinelIndex !== -1 && offset > sentinelIndex ? 1 : 0);
+
+      if (range.startContainer === node) {
+        start = toModelOffset(range.startOffset);
+      }
+      if (range.endContainer === node) {
+        end = toModelOffset(range.endOffset);
+      }
+      currentLength += text.length - (sentinelIndex === -1 ? 0 : 1);
+      return;
+    }
+
+    if (node.nodeName === "BR") {
+      if (range.startContainer === node) {
+        start = currentLength + range.startOffset;
+      }
+      if (range.endContainer === node) {
+        end = currentLength + range.endOffset;
+      }
+      currentLength += 1;
+      return;
+    }
+
+    const children = node.childNodes;
+    for (let index = 0; index < children.length; index++) {
+      const child = children[index];
+      if (
+        currentLength > 0 &&
+        CONTENT_EDITABLE_BLOCK_ELEMENTS.has(child.nodeName)
+      ) {
+        currentLength += 1;
+      }
+
+      if (range.startContainer === node && range.startOffset === index) {
+        start = currentLength;
+      }
+      if (range.endContainer === node && range.endOffset === index) {
+        end = currentLength;
+      }
+
+      traverse(child);
+      if (start !== -1 && end !== -1) {
+        return;
+      }
+    }
+
+    if (
+      range.startContainer === node &&
+      range.startOffset === children.length
+    ) {
+      start = currentLength;
+    }
+    if (range.endContainer === node && range.endOffset === children.length) {
+      end = currentLength;
+    }
+  };
+
+  traverse(editable);
+  return start === -1 || end === -1 ? null : { start, end };
+};
+
 export const textWysiwyg = ({
   id,
   onChange,
@@ -340,6 +663,22 @@ export const textWysiwyg = ({
 
   const editable = document.createElement("div");
 
+  const getEditableInput = (
+    inputType?: string,
+    selection?: { start: number; end: number } | null,
+  ) =>
+    normalizeContentEditableInput(readContentEditableText(editable), {
+      inputType,
+      previousText: lastSavedText,
+      selectionStart: selection?.start,
+      selectionEnd: selection?.end,
+    });
+
+  const getEditableText = (
+    inputType?: string,
+    selection?: { start: number; end: number } | null,
+  ) => getEditableInput(inputType, selection).text;
+
   editable.dir = "auto";
   editable.tabIndex = 0;
   editable.dataset.type = "wysiwyg";
@@ -374,9 +713,7 @@ export const textWysiwyg = ({
     boxSizing: "content-box",
   });
 
-  const renderStyledTextFromElement = (
-    textElement: ExcalidrawTextElement,
-  ) => {
+  const renderStyledTextFromElement = (textElement: ExcalidrawTextElement) => {
     const text = textElement.originalText || "";
 
     // Colors are still driven by richTextRanges for backward compatibility.
@@ -474,8 +811,7 @@ export const textWysiwyg = ({
     let currentStyle = getStyleForIndex(0);
 
     for (let index = 0; index <= text.length; index++) {
-      const nextStyle =
-        index < text.length ? getStyleForIndex(index) : null;
+      const nextStyle = index < text.length ? getStyleForIndex(index) : null;
 
       const styleChanged =
         nextStyle &&
@@ -512,10 +848,14 @@ export const textWysiwyg = ({
         }
       }
     }
+
+    appendTrailingCaretSentinel(editable, text);
   };
 
   editable.innerText = element.originalText;
   updateWysiwygStyle();
+
+  let pendingInputSelection: { start: number; end: number } | null = null;
 
   if (onChange) {
     editable.onpaste = async (event) => {
@@ -543,7 +883,7 @@ export const textWysiwyg = ({
           container,
           app.scene.getNonDeletedElementsMap(),
         );
-        const currentText = editable.innerText || "";
+        const currentText = getEditableText();
         const wrappedText = wrapText(
           `${currentText}${text}`,
           font,
@@ -554,19 +894,31 @@ export const textWysiwyg = ({
       }
     };
 
-    editable.oninput = () => {
+    editable.oninput = (event) => {
       isInputting = true;
       updateTextEditorSelection();
-      const raw = editable.innerText || "";
-      const normalized = normalizeText(raw);
+      const inputSelectionBeforeChange = pendingInputSelection;
+      const normalizedInput = getEditableInput(
+        (event as InputEvent).inputType,
+        inputSelectionBeforeChange,
+      );
+      pendingInputSelection = null;
+      const normalized = normalizedInput.text;
+
+      if (normalizedInput.selection) {
+        currentSelection = normalizedInput.selection;
+        app.setState({ textEditorSelection: normalizedInput.selection });
+      }
 
       // Only save undo state when NOT composing (IME input)
       // For IME input, we save the state in compositionend event
       if (!isComposing && normalized !== lastSavedText) {
         undoStack.push({
           text: lastSavedText,
-          selectionStart: currentSelection?.start ?? 0,
-          selectionEnd: currentSelection?.end ?? 0,
+          selectionStart:
+            inputSelectionBeforeChange?.start ?? currentSelection?.start ?? 0,
+          selectionEnd:
+            inputSelectionBeforeChange?.end ?? currentSelection?.end ?? 0,
         });
         // Clear redo stack when new input occurs
         redoStack.length = 0;
@@ -579,49 +931,107 @@ export const textWysiwyg = ({
   }
 
   // Helper to get current selection offsets
-  const getSelectionOffsets = (): { start: number; end: number } => {
+  const getSelectionOffsets = (): { start: number; end: number } | null => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
-      return { start: 0, end: 0 };
+      return null;
     }
     const range = selection.getRangeAt(0);
-    if (!editable.contains(range.startContainer)) {
-      return { start: 0, end: 0 };
+    if (
+      !editable.contains(range.startContainer) ||
+      !editable.contains(range.endContainer)
+    ) {
+      return null;
     }
 
-    let start = 0;
-    let end = 0;
-    let currentLength = 0;
-    let foundStart = false;
-    let foundEnd = false;
+    return getContentEditableSelectionOffsets(editable, range);
+  };
 
-    const traverse = (node: Node) => {
-      if (foundStart && foundEnd) return;
-      if (node.nodeType === Node.TEXT_NODE) {
-        const textLen = (node.textContent || "").length;
-        if (!foundStart && range.startContainer === node) {
-          start = currentLength + range.startOffset;
-          foundStart = true;
-        }
-        if (!foundEnd && range.endContainer === node) {
-          end = currentLength + range.endOffset;
-          foundEnd = true;
-        }
-        currentLength += textLen;
-      } else {
-        for (const child of Array.from(node.childNodes)) {
-          traverse(child);
-        }
-      }
-    };
-    traverse(editable);
-    return { start, end };
+  const getBeforeInputSelection = (event: InputEvent) => {
+    const targetRanges =
+      typeof event.getTargetRanges === "function"
+        ? event.getTargetRanges()
+        : [];
+
+    if (targetRanges.length > 0) {
+      return getContentEditableSelectionOffsets(editable, targetRanges[0]);
+    }
+
+    return getSelectionOffsets();
+  };
+
+  editable.onbeforeinput = (event) => {
+    const inputEvent = event as InputEvent;
+    const inputSelection = getBeforeInputSelection(inputEvent);
+    pendingInputSelection = inputSelection;
+
+    if (
+      !onChange ||
+      !event.cancelable ||
+      isComposing ||
+      inputEvent.isComposing ||
+      !inputSelection
+    ) {
+      return;
+    }
+
+    const next = applyContentEditableLineInput(lastSavedText, {
+      inputType: inputEvent.inputType,
+      data: inputEvent.data,
+      selectionStart: inputSelection.start,
+      selectionEnd: inputSelection.end,
+    });
+    if (!next) {
+      return;
+    }
+
+    event.preventDefault();
+    pendingInputSelection = null;
+    undoStack.push({
+      text: lastSavedText,
+      selectionStart: inputSelection.start,
+      selectionEnd: inputSelection.end,
+    });
+    redoStack.length = 0;
+    lastSavedText = next.text;
+    currentSelection = next.selection;
+
+    isInputting = true;
+    try {
+      onChange(next.text);
+      app.setState({ textEditorSelection: next.selection });
+      restoreSelectionByOffset(next.selection.start, next.selection.end);
+    } finally {
+      isInputting = false;
+    }
   };
 
   // Helper to restore selection by offset
-  const restoreSelectionByOffset = (start: number, end: number) => {
+  function restoreSelectionByOffset(start: number, end: number) {
     const selection = window.getSelection();
-    if (!selection) return;
+    if (!selection) {
+      return;
+    }
+
+    if (
+      start === end &&
+      start === lastSavedText.length &&
+      lastSavedText.endsWith("\n")
+    ) {
+      const sentinel = editable.querySelector(TRAILING_CARET_SENTINEL_SELECTOR);
+      const sentinelWalker = sentinel
+        ? document.createTreeWalker(sentinel, NodeFilter.SHOW_TEXT)
+        : null;
+      const sentinelNode = sentinelWalker?.nextNode();
+      if (sentinelNode) {
+        const range = document.createRange();
+        range.setStart(sentinelNode, 0);
+        range.collapse(true);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        return;
+      }
+    }
 
     let currentLength = 0;
     let startNode: Node | null = null;
@@ -632,14 +1042,26 @@ export const textWysiwyg = ({
     const traverse = (node: Node) => {
       if (startNode && endNode) return;
       if (node.nodeType === Node.TEXT_NODE) {
-        const textLen = (node.textContent || "").length;
+        const text = node.textContent || "";
+        const sentinelIndex = node.parentElement?.closest(
+          TRAILING_CARET_SENTINEL_SELECTOR,
+        )
+          ? text.indexOf(TRAILING_CARET_SENTINEL)
+          : -1;
+        const textLen = text.length - (sentinelIndex === -1 ? 0 : 1);
+        const toDomOffset = (modelOffset: number) => {
+          const offset = modelOffset - currentLength;
+          return (
+            offset + (sentinelIndex !== -1 && offset >= sentinelIndex ? 1 : 0)
+          );
+        };
         if (!startNode && currentLength + textLen >= start) {
           startNode = node;
-          startOffset = start - currentLength;
+          startOffset = toDomOffset(start);
         }
         if (!endNode && currentLength + textLen >= end) {
           endNode = node;
-          endOffset = end - currentLength;
+          endOffset = toDomOffset(end);
         }
         currentLength += textLen;
       } else {
@@ -652,21 +1074,32 @@ export const textWysiwyg = ({
 
     if (startNode && endNode) {
       const range = document.createRange();
-      range.setStart(startNode, Math.min(startOffset, (startNode.textContent || "").length));
-      range.setEnd(endNode, Math.min(endOffset, (endNode.textContent || "").length));
+      range.setStart(
+        startNode,
+        Math.min(startOffset, (startNode.textContent || "").length),
+      );
+      range.setEnd(
+        endNode,
+        Math.min(endOffset, (endNode.textContent || "").length),
+      );
       selection.removeAllRanges();
       selection.addRange(range);
     }
-  };
+  }
 
   // Undo function
   const performUndo = () => {
     if (undoStack.length === 0) return;
 
+    const selection = getSelectionOffsets() ??
+      currentSelection ?? {
+        start: 0,
+        end: 0,
+      };
     const currentState: TextUndoState = {
-      text: editable.innerText || "",
-      selectionStart: getSelectionOffsets().start,
-      selectionEnd: getSelectionOffsets().end,
+      text: getEditableText(),
+      selectionStart: selection.start,
+      selectionEnd: selection.end,
     };
     redoStack.push(currentState);
 
@@ -691,10 +1124,15 @@ export const textWysiwyg = ({
   const performRedo = () => {
     if (redoStack.length === 0) return;
 
+    const selection = getSelectionOffsets() ??
+      currentSelection ?? {
+        start: 0,
+        end: 0,
+      };
     const currentState: TextUndoState = {
-      text: editable.innerText || "",
-      selectionStart: getSelectionOffsets().start,
-      selectionEnd: getSelectionOffsets().end,
+      text: getEditableText(),
+      selectionStart: selection.start,
+      selectionEnd: selection.end,
     };
     undoStack.push(currentState);
 
@@ -717,14 +1155,20 @@ export const textWysiwyg = ({
 
   editable.onkeydown = (event) => {
     // Handle Undo (Ctrl+Z / Cmd+Z)
-    if (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === "z" && !event.shiftKey) {
+    if (
+      event[KEYS.CTRL_OR_CMD] &&
+      event.key.toLowerCase() === "z" &&
+      !event.shiftKey
+    ) {
       event.preventDefault();
       performUndo();
       return;
     }
     // Handle Redo (Ctrl+Shift+Z / Cmd+Shift+Z or Ctrl+Y / Cmd+Y)
     if (
-      (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === "z" && event.shiftKey) ||
+      (event[KEYS.CTRL_OR_CMD] &&
+        event.key.toLowerCase() === "z" &&
+        event.shiftKey) ||
       (event[KEYS.CTRL_OR_CMD] && event.key.toLowerCase() === "y")
     ) {
       event.preventDefault();
@@ -799,97 +1243,15 @@ export const textWysiwyg = ({
       return;
     }
 
-    let start = -1;
-    let end = -1;
-    let currentLength = 0;
-
-    // These elements behave like block elements, effectively adding a newline
-    // when they appear after other content.
-    const blockElements = new Set([
-      "DIV",
-      "P",
-      "LI",
-      "UL",
-      "OL",
-      "BLOCKQUOTE",
-      "H1",
-      "H2",
-      "H3",
-      "H4",
-      "H5",
-      "H6",
-    ]);
-
-    const traverse = (node: Node) => {
-      if (start !== -1 && end !== -1) {
-        return;
-      }
-
-      if (node.nodeType === Node.TEXT_NODE) {
-        if (range.startContainer === node) {
-          start = currentLength + range.startOffset;
-        }
-        if (range.endContainer === node) {
-          end = currentLength + range.endOffset;
-        }
-        currentLength += (node.textContent || "").length;
-        return;
-      }
-
-      if (node.nodeName === "BR") {
-        if (range.startContainer === node) {
-          start = currentLength + range.startOffset;
-        }
-        if (range.endContainer === node) {
-          end = currentLength + range.endOffset;
-        }
-        currentLength += 1;
-        return;
-      }
-
-      const children = node.childNodes;
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        // If we are entering a block element and we already have content,
-        // assume an implicit newline (matching innerText behavior).
-        if (currentLength > 0 && blockElements.has(child.nodeName)) {
-          currentLength += 1;
-        }
-
-        if (range.startContainer === node && range.startOffset === i) {
-          start = currentLength;
-        }
-        if (range.endContainer === node && range.endOffset === i) {
-          end = currentLength;
-        }
-
-        traverse(child);
-        if (start !== -1 && end !== -1) {
-          return;
-        }
-      }
-
-      if (
-        range.startContainer === node &&
-        range.startOffset === children.length
-      ) {
-        start = currentLength;
-      }
-      if (range.endContainer === node && range.endOffset === children.length) {
-        end = currentLength;
-      }
-    };
-
-    traverse(editable);
-
-    if (start === -1 || end === -1) {
+    const offsets = getContentEditableSelectionOffsets(editable, range);
+    if (!offsets) {
       currentSelection = null;
       app.setState({ textEditorSelection: null });
       return;
     }
 
-    currentSelection = { start, end };
-    app.setState({ textEditorSelection: { start, end } });
+    currentSelection = offsets;
+    app.setState({ textEditorSelection: offsets });
   };
 
   function restoreSelectionFromAppState() {
@@ -898,55 +1260,7 @@ export const textWysiwyg = ({
       return;
     }
 
-    const selection = window.getSelection();
-    if (!selection) {
-      return;
-    }
-
-    const { start, end } = sel;
-    let index = 0;
-
-    const walker = document.createTreeWalker(
-      editable,
-      NodeFilter.SHOW_TEXT,
-      null,
-    );
-
-    let node = walker.nextNode();
-    let rangeStartNode: Node | null = null;
-    let rangeEndNode: Node | null = null;
-    let rangeStartOffset = 0;
-    let rangeEndOffset = 0;
-
-    while (node) {
-      const text = node.textContent || "";
-      const nextIndex = index + text.length;
-
-      if (!rangeStartNode && start >= index && start <= nextIndex) {
-        rangeStartNode = node;
-        rangeStartOffset = start - index;
-      }
-
-      if (!rangeEndNode && end >= index && end <= nextIndex) {
-        rangeEndNode = node;
-        rangeEndOffset = end - index;
-        break;
-      }
-
-      index = nextIndex;
-      node = walker.nextNode();
-    }
-
-    if (!rangeStartNode || !rangeEndNode) {
-      return;
-    }
-
-    const range = document.createRange();
-    range.setStart(rangeStartNode, rangeStartOffset);
-    range.setEnd(rangeEndNode, rangeEndOffset);
-
-    selection.removeAllRanges();
-    selection.addRange(range);
+    restoreSelectionByOffset(sel.start, sel.end);
   }
 
   editable.addEventListener("compositionstart", () => {
@@ -956,8 +1270,7 @@ export const textWysiwyg = ({
   editable.addEventListener("compositionend", () => {
     isComposing = false;
     // Save undo state after IME composition ends (e.g., after typing Chinese characters)
-    const raw = editable.innerText || "";
-    const normalized = normalizeText(raw);
+    const normalized = getEditableText();
     if (normalized !== lastSavedText) {
       undoStack.push({
         text: lastSavedText,
@@ -1027,9 +1340,10 @@ export const textWysiwyg = ({
       updateElement,
       app.scene.getNonDeletedElementsMap(),
     );
+    const finalText = onChange ? lastSavedText : getEditableText();
 
     if (container) {
-      if ((editable.innerText || "").trim()) {
+      if (finalText.trim()) {
         const boundTextElementId = getBoundTextElementId(container);
         if (!boundTextElementId || boundTextElementId !== element.id) {
           app.scene.mutateElement(container, {
@@ -1056,18 +1370,16 @@ export const textWysiwyg = ({
       redrawTextBoundingBox(updateElement, container, app.scene);
     }
 
-    const finalText = normalizeText(editable.innerText || "");
-    const collapsedFinalText = finalText.replace(/\n{2,}$/g, "\n");
-
     onSubmit({
       viaKeyboard: submittedViaKeyboard,
-      nextOriginalText: collapsedFinalText,
+      nextOriginalText: finalText,
     });
   };
 
   const cleanup = () => {
     // remove events to ensure they don't late-fire
     editable.onblur = null;
+    editable.onbeforeinput = null;
     editable.oninput = null;
     editable.onkeydown = null;
     editable.onselect = null;
