@@ -2723,14 +2723,6 @@ class App extends React.Component<AppProps, AppState> {
                                       )
                                     }
                                   />
-                                  <SlideOrderButton
-                                    frameId={firstSelectedElement.id}
-                                    currentOrder={getFrameSlideOrder(
-                                      firstSelectedElement.id,
-                                    )}
-                                    totalSlides={presentationFrames.length}
-                                    onOrderChange={updateFrameSlideOrder}
-                                  />
                                 </>
                               )}
                               <ElementCanvasButton
@@ -2769,6 +2761,18 @@ class App extends React.Component<AppProps, AppState> {
                                   document.dispatchEvent(event);
                                 }}
                               />
+                              {!isFrameExcludedFromPresentation(
+                                firstSelectedElement,
+                              ) && (
+                                <SlideOrderButton
+                                  frameId={firstSelectedElement.id}
+                                  currentOrder={getFrameSlideOrder(
+                                    firstSelectedElement.id,
+                                  )}
+                                  totalSlides={presentationFrames.length}
+                                  onOrderChange={updateFrameSlideOrder}
+                                />
+                              )}
                               <ElementCanvasButton
                                 title="Frame 设置"
                                 icon={SlideBackgroundIcon}

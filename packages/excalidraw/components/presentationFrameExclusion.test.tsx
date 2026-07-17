@@ -73,6 +73,31 @@ describe("presentation frame exclusion", () => {
     expect(screen.queryByTitle("添加注释")).not.toBeInTheDocument();
   });
 
+  it("places slide order directly before Frame settings in the canvas toolbar", () => {
+    const frame = createFrame("frame-a");
+    API.setElements([frame]);
+    API.setSelectedElements([frame]);
+
+    const toolbar = document.querySelector<HTMLElement>(
+      ".excalidraw-canvas-buttons",
+    );
+    expect(toolbar).toBeTruthy();
+    expect(
+      Array.from(toolbar!.children, (control) => {
+        return (
+          control.getAttribute("title") ??
+          control.querySelector<HTMLElement>("[title]")?.title
+        );
+      }),
+    ).toEqual([
+      "从此播放",
+      "演讲者视图",
+      "添加注释",
+      "设置播放顺序",
+      "Frame 设置",
+    ]);
+  });
+
   it("uses the compact placeholder for an excluded frame label", () => {
     const excluded = createFrame("frame-b", { excluded: true });
     API.setElements([excluded]);
