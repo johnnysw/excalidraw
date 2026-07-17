@@ -6,7 +6,11 @@ import {
   decryptData,
 } from "@excalidraw/excalidraw/data/encryption";
 import { restoreElements } from "@excalidraw/excalidraw/data/restore";
-import { getSceneVersion } from "@excalidraw/element";
+import {
+  getSceneVersion,
+  isTextElement,
+  normalizeTextElementStyleRanges,
+} from "@excalidraw/element";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
@@ -94,7 +98,13 @@ const encryptElements = async (
   key: string,
   elements: readonly ExcalidrawElement[],
 ): Promise<{ ciphertext: ArrayBuffer; iv: Uint8Array }> => {
-  const json = JSON.stringify(elements);
+  const json = JSON.stringify(
+    elements.map((element) =>
+      isTextElement(element)
+        ? normalizeTextElementStyleRanges(element)
+        : element,
+    ),
+  );
   const encoded = new TextEncoder().encode(json);
   const { encryptedBuffer, iv } = await encryptData(key, encoded);
 

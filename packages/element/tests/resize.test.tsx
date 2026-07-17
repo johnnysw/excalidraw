@@ -27,6 +27,7 @@ import type {
   ExcalidrawElbowArrowElement,
   ExcalidrawFreeDrawElement,
   ExcalidrawLinearElement,
+  ExcalidrawTextElement,
 } from "../src/types";
 
 unmountComponent();
@@ -551,16 +552,40 @@ describe("text element", () => {
   it("resizes", async () => {
     const text = UI.createElement("text");
     await UI.editText(text, "hello\nworld");
-    const { width, height, fontSize } = text;
+    const textElement = h.elements[0] as ExcalidrawTextElement;
+    h.app.scene.mutateElement(textElement, {
+      textOutlineWidth: 1,
+      textStyleRanges: [
+        {
+          start: 0,
+          end: 5,
+          color: "#e03131",
+          fontSize: 30,
+          textOutlineWidth: 2,
+        },
+      ],
+    });
+    const { width, height, fontSize } = textElement;
     const scale = 40 / height + 1;
-    UI.resize(text, "se", [30, 40]);
+    UI.resize(textElement, "se", [30, 40]);
 
-    expect(text.x).toBeCloseTo(0);
-    expect(text.y).toBeCloseTo(0);
-    expect(text.width).toBeCloseTo(width * scale);
-    expect(text.height).toBeCloseTo(height * scale);
-    expect(text.angle).toBeCloseTo(0);
-    expect(text.fontSize).toBeCloseTo(fontSize * scale);
+    expect(textElement.x).toBeCloseTo(0);
+    expect(textElement.y).toBeCloseTo(0);
+    expect(textElement.width).toBeCloseTo(width * scale);
+    expect(textElement.height).toBeCloseTo(height * scale);
+    expect(textElement.angle).toBeCloseTo(0);
+    expect(textElement.fontSize).toBeCloseTo(fontSize * scale);
+    expect(textElement.textOutlineWidth).toBeCloseTo(scale);
+    expect(textElement.textStyleRanges).toHaveLength(1);
+    expect(textElement.textStyleRanges?.[0]).toMatchObject({
+      start: 0,
+      end: 5,
+      color: "#e03131",
+    });
+    expect(textElement.textStyleRanges?.[0].fontSize).toBeCloseTo(30 * scale);
+    expect(textElement.textStyleRanges?.[0].textOutlineWidth).toBeCloseTo(
+      2 * scale,
+    );
   });
 
   // TODO enable this test after adding single text element flipping

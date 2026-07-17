@@ -20,6 +20,7 @@
     "delete": "Delete",
     "copyStyles": "Copy styles",
     "pasteStyles": "Paste styles",
+    "textFormatBrush": "Text format painter",
     "stroke": "Stroke",
     "changeStroke": "Change stroke color",
     "background": "Background",

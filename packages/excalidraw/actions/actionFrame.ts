@@ -8,7 +8,12 @@ import {
 } from "@excalidraw/element";
 import { getFrameChildren } from "@excalidraw/element";
 
-import { FRAME_STYLE, KEYS, updateActiveTool } from "@excalidraw/common";
+import {
+  FRAME_STYLE,
+  KEYS,
+  ROUNDNESS,
+  updateActiveTool,
+} from "@excalidraw/common";
 
 import { getElementsInGroup } from "@excalidraw/element";
 

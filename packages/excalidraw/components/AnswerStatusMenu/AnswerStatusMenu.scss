@@ -323,7 +323,8 @@
     text-align: left;
     border: none;
     cursor: default;
-    padding: clamp(16px, 4cqi, 24px) clamp(18px, 5cqi, 24px) clamp(14px, 3.5cqi, 20px);
+    padding: clamp(16px, 4cqi, 24px) clamp(18px, 5cqi, 24px)
+      clamp(14px, 3.5cqi, 20px);
     min-height: 120px;
     background: #ffffff;
     border: 1px solid #e2e8f0; // slate-200
@@ -333,18 +334,30 @@
 
     &:hover {
       cursor: pointer;
-      background: linear-gradient(180deg, rgba(22, 163, 74, 0.08) 0%, rgba(255, 255, 255, 0.96) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(22, 163, 74, 0.08) 0%,
+        rgba(255, 255, 255, 0.96) 100%
+      );
     }
 
     &--active {
       border-color: #6965db;
-      background: linear-gradient(180deg, rgba(105, 101, 219, 0.06) 0%, rgba(255, 255, 255, 0.98) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(105, 101, 219, 0.06) 0%,
+        rgba(255, 255, 255, 0.98) 100%
+      );
       box-shadow: 0 0 0 1px rgba(105, 101, 219, 0.15);
     }
 
     &--published {
       border-color: #16a34a; // green-600
-      background: linear-gradient(180deg, rgba(22, 163, 74, 0.04) 0%, rgba(255, 255, 255, 0.98) 100%);
+      background: linear-gradient(
+        180deg,
+        rgba(22, 163, 74, 0.04) 0%,
+        rgba(255, 255, 255, 0.98) 100%
+      );
       box-shadow: 0 0 0 1px rgba(22, 163, 74, 0.12);
     }
   }
@@ -633,7 +646,7 @@
 
     // 两行之间的横向分隔线（充满整行）
     &::before {
-      content: '';
+      content: "";
       position: absolute;
       left: 8px;
       right: 8px;
@@ -653,7 +666,7 @@
 
     // 右侧分隔线（第 1、2、4 列显示，第 3、5 不显示）
     &:not(:nth-child(3n))::after {
-      content: '';
+      content: "";
       position: absolute;
       right: 0;
       top: 50%;
@@ -740,7 +753,11 @@
 
     &--correct {
       border-color: #86efac; // green-300
-      background: linear-gradient(to bottom, #f0fdf4, #ffffff); // green-50 to white
+      background: linear-gradient(
+        to bottom,
+        #f0fdf4,
+        #ffffff
+      ); // green-50 to white
 
       .AnswerStatusMenu__card-header {
         background: transparent;
@@ -866,24 +883,37 @@
 
       &:hover {
         cursor: pointer;
-        background: linear-gradient(180deg, rgba(22, 163, 74, 0.18) 0%, rgba(30, 41, 59, 0.92) 100%);
+        background: linear-gradient(
+          180deg,
+          rgba(22, 163, 74, 0.18) 0%,
+          rgba(30, 41, 59, 0.92) 100%
+        );
       }
 
       &:focus-visible {
         outline: none;
         border-color: #9f9bff;
-        box-shadow: 0 0 0 3px rgba(159, 155, 255, 0.2), 0 8px 16px rgba(0, 0, 0, 0.35);
+        box-shadow: 0 0 0 3px rgba(159, 155, 255, 0.2),
+          0 8px 16px rgba(0, 0, 0, 0.35);
       }
 
       &--active {
         border-color: #6965db;
-        background: linear-gradient(180deg, rgba(105, 101, 219, 0.2) 0%, rgba(30, 41, 59, 0.92) 100%);
+        background: linear-gradient(
+          180deg,
+          rgba(105, 101, 219, 0.2) 0%,
+          rgba(30, 41, 59, 0.92) 100%
+        );
         box-shadow: none;
       }
 
       &--published {
         border-color: #4ade80; // green-400
-        background: linear-gradient(180deg, rgba(22, 163, 74, 0.15) 0%, rgba(30, 41, 59, 0.95) 100%);
+        background: linear-gradient(
+          180deg,
+          rgba(22, 163, 74, 0.15) 0%,
+          rgba(30, 41, 59, 0.95) 100%
+        );
       }
     }
 
@@ -1044,7 +1074,11 @@
       box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
 
       &--correct {
-        background: linear-gradient(to bottom, rgba(22, 163, 74, 0.15), #1e293b);
+        background: linear-gradient(
+          to bottom,
+          rgba(22, 163, 74, 0.15),
+          #1e293b
+        );
         border-color: rgba(34, 197, 94, 0.4);
 
         .AnswerStatusMenu__card-header {

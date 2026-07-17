@@ -1,8 +1,8 @@
 import React from "react";
 
-import { SVG_NS } from "@excalidraw/common";
+import { FONT_FAMILY, SVG_NS } from "@excalidraw/common";
 
-import type { FileId } from "@excalidraw/element/types";
+import type { ExcalidrawTextElement, FileId } from "@excalidraw/element/types";
 
 import { getDefaultAppState } from "../appState";
 import { getDataURL } from "../data/blob";
@@ -217,5 +217,49 @@ describe("export", () => {
     // in case of regressions, save the SVG to a file and visually compare to:
     // src/tests/fixtures/svg-image-exporting-reference.svg
     expect(svgText).toMatchSnapshot(`svg export output`);
+  });
+
+  it("exports mixed text runs and outlines as SVG tspans", async () => {
+    const previousFlag = window.EXCALIDRAW_RICH_TEXT_V2;
+    window.EXCALIDRAW_RICH_TEXT_V2 = true;
+    try {
+      const text = {
+        ...API.createElement({
+          type: "text",
+          id: "rich-text-svg",
+          text: "ABC",
+          fontSize: 20,
+          fontFamily: FONT_FAMILY.Helvetica,
+          strokeColor: "#000000",
+        }),
+        width: 100,
+        height: 40,
+        textStyleRanges: [
+          {
+            start: 1,
+            end: 2,
+            color: "#ff0000",
+            fontSize: 30,
+            fontFamily: FONT_FAMILY.Cascadia,
+            fontWeight: "bold" as const,
+            textOutlineColor: "#00ff00",
+            textOutlineWidth: 2,
+          },
+        ],
+      } as ExcalidrawTextElement;
+
+      const svg = await exportToSvg([text], getDefaultAppState(), {});
+      const runs = [...svg.querySelectorAll("tspan")];
+
+      expect(runs.map((run) => run.textContent)).toEqual(["A", "B", "C"]);
+      expect(runs[1].getAttribute("fill")).toBe("#ff0000");
+      expect(runs[1].getAttribute("font-size")).toBe("30px");
+      expect(runs[1].getAttribute("font-weight")).toBe("bold");
+      expect(runs[1].getAttribute("stroke")).toBe("#00ff00");
+      expect(runs[1].getAttribute("stroke-width")).toBe("2");
+      expect(runs[1].getAttribute("paint-order")).toBe("stroke fill");
+    } finally {
+      window.EXCALIDRAW_RICH_TEXT_V2 = previousFlag;
+    }
   });
 });

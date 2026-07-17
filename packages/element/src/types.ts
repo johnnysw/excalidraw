@@ -29,7 +29,12 @@ export type StrokeStyle = "solid" | "dashed" | "dotted";
 export type TextAlign = typeof TEXT_ALIGN[keyof typeof TEXT_ALIGN];
 
 /** Animation target for text decoration groups */
-export type AnimationTarget = 'all' | 'text' | 'background' | 'underline' | 'strike';
+export type AnimationTarget =
+  | "all"
+  | "text"
+  | "background"
+  | "underline"
+  | "strike";
 
 /** Animation configuration for presentation mode */
 export type ElementAnimation = {
@@ -40,7 +45,7 @@ export type ElementAnimation = {
   /** Step group - elements with same stepGroup appear together */
   stepGroup: number;
   /** Trigger type */
-  trigger?: 'click' | 'auto';
+  trigger?: "click" | "auto";
   /** Animation target - which elements in a decoration group should animate */
   animationTarget?: AnimationTarget;
   /** UI event id (for animation panel) */
@@ -317,9 +322,8 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
      * Rich text ranges for applying different colors to parts of text.
      * If undefined or empty, the entire text uses strokeColor.
      *
-     * NOTE: prefer using `textStyleRanges` going forward. This field is
-     * kept for backwards compatibility and may be migrated internally
-     * to `textStyleRanges` in the future.
+     * @deprecated Read only during restore/constructor compatibility. Runtime
+     * elements and serialized scenes use `textStyleRanges` exclusively.
      */
     richTextRanges?: readonly RichTextRange[];
     /**

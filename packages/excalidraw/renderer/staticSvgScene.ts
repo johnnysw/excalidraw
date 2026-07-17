@@ -16,8 +16,13 @@ import {
   getEmbedLink,
 } from "@excalidraw/element";
 import { LinearElementEditor } from "@excalidraw/element";
-import { getBoundTextElement, getContainerElement } from "@excalidraw/element";
+import {
+  getBoundTextElement,
+  getBoundTextMaxWidth,
+  getContainerElement,
+} from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
+import { layoutTextElement } from "@excalidraw/element";
 import {
   isArrowElement,
   isIframeLikeElement,
@@ -43,6 +48,7 @@ import type {
 
 import type { RenderableElementsMap, SVGRenderConfig } from "../scene/types";
 import type { AppState, BinaryFiles } from "../types";
+import { isRichTextV2Enabled } from "../reactUtils";
 import type { Drawable } from "roughjs/bin/core";
 import type { RoughSVG } from "roughjs/bin/svg";
 
@@ -62,9 +68,7 @@ const roughSVGDrawWithPrecision = (
   return rsvg.draw(pshape);
 };
 
-const isSlideBackgroundSolidEllipse = (
-  element: NonDeletedExcalidrawElement,
-) =>
+const isSlideBackgroundSolidEllipse = (element: NonDeletedExcalidrawElement) =>
   element.type === "ellipse" &&
   element.customData?.type === "slideBackground" &&
   (element.fillStyle || "solid") === "solid" &&
@@ -617,11 +621,7 @@ const renderElementToSvg = (
       ) {
         const shape = ShapeCache.generateElementShape(element, null);
         const node = shape
-          ? roughSVGDrawWithPrecision(
-              rsvg,
-              shape,
-              MAX_DECIMALS_FOR_SVG_EXPORT,
-            )
+          ? roughSVGDrawWithPrecision(rsvg, shape, MAX_DECIMALS_FOR_SVG_EXPORT)
           : null;
 
         if (node) {
@@ -655,42 +655,140 @@ const renderElementToSvg = (
             offsetY || 0
           }) rotate(${degree} ${cx} ${cy})`,
         );
-        const lines = element.text.replace(/\r\n?/g, "\n").split("\n");
-        const lineHeightPx = getLineHeightInPx(
-          element.fontSize,
-          element.lineHeight,
-        );
-        const horizontalOffset =
-          element.textAlign === "center"
-            ? element.width / 2
-            : element.textAlign === "right"
-            ? element.width
-            : 0;
-        const verticalOffset = getVerticalOffset(
-          element.fontFamily,
-          element.fontSize,
-          lineHeightPx,
-        );
-        const direction = isRTL(element.text) ? "rtl" : "ltr";
-        const textAnchor =
-          element.textAlign === "center"
-            ? "middle"
-            : element.textAlign === "right" || direction === "rtl"
-            ? "end"
-            : "start";
-        for (let i = 0; i < lines.length; i++) {
-          const text = svgRoot.ownerDocument!.createElementNS(SVG_NS, "text");
-          text.textContent = lines[i];
-          text.setAttribute("x", `${horizontalOffset}`);
-          text.setAttribute("y", `${i * lineHeightPx + verticalOffset}`);
-          text.setAttribute("font-family", getFontFamilyString(element));
-          text.setAttribute("font-size", `${element.fontSize}px`);
-          text.setAttribute("fill", element.strokeColor);
-          text.setAttribute("text-anchor", textAnchor);
-          text.setAttribute("style", "white-space: pre;");
-          text.setAttribute("direction", direction);
-          text.setAttribute("dominant-baseline", "alphabetic");
-          node.appendChild(text);
+        if (element.textStyleRanges?.length && isRichTextV2Enabled()) {
+          const textContainer = getContainerElement(element, elementsMap);
+          const layout = layoutTextElement(element, {
+            maxWidth: textContainer
+              ? getBoundTextMaxWidth(textContainer, element)
+              : !element.autoResize
+              ? element.width
+              : undefined,
+            textAlign: element.textAlign,
+          });
+          for (const layoutLine of layout.lines) {
+            const text = svgRoot.ownerDocument!.createElementNS(SVG_NS, "text");
+            const baseline = layoutLine.y + layoutLine.baseline;
+            text.setAttribute("y", `${baseline}`);
+            text.setAttribute("text-anchor", "start");
+            text.setAttribute("style", "white-space: pre;");
+            text.setAttribute(
+              "direction",
+              isRTL(layoutLine.text) ? "rtl" : "ltr",
+            );
+            text.setAttribute("dominant-baseline", "alphabetic");
+            for (const run of layoutLine.runs) {
+              const tspan = svgRoot.ownerDocument!.createElementNS(
+                SVG_NS,
+                "tspan",
+              );
+              tspan.textContent = run.text;
+              tspan.setAttribute("x", `${run.x}`);
+              tspan.setAttribute(
+                "font-family",
+                getFontFamilyString({ fontFamily: run.style.fontFamily }),
+              );
+              tspan.setAttribute("font-size", `${run.style.fontSize}px`);
+              tspan.setAttribute("font-weight", run.style.fontWeight);
+              tspan.setAttribute(
+                "fill",
+                run.style.color ?? element.strokeColor,
+              );
+              const outlineWidth =
+                run.style.textOutlineWidth ?? element.textOutlineWidth;
+              if (outlineWidth > 0) {
+                tspan.setAttribute(
+                  "stroke",
+                  run.style.textOutlineColor ?? element.textOutlineColor,
+                );
+                tspan.setAttribute("stroke-width", `${outlineWidth}`);
+                tspan.setAttribute("paint-order", "stroke fill");
+                tspan.setAttribute("stroke-linejoin", "round");
+              }
+              text.appendChild(tspan);
+            }
+            node.appendChild(text);
+          }
+        } else {
+          const lines = element.text.replace(/\r\n?/g, "\n").split("\n");
+          const colorRanges = element.textStyleRanges?.filter(
+            (range) => range.color !== undefined,
+          );
+          const lineHeightPx = getLineHeightInPx(
+            element.fontSize,
+            element.lineHeight,
+          );
+          const horizontalOffset =
+            element.textAlign === "center"
+              ? element.width / 2
+              : element.textAlign === "right"
+              ? element.width
+              : 0;
+          const verticalOffset = getVerticalOffset(
+            element.fontFamily,
+            element.fontSize,
+            lineHeightPx,
+          );
+          const direction = isRTL(element.text) ? "rtl" : "ltr";
+          const textAnchor =
+            element.textAlign === "center"
+              ? "middle"
+              : element.textAlign === "right" || direction === "rtl"
+              ? "end"
+              : "start";
+          let sourceIndex = 0;
+          for (let i = 0; i < lines.length; i++) {
+            const text = svgRoot.ownerDocument!.createElementNS(SVG_NS, "text");
+            const line = lines[i];
+            if (colorRanges?.length) {
+              let segmentStart = 0;
+              const getColorAt = (index: number) => {
+                for (const range of colorRanges) {
+                  if (index >= range.start && index < range.end) {
+                    return range.color ?? element.strokeColor;
+                  }
+                }
+                return element.strokeColor;
+              };
+              let currentColor = getColorAt(sourceIndex);
+              for (let index = 1; index <= line.length; index++) {
+                const nextColor =
+                  index < line.length
+                    ? getColorAt(sourceIndex + index)
+                    : currentColor;
+                if (index === line.length || nextColor !== currentColor) {
+                  const tspan = svgRoot.ownerDocument!.createElementNS(
+                    SVG_NS,
+                    "tspan",
+                  );
+                  tspan.textContent = line.slice(segmentStart, index);
+                  tspan.setAttribute("fill", currentColor);
+                  text.appendChild(tspan);
+                  segmentStart = index;
+                  currentColor = nextColor;
+                }
+              }
+            } else {
+              text.textContent = line;
+            }
+            text.setAttribute("x", `${horizontalOffset}`);
+            text.setAttribute("y", `${i * lineHeightPx + verticalOffset}`);
+            text.setAttribute("font-family", getFontFamilyString(element));
+            text.setAttribute("font-size", `${element.fontSize}px`);
+            text.setAttribute("font-weight", element.fontWeight ?? "normal");
+            text.setAttribute("fill", element.strokeColor);
+            text.setAttribute("text-anchor", textAnchor);
+            text.setAttribute("style", "white-space: pre;");
+            text.setAttribute("direction", direction);
+            text.setAttribute("dominant-baseline", "alphabetic");
+            if (element.textOutlineWidth > 0) {
+              text.setAttribute("stroke", element.textOutlineColor);
+              text.setAttribute("stroke-width", `${element.textOutlineWidth}`);
+              text.setAttribute("paint-order", "stroke fill");
+              text.setAttribute("stroke-linejoin", "round");
+            }
+            node.appendChild(text);
+            sourceIndex += line.length + 1;
+          }
         }
 
         const g = maybeWrapNodesInFrameClipPath(

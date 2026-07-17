@@ -168,7 +168,7 @@
     // Range component (opacity slider)
     .control-label {
       display: block;
-      font-size: 0;  // Hide the text label
+      font-size: 0; // Hide the text label
       --color-slider-track: var(--color-primary-light);
       --color-slider-thumb: var(--color-gray-80);
       --button-bg: var(--color-gray-20);
@@ -445,10 +445,7 @@
     font-weight: 500;
     line-height: 1;
     cursor: pointer;
-    transition:
-      background 0.15s,
-      border-color 0.15s,
-      color 0.15s;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
 
     &:hover {
       background: var(--color-gray-10);

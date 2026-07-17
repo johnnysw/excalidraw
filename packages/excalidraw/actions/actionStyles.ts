@@ -124,6 +124,8 @@ const applyTextFormatBrushSnapshot = (
     textOutlineColor: snapshot.textOutlineColor,
     textOutlineWidth: snapshot.textOutlineWidth,
     opacity: snapshot.opacity,
+    textStyleRanges: undefined,
+    richTextRanges: undefined,
   });
   redrawTextBoundingBox(
     nextElement,
@@ -301,7 +303,7 @@ export const actionTextFormatBrush = register<
       captureUpdate: CaptureUpdateAction.EVENTUALLY,
     };
   },
-  PanelComponent: ({ updateData }) => (
+  PanelComponent: ({ updateData }) =>
     React.createElement(
       "div",
       { className: "PropertiesMenu__format-brush-row" },
@@ -329,8 +331,7 @@ export const actionTextFormatBrush = register<
         paintIcon,
         React.createElement("span", null, "格式刷"),
       ),
-    )
-  ),
+    ),
 });
 
 export const actionCopyStyles = register({
@@ -429,6 +430,17 @@ export const actionPasteStyles = register({
               lineHeight:
                 (elementStylesToCopyFrom as ExcalidrawTextElement).lineHeight ||
                 getLineHeight(fontFamily),
+              verticalAlign:
+                (elementStylesToCopyFrom as ExcalidrawTextElement)
+                  .verticalAlign || newElement.verticalAlign,
+              textOutlineColor:
+                (elementStylesToCopyFrom as ExcalidrawTextElement)
+                  .textOutlineColor || newElement.textOutlineColor,
+              textOutlineWidth:
+                (elementStylesToCopyFrom as ExcalidrawTextElement)
+                  .textOutlineWidth ?? newElement.textOutlineWidth,
+              textStyleRanges: undefined,
+              richTextRanges: undefined,
             });
             let container = null;
             if (newElement.containerId) {

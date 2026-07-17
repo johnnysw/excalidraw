@@ -366,6 +366,18 @@ describe("stats for a non-generic element", () => {
     });
 
     const text = h.elements[0] as ExcalidrawTextElement;
+    h.app.scene.mutateElement(text, {
+      textStyleRanges: [
+        {
+          start: 0,
+          end: text.originalText.length,
+          color: "#e03131",
+          fontSize: 48,
+          fontWeight: "bold",
+          textOutlineWidth: 2,
+        },
+      ],
+    });
     mouse.clickOn(text);
 
     elementStats = stats?.querySelector("#elementStats");
@@ -378,6 +390,15 @@ describe("stats for a non-generic element", () => {
     expect(input.value).toBe(text.fontSize.toString());
     UI.updateInput(input, "36");
     expect(text.fontSize).toBe(36);
+    expect(text.textStyleRanges).toEqual([
+      {
+        start: 0,
+        end: text.originalText.length,
+        color: "#e03131",
+        fontWeight: "bold",
+        textOutlineWidth: 2,
+      },
+    ]);
 
     // can change width or height
     const width = UI.queryStatsProperty("W")?.querySelector(
@@ -396,11 +417,35 @@ describe("stats for a non-generic element", () => {
     expect(text.height).toBeGreaterThan(textHeightBeforeWrapping);
     expect(text.text).not.toBe(textBeforeWrapping);
     expect(text.originalText).toBe(originalTextBeforeWrapping);
+    expect(text.textStyleRanges).toEqual([
+      {
+        start: 0,
+        end: text.originalText.length,
+        color: "#e03131",
+        fontWeight: "bold",
+        textOutlineWidth: 2,
+      },
+    ]);
 
     // min font size is 4
     UI.updateInput(input, "0");
     expect(text.fontSize).not.toBe(0);
     expect(text.fontSize).toBe(4);
+
+    const latestText = h.elements.find(
+      (element) => element.id === text.id,
+    ) as ExcalidrawTextElement;
+    h.app.scene.mutateElement(latestText, {
+      textStyleRanges: [
+        { start: 0, end: latestText.originalText.length, fontSize: 48 },
+      ],
+    });
+    UI.updateInput(input, "8");
+    const updatedText = h.elements.find(
+      (element) => element.id === text.id,
+    ) as ExcalidrawTextElement;
+    expect(updatedText.fontSize).toBe(8);
+    expect(updatedText.textStyleRanges).toEqual([]);
   });
 
   it("frame element", () => {

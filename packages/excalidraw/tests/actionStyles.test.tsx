@@ -1,6 +1,8 @@
 import React from "react";
 
-import { CODES } from "@excalidraw/common";
+import { CODES, FONT_FAMILY } from "@excalidraw/common";
+
+import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
 import { copiedStyles } from "../actions/actionStyles";
 import { Excalidraw } from "../index";
@@ -82,5 +84,54 @@ describe("actionStyles", () => {
     expect(firstRect.strokeStyle).toBe("dotted");
     expect(firstRect.roughness).toBe(2); // Cartoonist: 2
     expect(firstRect.opacity).toBe(60);
+  });
+
+  it("pastes complete base text formatting and clears local ranges", () => {
+    const source = {
+      ...API.createElement({
+        type: "text",
+        text: "source",
+        strokeColor: "#e03131",
+        fontSize: 32,
+        fontFamily: FONT_FAMILY.Cascadia,
+        textAlign: "center",
+        verticalAlign: "middle",
+      }),
+      fontWeight: "bold" as const,
+      textOutlineColor: "#00ff00",
+      textOutlineWidth: 2,
+    } as ExcalidrawTextElement;
+    const target = {
+      ...API.createElement({
+        type: "text",
+        text: "target",
+        strokeColor: "#000000",
+      }),
+      textStyleRanges: [{ start: 0, end: 3, color: "#0000ff", fontSize: 48 }],
+    } as ExcalidrawTextElement;
+    API.setElements([source, target]);
+
+    API.setSelectedElements([source]);
+    Keyboard.withModifierKeys({ ctrl: true, alt: true }, () => {
+      Keyboard.codeDown(CODES.C);
+    });
+    API.setSelectedElements([target]);
+    Keyboard.withModifierKeys({ ctrl: true, alt: true }, () => {
+      Keyboard.codeDown(CODES.V);
+    });
+
+    const updated = h.elements[1] as ExcalidrawTextElement;
+    expect(updated).toMatchObject({
+      strokeColor: "#e03131",
+      fontSize: 32,
+      fontFamily: FONT_FAMILY.Cascadia,
+      fontWeight: "bold",
+      textAlign: "center",
+      verticalAlign: "middle",
+      textOutlineColor: "#00ff00",
+      textOutlineWidth: 2,
+    });
+    expect(updated.textStyleRanges).toBeUndefined();
+    expect(updated.richTextRanges).toBeUndefined();
   });
 });

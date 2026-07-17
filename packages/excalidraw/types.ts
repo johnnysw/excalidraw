@@ -33,6 +33,7 @@ import type {
   OrderedExcalidrawElement,
   ExcalidrawNonSelectionElement,
   BindMode,
+  ExcalidrawTextElement,
 } from "@excalidraw/element/types";
 
 import type {
@@ -46,6 +47,7 @@ import type {
   CaptureUpdateActionType,
   DurableIncrement,
   EphemeralIncrement,
+  TextStyle,
 } from "@excalidraw/element";
 
 import type { Action } from "./actions/types";
@@ -110,9 +112,9 @@ export type DataURL = string & { _brand: "DataURL" };
 
 export type BinaryFileData = {
   mimeType:
-  | ValueOf<typeof IMAGE_MIME_TYPES>
-  // future user or unknown file type
-  | typeof MIME_TYPES.binary;
+    | ValueOf<typeof IMAGE_MIME_TYPES>
+    // future user or unknown file type
+    | typeof MIME_TYPES.binary;
   id: FileId;
   dataURL: DataURL;
   /**
@@ -163,13 +165,13 @@ export type ElementOrToolType = ExcalidrawElementType | ToolType | "custom";
 
 export type ActiveTool =
   | {
-    type: ToolType;
-    customType: null;
-  }
+      type: ToolType;
+      customType: null;
+    }
   | {
-    type: "custom";
-    customType: string;
-  };
+      type: "custom";
+      customType: string;
+    };
 
 export type SidebarName = string;
 export type SidebarTabName = string;
@@ -323,7 +325,12 @@ export interface AppState {
    * Selection range in the text editor when editing text.
    * Used for applying rich text styling to selected text.
    */
-  textEditorSelection: { start: number; end: number } | null;
+  textEditorSelection: {
+    start: number;
+    end: number;
+    direction?: "forward" | "backward";
+  } | null;
+  textEditorPendingStyle: TextStyle | null;
   activeTool: {
     /**
      * indicates a previous tool we should revert back to if we deselect the
@@ -357,7 +364,7 @@ export interface AppState {
   currentItemFontFamily: FontFamilyValues;
   currentItemFontSize: number;
   currentItemTextAlign: TextAlign;
-  currentItemLineHeight: number;
+  currentItemLineHeight: ExcalidrawTextElement["lineHeight"];
   currentItemStartArrowhead: Arrowhead | null;
   currentItemEndArrowhead: Arrowhead | null;
   currentHoveredFontFamily: FontFamilyValues | null;
@@ -374,25 +381,25 @@ export interface AppState {
   zoom: Zoom;
   openMenu: "canvas" | null;
   openPopup:
-  | "canvasBackground"
-  | "elementBackground"
-  | "elementStroke"
-  | "textOutline"
-  | "questionShadow"
-  | "fontFamily"
-  | "compactTextProperties"
-  | "compactStrokeStyles"
-  | "compactOtherProperties"
-  | "compactArrowProperties"
-  | null;
+    | "canvasBackground"
+    | "elementBackground"
+    | "elementStroke"
+    | "textOutline"
+    | "questionShadow"
+    | "fontFamily"
+    | "compactTextProperties"
+    | "compactStrokeStyles"
+    | "compactOtherProperties"
+    | "compactArrowProperties"
+    | null;
   openSidebar: { name: SidebarName; tab?: SidebarTabName } | null;
   openDialog:
-  | null
-  | { name: "imageExport" | "help" | "jsonExport" }
-  | { name: "ttd"; tab: "text-to-diagram" | "mermaid" }
-  | { name: "commandPalette" }
-  | { name: "settings" }
-  | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] };
+    | null
+    | { name: "imageExport" | "help" | "jsonExport" }
+    | { name: "ttd"; tab: "text-to-diagram" | "mermaid" }
+    | { name: "commandPalette" }
+    | { name: "settings" }
+    | { name: "elementLinkSelector"; sourceElementId: ExcalidrawElement["id"] };
   /**
    * Reflects user preference for whether the default sidebar should be docked.
    *
@@ -454,14 +461,14 @@ export interface AppState {
   };
   currentChartType: ChartType;
   pasteDialog:
-  | {
-    shown: false;
-    data: null;
-  }
-  | {
-    shown: true;
-    data: Spreadsheet;
-  };
+    | {
+        shown: false;
+        data: null;
+      }
+    | {
+        shown: true;
+        data: Spreadsheet;
+      };
   showHyperlinkPopup: false | "info" | "editor";
   selectedLinearElement: LinearElementEditor | null;
   snapLines: readonly SnapLine[];
@@ -558,8 +565,8 @@ export type LibraryItems_anyVersion = LibraryItems | LibraryItems_v1;
 
 export type LibraryItemsSource =
   | ((
-    currentLibraryItems: LibraryItems,
-  ) => MaybePromise<LibraryItems_anyVersion | Blob>)
+      currentLibraryItems: LibraryItems,
+    ) => MaybePromise<LibraryItems_anyVersion | Blob>)
   | MaybePromise<LibraryItems_anyVersion | Blob>;
 // -----------------------------------------------------------------------------
 
@@ -616,14 +623,14 @@ export type ShareModePermissions = {
       /** 是否在 viewMode 下也显示演示按钮 */
       visible?: boolean;
       /** 允许的演示视图类型（'normal' = 普通视图, 'presenter' = 演讲者视图） */
-      allowedViews?: Array<'normal' | 'presenter'>;
+      allowedViews?: Array<"normal" | "presenter">;
     };
   };
 };
 
 export interface ExcalidrawProps {
-  /** 角色标识（必填）：teacher=教师端，member=学生端 */
-  role: RoleType;
+  /** 角色标识：teacher=教师端，member=学生端，默认 teacher */
+  role?: RoleType;
   onChange?: (
     elements: readonly OrderedExcalidrawElement[],
     appState: AppState,
@@ -637,8 +644,8 @@ export interface ExcalidrawProps {
   }) => MaybePromise<"keep" | "discard">;
   onIncrement?: (event: DurableIncrement | EphemeralIncrement) => void;
   initialData?:
-  | (() => MaybePromise<ExcalidrawInitialDataState | null>)
-  | MaybePromise<ExcalidrawInitialDataState | null>;
+    | (() => MaybePromise<ExcalidrawInitialDataState | null>)
+    | MaybePromise<ExcalidrawInitialDataState | null>;
   excalidrawAPI?: (api: ExcalidrawImperativeAPI) => void;
   isCollaborating?: boolean;
   onPointerUpdate?: (payload: {
@@ -716,11 +723,11 @@ export interface ExcalidrawProps {
   onUserFollow?: (payload: OnUserFollowedPayload) => void;
   children?: React.ReactNode;
   validateEmbeddable?:
-  | boolean
-  | string[]
-  | RegExp
-  | RegExp[]
-  | ((link: string) => boolean | undefined);
+    | boolean
+    | string[]
+    | RegExp
+    | RegExp[]
+    | ((link: string) => boolean | undefined);
   renderEmbeddable?: (
     element: NonDeleted<ExcalidrawEmbeddableElement>,
     appState: AppState,

@@ -20,6 +20,7 @@
     "delete": "删除",
     "copyStyles": "拷贝样式",
     "pasteStyles": "粘贴样式",
+    "textFormatBrush": "文本格式刷",
     "stroke": "描边",
     "changeStroke": "更改描边颜色",
     "background": "背景",

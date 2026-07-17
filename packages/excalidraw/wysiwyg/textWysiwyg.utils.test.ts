@@ -7,6 +7,8 @@ import {
   normalizeContentEditableInput,
   normalizeContentEditableText,
   readContentEditableText,
+  serializeRichTextClipboard,
+  parseRichTextClipboard,
 } from "./textWysiwyg";
 
 const createEditableWithChild = (container: Node) => {
@@ -300,5 +302,47 @@ describe("normalizeContentEditableText", () => {
 
   it("leaves ordinary text unchanged", () => {
     expect(normalizeContentEditableText("one line")).toBe("one line");
+  });
+});
+
+describe("rich text clipboard", () => {
+  const baseStyle = {
+    color: "black",
+    fontSize: 20,
+    fontFamily: 1,
+    fontWeight: "normal" as const,
+    textOutlineColor: "transparent",
+    textOutlineWidth: 0,
+  };
+
+  it("preserves UTF-16 relative style ranges for an internal copy", () => {
+    const payload = parseRichTextClipboard(
+      serializeRichTextClipboard(
+        "A😀B",
+        [{ start: 1, end: 3, color: "red", fontWeight: "bold" }],
+        1,
+        3,
+        baseStyle,
+      ),
+    );
+
+    expect(payload?.text).toBe("😀");
+    expect(payload?.textStyleRanges).toEqual([
+      {
+        start: 0,
+        end: 2,
+        color: "red",
+        fontSize: 20,
+        fontFamily: 1,
+        fontWeight: "bold",
+        textOutlineColor: "transparent",
+        textOutlineWidth: 0,
+      },
+    ]);
+  });
+
+  it("rejects malformed custom clipboard payloads", () => {
+    expect(parseRichTextClipboard("not-json")).toBeNull();
+    expect(parseRichTextClipboard(JSON.stringify({ version: 1 }))).toBeNull();
   });
 });

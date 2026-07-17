@@ -1,26 +1,46 @@
 import { useState, useCallback } from "react";
 
+import {
+  getContentEditableSelectionOffsets,
+  restoreContentEditableSelection,
+} from "../wysiwyg/textWysiwyg";
+
 // Utility type for caret position
 export type CaretPosition = {
   start: number;
   end: number;
+  direction: "forward" | "backward";
 };
 
 // Utility function to get text editor element
-const getTextEditor = (): HTMLTextAreaElement | null => {
-  return document.querySelector(".excalidraw-wysiwyg") as HTMLTextAreaElement;
-};
+const getTextEditor = () =>
+  document.querySelector<HTMLElement>(".excalidraw-wysiwyg");
 
 // Utility functions for caret position management
 export const saveCaretPosition = (): CaretPosition | null => {
   const textEditor = getTextEditor();
-  if (textEditor) {
-    return {
-      start: textEditor.selectionStart,
-      end: textEditor.selectionEnd,
-    };
+  const selection = window.getSelection();
+  if (!textEditor || !selection || selection.rangeCount === 0) {
+    return null;
   }
-  return null;
+  const range = selection.getRangeAt(0);
+  if (
+    !textEditor.contains(range.startContainer) ||
+    !textEditor.contains(range.endContainer)
+  ) {
+    return null;
+  }
+  const offsets = getContentEditableSelectionOffsets(textEditor, range);
+  if (!offsets) {
+    return null;
+  }
+  const direction =
+    selection.anchorNode === range.endContainer &&
+    selection.anchorOffset === range.endOffset &&
+    !range.collapsed
+      ? "backward"
+      : "forward";
+  return { ...offsets, direction };
 };
 
 export const restoreCaretPosition = (position: CaretPosition | null): void => {
@@ -29,8 +49,13 @@ export const restoreCaretPosition = (position: CaretPosition | null): void => {
     if (textEditor) {
       textEditor.focus();
       if (position) {
-        textEditor.selectionStart = position.start;
-        textEditor.selectionEnd = position.end;
+        restoreContentEditableSelection(
+          textEditor,
+          position.start,
+          position.end,
+          undefined,
+          position.direction,
+        );
       }
     }
   }, 0);
@@ -76,8 +101,13 @@ export const useTextEditorFocus = () => {
       if (textEditor) {
         textEditor.focus();
         if (savedCaretPosition) {
-          textEditor.selectionStart = savedCaretPosition.start;
-          textEditor.selectionEnd = savedCaretPosition.end;
+          restoreContentEditableSelection(
+            textEditor,
+            savedCaretPosition.start,
+            savedCaretPosition.end,
+            undefined,
+            savedCaretPosition.direction,
+          );
           setSavedCaretPosition(null);
         }
       }

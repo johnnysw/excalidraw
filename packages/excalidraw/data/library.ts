@@ -17,7 +17,12 @@ import {
   Emitter,
 } from "@excalidraw/common";
 
-import { hashElementsVersion, hashString } from "@excalidraw/element";
+import {
+  hashElementsVersion,
+  hashString,
+  isTextElement,
+  normalizeTextElementStyleRanges,
+} from "@excalidraw/element";
 
 import { getCommonBoundingBox } from "@excalidraw/element";
 
@@ -655,9 +660,16 @@ const persistLibraryUpdate = async (
         }
       }
 
-      const nextLibraryItems = addedItems.concat(
-        Array.from(nextLibraryItemsMap.values()),
-      );
+      const nextLibraryItems = addedItems
+        .concat(Array.from(nextLibraryItemsMap.values()))
+        .map((item) => ({
+          ...item,
+          elements: item.elements.map((element) =>
+            isTextElement(element)
+              ? normalizeTextElementStyleRanges(element)
+              : element,
+          ),
+        }));
 
       const version = getLibraryItemsHash(nextLibraryItems);
 

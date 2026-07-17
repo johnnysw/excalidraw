@@ -27,10 +27,20 @@ import {
   computeContainerDimensionForBoundText,
   computeBoundTextPosition,
   getBoundTextElement,
+  layoutTextElement,
 } from "@excalidraw/element";
 import { getTextWidth } from "@excalidraw/element";
 import { normalizeText } from "@excalidraw/element";
 import { wrapText } from "@excalidraw/element";
+import {
+  applyTextStyleToRange,
+  applyTextStyleRanges,
+  getTextElementBaseStyle,
+  normalizeTextStyleRanges,
+  resolveTextStyleAt,
+  transformTextStyleRangesForEdit,
+} from "@excalidraw/element";
+import type { TextStyle } from "@excalidraw/element";
 import {
   isArrowElement,
   isBoundToContainer,
@@ -42,11 +52,11 @@ import type {
   ExcalidrawLinearElement,
   ExcalidrawTextElementWithContainer,
   ExcalidrawTextElement,
+  TextStyleRange,
 } from "@excalidraw/element/types";
 
 import { actionSaveToActiveFile } from "../actions";
 
-import { parseDataTransferEvent } from "../clipboard";
 import {
   actionDecreaseFontSize,
   actionIncreaseFontSize,
@@ -59,6 +69,7 @@ import {
 
 import type App from "../components/App";
 import type { AppState } from "../types";
+import { isRichTextV2Enabled } from "../reactUtils";
 
 const getTransform = (
   width: number,
@@ -83,11 +94,172 @@ const getTransform = (
 
 type SubmitHandler = () => void;
 
-// Undo/Redo state type for text editing
+type TextEditorSelection = {
+  start: number;
+  end: number;
+  direction: "forward" | "backward";
+};
+
 type TextUndoState = {
+  originalText: string;
+  textStyleRanges: TextStyleRange[];
+  selection: TextEditorSelection;
+  pendingStyle: TextStyle | null;
+};
+
+type TextHistoryKind = "typing" | "delete" | "discrete";
+
+type RichTextClipboardPayload = {
+  type: typeof EXCALIDRAW_RICH_TEXT_MIME_TYPE;
+  version: 1;
   text: string;
-  selectionStart: number;
-  selectionEnd: number;
+  textStyleRanges: TextStyleRange[];
+};
+
+export const EXCALIDRAW_RICH_TEXT_MIME_TYPE =
+  "application/vnd.excalidraw.rich-text+json";
+
+const cloneTextStyleRanges = (
+  ranges: readonly TextStyleRange[] | undefined,
+): TextStyleRange[] => ranges?.map((range) => ({ ...range })) ?? [];
+
+const cloneTextStyle = (style: TextStyle | null): TextStyle | null =>
+  style ? { ...style } : null;
+
+export const getContentEditableSelectionDirection = (
+  selection: Selection,
+  range: Range,
+): TextEditorSelection["direction"] =>
+  !range.collapsed &&
+  selection.anchorNode === range.endContainer &&
+  selection.anchorOffset === range.endOffset
+    ? "backward"
+    : "forward";
+
+export const serializeRichTextClipboard = (
+  text: string,
+  ranges: readonly TextStyleRange[] | undefined,
+  start: number,
+  end: number,
+  baseStyle: Readonly<TextStyle>,
+) => {
+  const selectionStart = Math.max(0, Math.min(start, end, text.length));
+  const selectionEnd = Math.max(
+    selectionStart,
+    Math.min(Math.max(start, end), text.length),
+  );
+  const selectedText = text.slice(selectionStart, selectionEnd);
+  const boundaries = new Set<number>([selectionStart, selectionEnd]);
+
+  for (const range of ranges ?? []) {
+    if (range.start > selectionStart && range.start < selectionEnd) {
+      boundaries.add(range.start);
+    }
+    if (range.end > selectionStart && range.end < selectionEnd) {
+      boundaries.add(range.end);
+    }
+  }
+
+  const sortedBoundaries = [...boundaries].sort(
+    (first, second) => first - second,
+  );
+  const selectedRanges: TextStyleRange[] = [];
+  for (let index = 0; index < sortedBoundaries.length - 1; index++) {
+    const segmentStart = sortedBoundaries[index];
+    const segmentEnd = sortedBoundaries[index + 1];
+    if (segmentStart >= segmentEnd) {
+      continue;
+    }
+    selectedRanges.push({
+      start: segmentStart - selectionStart,
+      end: segmentEnd - selectionStart,
+      ...resolveTextStyleAt(segmentStart, ranges, baseStyle),
+    });
+  }
+
+  const payload: RichTextClipboardPayload = {
+    type: EXCALIDRAW_RICH_TEXT_MIME_TYPE,
+    version: 1,
+    text: selectedText,
+    textStyleRanges: selectedRanges,
+  };
+  return JSON.stringify(payload);
+};
+
+const parseClipboardStyleRange = (value: unknown): TextStyleRange | null => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const range = value as Record<string, unknown>;
+  if (
+    typeof range.start !== "number" ||
+    !Number.isFinite(range.start) ||
+    typeof range.end !== "number" ||
+    !Number.isFinite(range.end)
+  ) {
+    return null;
+  }
+
+  const parsed: TextStyleRange = { start: range.start, end: range.end };
+  if (typeof range.color === "string") {
+    parsed.color = range.color;
+  }
+  if (typeof range.fontSize === "number" && Number.isFinite(range.fontSize)) {
+    parsed.fontSize = range.fontSize;
+  }
+  if (
+    typeof range.fontFamily === "number" &&
+    Number.isFinite(range.fontFamily)
+  ) {
+    parsed.fontFamily = range.fontFamily as TextStyleRange["fontFamily"];
+  }
+  if (range.fontWeight === "normal" || range.fontWeight === "bold") {
+    parsed.fontWeight = range.fontWeight;
+  }
+  if (typeof range.textOutlineColor === "string") {
+    parsed.textOutlineColor = range.textOutlineColor;
+  }
+  if (
+    typeof range.textOutlineWidth === "number" &&
+    Number.isFinite(range.textOutlineWidth)
+  ) {
+    parsed.textOutlineWidth = range.textOutlineWidth;
+  }
+  return parsed;
+};
+
+export const parseRichTextClipboard = (
+  serialized: string,
+): RichTextClipboardPayload | null => {
+  if (!serialized) {
+    return null;
+  }
+  try {
+    const value = JSON.parse(serialized) as Partial<RichTextClipboardPayload>;
+    if (
+      value.type !== EXCALIDRAW_RICH_TEXT_MIME_TYPE ||
+      value.version !== 1 ||
+      typeof value.text !== "string" ||
+      !Array.isArray(value.textStyleRanges)
+    ) {
+      return null;
+    }
+    const parsedRanges = value.textStyleRanges
+      .map(parseClipboardStyleRange)
+      .filter((range): range is TextStyleRange => range !== null);
+    return {
+      type: EXCALIDRAW_RICH_TEXT_MIME_TYPE,
+      version: 1,
+      text: normalizeText(value.text),
+      textStyleRanges: normalizeTextStyleRanges(
+        normalizeText(value.text).length,
+        parsedRanges,
+        {},
+      ),
+    };
+  } catch {
+    return null;
+  }
 };
 
 type ContentEditableInputOptions = {
@@ -413,6 +585,102 @@ export const getContentEditableSelectionOffsets = (
   return start === -1 || end === -1 ? null : { start, end };
 };
 
+export const restoreContentEditableSelection = (
+  editable: HTMLElement,
+  start: number,
+  end: number,
+  modelText = readContentEditableText(editable),
+  direction: "forward" | "backward" = "forward",
+) => {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+
+  if (start === end && start === modelText.length && modelText.endsWith("\n")) {
+    const sentinel = editable.querySelector(TRAILING_CARET_SENTINEL_SELECTOR);
+    const sentinelWalker = sentinel
+      ? document.createTreeWalker(sentinel, NodeFilter.SHOW_TEXT)
+      : null;
+    const sentinelNode = sentinelWalker?.nextNode();
+    if (sentinelNode) {
+      const range = document.createRange();
+      range.setStart(sentinelNode, 0);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+      return;
+    }
+  }
+
+  let currentLength = 0;
+  let startNode: Node | null = null;
+  let startOffset = 0;
+  let endNode: Node | null = null;
+  let endOffset = 0;
+
+  const traverse = (node: Node) => {
+    if (startNode && endNode) {
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent || "";
+      const sentinelIndex = node.parentElement?.closest(
+        TRAILING_CARET_SENTINEL_SELECTOR,
+      )
+        ? text.indexOf(TRAILING_CARET_SENTINEL)
+        : -1;
+      const textLength = text.length - (sentinelIndex === -1 ? 0 : 1);
+      const toDomOffset = (modelOffset: number) => {
+        const offset = modelOffset - currentLength;
+        return (
+          offset + (sentinelIndex !== -1 && offset >= sentinelIndex ? 1 : 0)
+        );
+      };
+      if (!startNode && currentLength + textLength >= start) {
+        startNode = node;
+        startOffset = toDomOffset(start);
+      }
+      if (!endNode && currentLength + textLength >= end) {
+        endNode = node;
+        endOffset = toDomOffset(end);
+      }
+      currentLength += textLength;
+      return;
+    }
+    for (const child of Array.from(node.childNodes)) {
+      traverse(child);
+    }
+  };
+  traverse(editable);
+
+  const resolvedStartNode = startNode as Node | null;
+  const resolvedEndNode = endNode as Node | null;
+  if (!resolvedStartNode || !resolvedEndNode) {
+    return;
+  }
+  const safeStartOffset = Math.min(
+    startOffset,
+    resolvedStartNode.textContent?.length ?? 0,
+  );
+  const safeEndOffset = Math.min(
+    endOffset,
+    resolvedEndNode.textContent?.length ?? 0,
+  );
+  if (direction === "backward" && typeof selection.extend === "function") {
+    selection.removeAllRanges();
+    selection.collapse(resolvedEndNode, safeEndOffset);
+    selection.extend(resolvedStartNode, safeStartOffset);
+    return;
+  }
+
+  const range = document.createRange();
+  range.setStart(resolvedStartNode, safeStartOffset);
+  range.setEnd(resolvedEndNode, safeEndOffset);
+  selection.removeAllRanges();
+  selection.addRange(range);
+};
+
 export const textWysiwyg = ({
   id,
   onChange,
@@ -440,11 +708,12 @@ export const textWysiwyg = ({
   app: App;
   autoSelect?: boolean;
 }): SubmitHandler => {
-  let currentSelection: { start: number; end: number } | null = null;
+  let currentSelection: TextEditorSelection | null = null;
   let isInputting = false;
   let isComposing = false;
+  let compositionStartState: TextUndoState | null = null;
+  let pendingInputState: TextUndoState | null = null;
 
-  // Custom undo/redo stacks for text editing
   const undoStack: TextUndoState[] = [];
   const redoStack: TextUndoState[] = [];
   let lastSavedText = element.originalText || "";
@@ -578,28 +847,13 @@ export const textWysiwyg = ({
 
       const font = getFontString(updatedTextElement);
 
-      // Calculate the maximum font size from textStyleRanges for proper line-height
-      let maxFontSize = updatedTextElement.fontSize;
-      if (updatedTextElement.textStyleRanges?.length) {
-        for (const range of updatedTextElement.textStyleRanges) {
-          if (range.fontSize != null && range.fontSize > maxFontSize) {
-            maxFontSize = range.fontSize;
-          }
-        }
-      }
-      // Use pixel-based line-height when there are mixed font sizes
-      const effectiveLineHeight =
-        maxFontSize > updatedTextElement.fontSize
-          ? `${maxFontSize * updatedTextElement.lineHeight}px`
-          : updatedTextElement.lineHeight;
-
       // Make sure text editor height doesn't go beyond viewport
       const editorMaxHeight =
         (appState.height - viewportY) / appState.zoom.value;
       Object.assign(editable.style, {
         font,
         // must be defined *after* font ¯\_(ツ)_/¯
-        lineHeight: effectiveLineHeight,
+        lineHeight: updatedTextElement.lineHeight,
         width: `${width}px`,
         height: `${height}px`,
         left: `${viewportX}px`,
@@ -715,80 +969,13 @@ export const textWysiwyg = ({
 
   const renderStyledTextFromElement = (textElement: ExcalidrawTextElement) => {
     const text = textElement.originalText || "";
-
-    // Colors are still driven by richTextRanges for backward compatibility.
-    const colorRanges = textElement.richTextRanges || [];
-    // textStyleRanges carries fontSize / fontFamily (and may also carry color).
-    const styleRanges = textElement.textStyleRanges || [];
-
-    const getColorForIndex = (index: number): string => {
-      for (let i = 0; i < colorRanges.length; i++) {
-        const range = colorRanges[i];
-        if (index >= range.start && index < range.end && range.color) {
-          return range.color;
-        }
-      }
-      return textElement.strokeColor;
-    };
-
-    const getFontSizeForIndex = (index: number): number => {
-      let size = textElement.fontSize;
-      for (let i = 0; i < styleRanges.length; i++) {
-        const range = styleRanges[i];
-        if (
-          index >= range.start &&
-          index < range.end &&
-          range.fontSize != null
-        ) {
-          size = range.fontSize;
-        }
-      }
-      return size;
-    };
-
-    const getFontFamilyForIndex = (index: number): number => {
-      let fontFamily = textElement.fontFamily;
-      for (let i = 0; i < styleRanges.length; i++) {
-        const range = styleRanges[i];
-        if (
-          index >= range.start &&
-          index < range.end &&
-          range.fontFamily != null
-        ) {
-          fontFamily = range.fontFamily;
-        }
-      }
-      return fontFamily;
-    };
-
-    const getTextOutlineWidthForIndex = (index: number): number => {
-      let width = textElement.textOutlineWidth;
-      for (let i = 0; i < styleRanges.length; i++) {
-        const range = styleRanges[i];
-        if (
-          index >= range.start &&
-          index < range.end &&
-          range.textOutlineWidth != null
-        ) {
-          width = range.textOutlineWidth;
-        }
-      }
-      return width;
-    };
-
-    const getTextOutlineColorForIndex = (index: number): string => {
-      let color = textElement.textOutlineColor;
-      for (let i = 0; i < styleRanges.length; i++) {
-        const range = styleRanges[i];
-        if (
-          index >= range.start &&
-          index < range.end &&
-          range.textOutlineColor != null
-        ) {
-          color = range.textOutlineColor;
-        }
-      }
-      return color;
+    const baseStyle = {
+      color: textElement.strokeColor,
+      fontSize: textElement.fontSize,
+      fontFamily: textElement.fontFamily,
+      fontWeight: textElement.fontWeight ?? "normal",
+      textOutlineColor: textElement.textOutlineColor,
+      textOutlineWidth: textElement.textOutlineWidth,
     };
 
     editable.innerHTML = "";
@@ -796,58 +983,81 @@ export const textWysiwyg = ({
     if (!text.length) {
       return;
     }
-
-    const getStyleForIndex = (index: number) => {
-      return {
-        color: getColorForIndex(index),
-        fontSize: getFontSizeForIndex(index),
-        fontFamily: getFontFamilyForIndex(index),
-        textOutlineWidth: getTextOutlineWidthForIndex(index),
-        textOutlineColor: getTextOutlineColorForIndex(index),
+    const normalizedRanges = normalizeTextStyleRanges(
+      text.length,
+      textElement.textStyleRanges,
+      baseStyle,
+    );
+    const appendSpan = (start: number, end: number, style: TextStyle) => {
+      if (start >= end) {
+        return;
+      }
+      const span = document.createElement("span");
+      span.textContent = text.slice(start, end);
+      span.style.color = style.color ?? textElement.strokeColor;
+      span.style.fontSize = `${style.fontSize ?? textElement.fontSize}px`;
+      span.style.fontFamily = getFontFamilyString({
+        fontFamily: style.fontFamily ?? textElement.fontFamily,
+      });
+      span.style.fontWeight = style.fontWeight ?? "normal";
+      span.style.lineHeight = `${textElement.lineHeight}`;
+      span.style.verticalAlign = "baseline";
+      const spanStyle = span.style as CSSStyleDeclaration & {
+        webkitTextStrokeWidth: string;
+        webkitTextStrokeColor: string;
       };
+      spanStyle.webkitTextStrokeWidth = `${
+        style.textOutlineWidth ?? textElement.textOutlineWidth
+      }px`;
+      spanStyle.webkitTextStrokeColor =
+        style.textOutlineColor ?? textElement.textOutlineColor;
+      editable.appendChild(span);
     };
 
-    let segmentStart = 0;
-    let currentStyle = getStyleForIndex(0);
+    if (isRichTextV2Enabled() && normalizedRanges.length) {
+      const container = getContainerElement(
+        textElement,
+        app.scene.getNonDeletedElementsMap(),
+      );
+      const layout = layoutTextElement(textElement, {
+        maxWidth: container
+          ? getBoundTextMaxWidth(container, textElement)
+          : !textElement.autoResize
+          ? textElement.width
+          : undefined,
+      });
 
-    for (let index = 0; index <= text.length; index++) {
-      const nextStyle = index < text.length ? getStyleForIndex(index) : null;
-
-      const styleChanged =
-        nextStyle &&
-        (nextStyle.color !== currentStyle.color ||
-          nextStyle.fontSize !== currentStyle.fontSize ||
-          nextStyle.fontFamily !== currentStyle.fontFamily ||
-          nextStyle.textOutlineWidth !== currentStyle.textOutlineWidth ||
-          nextStyle.textOutlineColor !== currentStyle.textOutlineColor);
-
-      if (index === text.length || styleChanged) {
-        if (index > segmentStart) {
-          const span = document.createElement("span");
-          span.textContent = text.slice(segmentStart, index);
-
-          span.style.color = currentStyle.color;
-          span.style.fontSize = `${currentStyle.fontSize}px`;
-          span.style.fontFamily = getFontFamilyString({
-            fontFamily: currentStyle.fontFamily,
-          });
-          // Set line-height for each span to prevent text clipping when font size differs
-          span.style.lineHeight = `${textElement.lineHeight}`;
-          // Use baseline alignment to match canvas rendering (alphabetic baseline)
-          span.style.verticalAlign = "baseline";
-
-          const spanStyleAny = span.style as any;
-          spanStyleAny.webkitTextStrokeWidth = `${currentStyle.textOutlineWidth}px`;
-          spanStyleAny.webkitTextStrokeColor = currentStyle.textOutlineColor;
-
-          editable.appendChild(span);
+      layout.lines.forEach((line, lineIndex) => {
+        line.runs.forEach((run) =>
+          appendSpan(run.sourceStart, run.sourceEnd, run.style),
+        );
+        if (line.breakType === "hard") {
+          const nextSourceStart =
+            layout.lines[lineIndex + 1]?.sourceStart ?? text.length;
+          editable.appendChild(
+            document.createTextNode(
+              text.slice(line.sourceEnd, nextSourceStart) || "\n",
+            ),
+          );
         }
-        segmentStart = index;
-        if (nextStyle) {
-          currentStyle = nextStyle;
-        }
-      }
+      });
+      appendTrailingCaretSentinel(editable, text);
+      return;
     }
+
+    let sourceIndex = 0;
+    for (const range of normalizedRanges) {
+      appendSpan(sourceIndex, range.start, baseStyle);
+      appendSpan(
+        range.start,
+        range.end,
+        isRichTextV2Enabled()
+          ? { ...baseStyle, ...range }
+          : { ...baseStyle, color: range.color ?? baseStyle.color },
+      );
+      sourceIndex = range.end;
+    }
+    appendSpan(sourceIndex, text.length, baseStyle);
 
     appendTrailingCaretSentinel(editable, text);
   };
@@ -855,83 +1065,7 @@ export const textWysiwyg = ({
   editable.innerText = element.originalText;
   updateWysiwygStyle();
 
-  let pendingInputSelection: { start: number; end: number } | null = null;
-
-  if (onChange) {
-    editable.onpaste = async (event) => {
-      const textItem = (await parseDataTransferEvent(event)).findByType(
-        MIME_TYPES.text,
-      );
-      if (!textItem) {
-        return;
-      }
-      const text = normalizeText(textItem.value);
-      if (!text) {
-        return;
-      }
-      const container = getContainerElement(
-        element,
-        app.scene.getNonDeletedElementsMap(),
-      );
-
-      const font = getFontString({
-        fontSize: app.state.currentItemFontSize,
-        fontFamily: app.state.currentItemFontFamily,
-      });
-      if (container) {
-        const boundTextElement = getBoundTextElement(
-          container,
-          app.scene.getNonDeletedElementsMap(),
-        );
-        const currentText = getEditableText();
-        const wrappedText = wrapText(
-          `${currentText}${text}`,
-          font,
-          getBoundTextMaxWidth(container, boundTextElement),
-        );
-        const width = getTextWidth(wrappedText, font);
-        editable.style.width = `${width}px`;
-      }
-    };
-
-    editable.oninput = (event) => {
-      isInputting = true;
-      updateTextEditorSelection();
-      const inputSelectionBeforeChange = pendingInputSelection;
-      const normalizedInput = getEditableInput(
-        (event as InputEvent).inputType,
-        inputSelectionBeforeChange,
-      );
-      pendingInputSelection = null;
-      const normalized = normalizedInput.text;
-
-      if (normalizedInput.selection) {
-        currentSelection = normalizedInput.selection;
-        app.setState({ textEditorSelection: normalizedInput.selection });
-      }
-
-      // Only save undo state when NOT composing (IME input)
-      // For IME input, we save the state in compositionend event
-      if (!isComposing && normalized !== lastSavedText) {
-        undoStack.push({
-          text: lastSavedText,
-          selectionStart:
-            inputSelectionBeforeChange?.start ?? currentSelection?.start ?? 0,
-          selectionEnd:
-            inputSelectionBeforeChange?.end ?? currentSelection?.end ?? 0,
-        });
-        // Clear redo stack when new input occurs
-        redoStack.length = 0;
-        lastSavedText = normalized;
-      }
-
-      onChange(normalized);
-      isInputting = false;
-    };
-  }
-
-  // Helper to get current selection offsets
-  const getSelectionOffsets = (): { start: number; end: number } | null => {
+  const getSelectionState = (): TextEditorSelection | null => {
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
       return null;
@@ -944,33 +1078,533 @@ export const textWysiwyg = ({
       return null;
     }
 
-    return getContentEditableSelectionOffsets(editable, range);
+    const offsets = getContentEditableSelectionOffsets(editable, range);
+    return offsets
+      ? {
+          ...offsets,
+          direction: getContentEditableSelectionDirection(selection, range),
+        }
+      : null;
   };
 
-  const getBeforeInputSelection = (event: InputEvent) => {
+  const getSelectionOffsets = () => {
+    const selection = getSelectionState();
+    return selection ? { start: selection.start, end: selection.end } : null;
+  };
+
+  const getBeforeInputSelection = (
+    event: InputEvent,
+  ): TextEditorSelection | null => {
     const targetRanges =
       typeof event.getTargetRanges === "function"
         ? event.getTargetRanges()
         : [];
 
     if (targetRanges.length > 0) {
-      return getContentEditableSelectionOffsets(editable, targetRanges[0]);
+      const offsets = getContentEditableSelectionOffsets(
+        editable,
+        targetRanges[0],
+      );
+      if (offsets) {
+        const liveSelection = getSelectionState();
+        return {
+          ...offsets,
+          direction:
+            liveSelection?.start === offsets.start &&
+            liveSelection.end === offsets.end
+              ? liveSelection.direction
+              : "forward",
+        };
+      }
     }
 
-    return getSelectionOffsets();
+    return getSelectionState();
   };
+
+  const getFallbackSelection = (): TextEditorSelection =>
+    getSelectionState() ??
+    currentSelection ?? {
+      start: 0,
+      end: 0,
+      direction: "forward",
+    };
+
+  const captureEditorState = (
+    selection: TextEditorSelection = getFallbackSelection(),
+  ): TextUndoState => {
+    const textElement = app.scene.getElement<ExcalidrawTextElement>(id);
+    return {
+      originalText: lastSavedText,
+      textStyleRanges: cloneTextStyleRanges(textElement?.textStyleRanges),
+      selection: { ...selection },
+      pendingStyle: cloneTextStyle(app.state.textEditorPendingStyle),
+    };
+  };
+
+  let observedHistoryState = captureEditorState({
+    start: 0,
+    end: 0,
+    direction: "forward",
+  });
+  let lastHistoryTransaction: {
+    kind: Exclude<TextHistoryKind, "discrete">;
+    timestamp: number;
+    selection: TextEditorSelection;
+  } | null = null;
+
+  const areTextStyleRangesEqual = (
+    first: readonly TextStyleRange[],
+    second: readonly TextStyleRange[],
+  ) => JSON.stringify(first) === JSON.stringify(second);
+
+  const arePendingStylesEqual = (
+    first: TextStyle | null,
+    second: TextStyle | null,
+  ) => JSON.stringify(first) === JSON.stringify(second);
+
+  const syncExternalEditorHistory = (
+    state: TextUndoState = captureEditorState(),
+  ) => {
+    const contentChanged =
+      state.originalText !== observedHistoryState.originalText ||
+      !areTextStyleRangesEqual(
+        state.textStyleRanges,
+        observedHistoryState.textStyleRanges,
+      ) ||
+      !arePendingStylesEqual(
+        state.pendingStyle,
+        observedHistoryState.pendingStyle,
+      );
+    if (contentChanged) {
+      undoStack.push(observedHistoryState);
+      redoStack.length = 0;
+      lastHistoryTransaction = null;
+    }
+    observedHistoryState = {
+      ...state,
+      selection: { ...state.selection },
+      textStyleRanges: cloneTextStyleRanges(state.textStyleRanges),
+      pendingStyle: cloneTextStyle(state.pendingStyle),
+    };
+  };
+
+  const getTextEdit = (oldText: string, newText: string) => {
+    let start = 0;
+    const sharedLength = Math.min(oldText.length, newText.length);
+    while (start < sharedLength && oldText[start] === newText[start]) {
+      start++;
+    }
+    let oldEnd = oldText.length;
+    let newEnd = newText.length;
+    while (
+      oldEnd > start &&
+      newEnd > start &&
+      oldText[oldEnd - 1] === newText[newEnd - 1]
+    ) {
+      oldEnd--;
+      newEnd--;
+    }
+    return {
+      start,
+      end: oldEnd,
+      insertedText: newText.slice(start, newEnd),
+    };
+  };
+
+  const getRangesAfterEdit = ({
+    before,
+    nextOriginalText,
+    edit = getTextEdit(before.originalText, nextOriginalText),
+    pastedRanges,
+  }: {
+    before: TextUndoState;
+    nextOriginalText: string;
+    edit?: { start: number; end: number; insertedText: string };
+    pastedRanges?: readonly TextStyleRange[];
+  }) => {
+    const textElement = app.scene.getElement<ExcalidrawTextElement>(id);
+    if (!textElement) {
+      return [];
+    }
+    const baseStyle = getTextElementBaseStyle(textElement);
+    let ranges = transformTextStyleRangesForEdit({
+      oldText: before.originalText,
+      newText: nextOriginalText,
+      start: edit.start,
+      end: edit.end,
+      insertedText: edit.insertedText,
+      ranges: before.textStyleRanges,
+      baseStyle,
+    });
+
+    const effectivePastedRanges = isRichTextV2Enabled()
+      ? pastedRanges
+      : pastedRanges
+      ? pastedRanges.flatMap(({ start, end, color }) =>
+          color === undefined ? [] : [{ start, end, color }],
+        )
+      : undefined;
+    if (effectivePastedRanges?.length) {
+      ranges = applyTextStyleRanges(
+        nextOriginalText.length,
+        ranges,
+        effectivePastedRanges.map((range) => ({
+          ...range,
+          start: edit.start + range.start,
+          end: edit.start + range.end,
+        })),
+        baseStyle,
+      );
+    } else if (edit.insertedText && before.pendingStyle) {
+      const pendingStyle = isRichTextV2Enabled()
+        ? before.pendingStyle
+        : before.pendingStyle.color
+        ? { color: before.pendingStyle.color }
+        : null;
+      if (!pendingStyle) {
+        return ranges;
+      }
+      ranges = applyTextStyleToRange(
+        nextOriginalText.length,
+        ranges,
+        edit.start,
+        edit.start + edit.insertedText.length,
+        pendingStyle,
+        baseStyle,
+      );
+    }
+
+    return ranges;
+  };
+
+  const applyElementTextStyleRanges = (ranges: readonly TextStyleRange[]) => {
+    const textElement = app.scene.getElement<ExcalidrawTextElement>(id);
+    if (!textElement) {
+      return;
+    }
+    const nextRanges = cloneTextStyleRanges(ranges);
+    if (
+      areTextStyleRangesEqual(
+        cloneTextStyleRanges(textElement.textStyleRanges),
+        nextRanges,
+      )
+    ) {
+      return;
+    }
+    app.scene.mutateElement(textElement, {
+      textStyleRanges: nextRanges,
+    });
+    const updatedTextElement = app.scene.getElement<ExcalidrawTextElement>(id);
+    if (updatedTextElement) {
+      redrawTextBoundingBox(
+        updatedTextElement,
+        getContainerElement(
+          updatedTextElement,
+          app.scene.getNonDeletedElementsMap(),
+        ),
+        app.scene,
+      );
+    }
+  };
+
+  const restoreSelectionByOffset = (
+    start: number,
+    end: number,
+    direction: TextEditorSelection["direction"] = "forward",
+  ) => {
+    restoreContentEditableSelection(
+      editable,
+      start,
+      end,
+      lastSavedText,
+      direction,
+    );
+  };
+
+  const commitEditorUpdate = ({
+    before,
+    nextOriginalText,
+    nextSelection,
+    edit,
+    textStyleRanges,
+    pastedRanges,
+    recordHistory = true,
+    rebuildDom = true,
+    historyKind = "discrete",
+  }: {
+    before: TextUndoState;
+    nextOriginalText: string;
+    nextSelection: TextEditorSelection;
+    edit?: { start: number; end: number; insertedText: string };
+    textStyleRanges?: readonly TextStyleRange[];
+    pastedRanges?: readonly TextStyleRange[];
+    recordHistory?: boolean;
+    rebuildDom?: boolean;
+    historyKind?: TextHistoryKind;
+  }) => {
+    if (!onChange) {
+      return;
+    }
+    const normalizedText = normalizeText(nextOriginalText);
+    const nextRanges = textStyleRanges
+      ? cloneTextStyleRanges(textStyleRanges)
+      : getRangesAfterEdit({
+          before,
+          nextOriginalText: normalizedText,
+          edit,
+          pastedRanges,
+        });
+    const hasChanged =
+      normalizedText !== before.originalText ||
+      !areTextStyleRangesEqual(nextRanges, before.textStyleRanges);
+
+    if (!hasChanged) {
+      currentSelection = { ...nextSelection };
+      app.setState({
+        textEditorSelection: {
+          start: nextSelection.start,
+          end: nextSelection.end,
+        },
+      });
+      restoreSelectionByOffset(
+        nextSelection.start,
+        nextSelection.end,
+        nextSelection.direction,
+      );
+      observedHistoryState = captureEditorState(nextSelection);
+      return;
+    }
+
+    if (recordHistory) {
+      syncExternalEditorHistory(before);
+      const now = Date.now();
+      const canMerge =
+        historyKind !== "discrete" &&
+        lastHistoryTransaction?.kind === historyKind &&
+        now - lastHistoryTransaction.timestamp <= 1000 &&
+        lastHistoryTransaction.selection.start === before.selection.start &&
+        lastHistoryTransaction.selection.end === before.selection.end;
+      if (!canMerge) {
+        undoStack.push(before);
+      }
+      redoStack.length = 0;
+      lastHistoryTransaction =
+        historyKind === "discrete"
+          ? null
+          : { kind: historyKind, timestamp: now, selection: nextSelection };
+    }
+
+    isInputting = true;
+    try {
+      onChange(normalizedText);
+      lastSavedText = normalizedText;
+      applyElementTextStyleRanges(nextRanges);
+      currentSelection = { ...nextSelection };
+      app.setState({
+        textEditorSelection: {
+          start: nextSelection.start,
+          end: nextSelection.end,
+        },
+      });
+      if (rebuildDom) {
+        updateWysiwygStyle();
+        restoreSelectionByOffset(
+          nextSelection.start,
+          nextSelection.end,
+          nextSelection.direction,
+        );
+      }
+      observedHistoryState = captureEditorState(nextSelection);
+    } finally {
+      isInputting = false;
+    }
+  };
+
+  const restoreEditorState = (state: TextUndoState) => {
+    if (!onChange) {
+      return;
+    }
+    isInputting = true;
+    try {
+      app.setState({
+        textEditorPendingStyle: cloneTextStyle(state.pendingStyle),
+        textEditorSelection: {
+          start: state.selection.start,
+          end: state.selection.end,
+        },
+      });
+      onChange(state.originalText);
+      lastSavedText = state.originalText;
+      applyElementTextStyleRanges(state.textStyleRanges);
+      currentSelection = { ...state.selection };
+      updateWysiwygStyle();
+      restoreSelectionByOffset(
+        state.selection.start,
+        state.selection.end,
+        state.selection.direction,
+      );
+      observedHistoryState = captureEditorState(state.selection);
+      lastHistoryTransaction = null;
+    } finally {
+      isInputting = false;
+    }
+  };
+
+  const writeSelectionToClipboard = (event: ClipboardEvent) => {
+    const selection = getSelectionState() ?? currentSelection;
+    const clipboardData = event.clipboardData;
+    const textElement = app.scene.getElement<ExcalidrawTextElement>(id);
+    if (
+      !selection ||
+      selection.start === selection.end ||
+      !clipboardData ||
+      !textElement
+    ) {
+      return null;
+    }
+    const plainText = lastSavedText.slice(selection.start, selection.end);
+    clipboardData.setData(MIME_TYPES.text, plainText);
+    try {
+      clipboardData.setData(
+        EXCALIDRAW_RICH_TEXT_MIME_TYPE,
+        serializeRichTextClipboard(
+          lastSavedText,
+          textElement.textStyleRanges,
+          selection.start,
+          selection.end,
+          getTextElementBaseStyle(textElement),
+        ),
+      );
+    } catch {
+      // Some browsers reject custom clipboard types but still allow plain text.
+    }
+    event.preventDefault();
+    return selection;
+  };
+
+  editable.oncopy = (event) => {
+    writeSelectionToClipboard(event);
+  };
+
+  if (onChange) {
+    editable.oncut = (event) => {
+      const selection = writeSelectionToClipboard(event);
+      if (!selection) {
+        return;
+      }
+      const before = captureEditorState(selection);
+      commitEditorUpdate({
+        before,
+        nextOriginalText: `${before.originalText.slice(
+          0,
+          selection.start,
+        )}${before.originalText.slice(selection.end)}`,
+        nextSelection: {
+          start: selection.start,
+          end: selection.start,
+          direction: "forward",
+        },
+        edit: {
+          start: selection.start,
+          end: selection.end,
+          insertedText: "",
+        },
+      });
+    };
+
+    editable.onpaste = (event) => {
+      const clipboardData = event.clipboardData;
+      if (!clipboardData) {
+        return;
+      }
+      const richText = parseRichTextClipboard(
+        clipboardData.getData(EXCALIDRAW_RICH_TEXT_MIME_TYPE),
+      );
+      let pastedText = richText?.text ?? clipboardData.getData(MIME_TYPES.text);
+      if (!pastedText) {
+        const html = clipboardData.getData(MIME_TYPES.html);
+        if (html) {
+          pastedText =
+            new DOMParser().parseFromString(html, MIME_TYPES.html).body
+              .textContent ?? "";
+        }
+      }
+      pastedText = normalizeText(pastedText);
+      if (!pastedText) {
+        return;
+      }
+
+      event.preventDefault();
+      const selection = getFallbackSelection();
+      const before = captureEditorState(selection);
+      const nextOriginalText = `${before.originalText.slice(
+        0,
+        selection.start,
+      )}${pastedText}${before.originalText.slice(selection.end)}`;
+      const caret = selection.start + pastedText.length;
+      commitEditorUpdate({
+        before,
+        nextOriginalText,
+        nextSelection: {
+          start: caret,
+          end: caret,
+          direction: "forward",
+        },
+        edit: {
+          start: selection.start,
+          end: selection.end,
+          insertedText: pastedText,
+        },
+        pastedRanges: richText?.textStyleRanges,
+        historyKind: "discrete",
+      });
+    };
+
+    editable.oninput = (event) => {
+      const inputEvent = event as InputEvent;
+      if (isComposing || inputEvent.isComposing) {
+        pendingInputState = null;
+        return;
+      }
+      const before =
+        pendingInputState ?? captureEditorState(currentSelection ?? undefined);
+      const normalizedInput = getEditableInput(
+        inputEvent.inputType,
+        before.selection,
+      );
+      pendingInputState = null;
+      const selection = normalizedInput.selection
+        ? { ...normalizedInput.selection, direction: "forward" as const }
+        : getFallbackSelection();
+      commitEditorUpdate({
+        before,
+        nextOriginalText: normalizedInput.text,
+        nextSelection: selection,
+        historyKind: inputEvent.inputType?.startsWith("delete")
+          ? "delete"
+          : inputEvent.inputType === "insertText"
+          ? "typing"
+          : "discrete",
+      });
+    };
+  }
 
   editable.onbeforeinput = (event) => {
     const inputEvent = event as InputEvent;
+    if (isComposing || inputEvent.isComposing) {
+      return;
+    }
     const inputSelection = getBeforeInputSelection(inputEvent);
-    pendingInputSelection = inputSelection;
+    if (!inputSelection) {
+      return;
+    }
+    pendingInputState = captureEditorState(inputSelection);
 
     if (
       !onChange ||
       !event.cancelable ||
       isComposing ||
-      inputEvent.isComposing ||
-      !inputSelection
+      inputEvent.isComposing
     ) {
       return;
     }
@@ -986,171 +1620,32 @@ export const textWysiwyg = ({
     }
 
     event.preventDefault();
-    pendingInputSelection = null;
-    undoStack.push({
-      text: lastSavedText,
-      selectionStart: inputSelection.start,
-      selectionEnd: inputSelection.end,
+    const before = pendingInputState;
+    pendingInputState = null;
+    commitEditorUpdate({
+      before,
+      nextOriginalText: next.text,
+      nextSelection: { ...next.selection, direction: "forward" },
+      historyKind: "discrete",
     });
-    redoStack.length = 0;
-    lastSavedText = next.text;
-    currentSelection = next.selection;
-
-    isInputting = true;
-    try {
-      onChange(next.text);
-      app.setState({ textEditorSelection: next.selection });
-      restoreSelectionByOffset(next.selection.start, next.selection.end);
-    } finally {
-      isInputting = false;
-    }
   };
 
-  // Helper to restore selection by offset
-  function restoreSelectionByOffset(start: number, end: number) {
-    const selection = window.getSelection();
-    if (!selection) {
+  const performUndo = () => {
+    syncExternalEditorHistory();
+    if (undoStack.length === 0) {
       return;
     }
-
-    if (
-      start === end &&
-      start === lastSavedText.length &&
-      lastSavedText.endsWith("\n")
-    ) {
-      const sentinel = editable.querySelector(TRAILING_CARET_SENTINEL_SELECTOR);
-      const sentinelWalker = sentinel
-        ? document.createTreeWalker(sentinel, NodeFilter.SHOW_TEXT)
-        : null;
-      const sentinelNode = sentinelWalker?.nextNode();
-      if (sentinelNode) {
-        const range = document.createRange();
-        range.setStart(sentinelNode, 0);
-        range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        return;
-      }
-    }
-
-    let currentLength = 0;
-    let startNode: Node | null = null;
-    let startOffset = 0;
-    let endNode: Node | null = null;
-    let endOffset = 0;
-
-    const traverse = (node: Node) => {
-      if (startNode && endNode) return;
-      if (node.nodeType === Node.TEXT_NODE) {
-        const text = node.textContent || "";
-        const sentinelIndex = node.parentElement?.closest(
-          TRAILING_CARET_SENTINEL_SELECTOR,
-        )
-          ? text.indexOf(TRAILING_CARET_SENTINEL)
-          : -1;
-        const textLen = text.length - (sentinelIndex === -1 ? 0 : 1);
-        const toDomOffset = (modelOffset: number) => {
-          const offset = modelOffset - currentLength;
-          return (
-            offset + (sentinelIndex !== -1 && offset >= sentinelIndex ? 1 : 0)
-          );
-        };
-        if (!startNode && currentLength + textLen >= start) {
-          startNode = node;
-          startOffset = toDomOffset(start);
-        }
-        if (!endNode && currentLength + textLen >= end) {
-          endNode = node;
-          endOffset = toDomOffset(end);
-        }
-        currentLength += textLen;
-      } else {
-        for (const child of Array.from(node.childNodes)) {
-          traverse(child);
-        }
-      }
-    };
-    traverse(editable);
-
-    if (startNode && endNode) {
-      const range = document.createRange();
-      range.setStart(
-        startNode,
-        Math.min(startOffset, (startNode.textContent || "").length),
-      );
-      range.setEnd(
-        endNode,
-        Math.min(endOffset, (endNode.textContent || "").length),
-      );
-      selection.removeAllRanges();
-      selection.addRange(range);
-    }
-  }
-
-  // Undo function
-  const performUndo = () => {
-    if (undoStack.length === 0) return;
-
-    const selection = getSelectionOffsets() ??
-      currentSelection ?? {
-        start: 0,
-        end: 0,
-      };
-    const currentState: TextUndoState = {
-      text: getEditableText(),
-      selectionStart: selection.start,
-      selectionEnd: selection.end,
-    };
-    redoStack.push(currentState);
-
-    const prevState = undoStack.pop()!;
-    lastSavedText = prevState.text;
-
-    // Update the text element
-    if (onChange) {
-      onChange(prevState.text);
-    }
-
-    // Update editable content after onChange updates the element
-    // Always place cursor at the end of restored text
-    setTimeout(() => {
-      updateWysiwygStyle();
-      const textLen = prevState.text.length;
-      restoreSelectionByOffset(textLen, textLen);
-    }, 0);
+    redoStack.push(captureEditorState());
+    restoreEditorState(undoStack.pop()!);
   };
 
-  // Redo function
   const performRedo = () => {
-    if (redoStack.length === 0) return;
-
-    const selection = getSelectionOffsets() ??
-      currentSelection ?? {
-        start: 0,
-        end: 0,
-      };
-    const currentState: TextUndoState = {
-      text: getEditableText(),
-      selectionStart: selection.start,
-      selectionEnd: selection.end,
-    };
-    undoStack.push(currentState);
-
-    const nextState = redoStack.pop()!;
-    lastSavedText = nextState.text;
-
-    // Update the text element
-    if (onChange) {
-      onChange(nextState.text);
+    syncExternalEditorHistory();
+    if (redoStack.length === 0) {
+      return;
     }
-
-    // Update editable content after onChange updates the element
-    // Always place cursor at the end of restored text
-    setTimeout(() => {
-      updateWysiwygStyle();
-      const textLen = nextState.text.length;
-      restoreSelectionByOffset(textLen, textLen);
-    }, 0);
+    undoStack.push(captureEditorState());
+    restoreEditorState(redoStack.pop()!);
   };
 
   editable.onkeydown = (event) => {
@@ -1220,38 +1715,37 @@ export const textWysiwyg = ({
       } else {
         indent();
       }
-      // We must send an input event to resize the element
-      editable.dispatchEvent(new Event("input"));
     }
   };
 
   // Update text editor selection state for rich text functionality
   const updateTextEditorSelection = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0) {
+    const selection = getSelectionState();
+    if (!selection) {
       // Don't clear textEditorSelection here - preserve it for property panel actions
       return;
     }
-
-    const range = selection.getRangeAt(0);
-
-    if (
-      !editable.contains(range.startContainer) ||
-      !editable.contains(range.endContainer)
-    ) {
-      // Don't clear textEditorSelection here - preserve it for property panel actions
-      return;
+    const selectionMoved =
+      currentSelection !== null &&
+      (currentSelection.start !== selection.start ||
+        currentSelection.end !== selection.end);
+    currentSelection = selection;
+    const nextTextEditorSelection = {
+      start: selection.start,
+      end: selection.end,
+    };
+    if (selectionMoved && !isInputting && !isComposing) {
+      app.setState({
+        textEditorSelection: nextTextEditorSelection,
+        textEditorPendingStyle: null,
+      });
+    } else {
+      app.setState({ textEditorSelection: nextTextEditorSelection });
     }
-
-    const offsets = getContentEditableSelectionOffsets(editable, range);
-    if (!offsets) {
-      currentSelection = null;
-      app.setState({ textEditorSelection: null });
-      return;
+    observedHistoryState.selection = { ...selection };
+    if (selectionMoved && !isInputting && !isComposing) {
+      lastHistoryTransaction = null;
     }
-
-    currentSelection = offsets;
-    app.setState({ textEditorSelection: offsets });
   };
 
   function restoreSelectionFromAppState() {
@@ -1260,25 +1754,44 @@ export const textWysiwyg = ({
       return;
     }
 
-    restoreSelectionByOffset(sel.start, sel.end);
+    const direction =
+      currentSelection?.start === sel.start && currentSelection.end === sel.end
+        ? currentSelection.direction
+        : "forward";
+    restoreSelectionByOffset(sel.start, sel.end, direction);
   }
 
   editable.addEventListener("compositionstart", () => {
+    compositionStartState = captureEditorState();
+    pendingInputState = null;
     isComposing = true;
   });
 
   editable.addEventListener("compositionend", () => {
-    isComposing = false;
-    // Save undo state after IME composition ends (e.g., after typing Chinese characters)
+    const before = compositionStartState ?? captureEditorState();
     const normalized = getEditableText();
-    if (normalized !== lastSavedText) {
-      undoStack.push({
-        text: lastSavedText,
-        selectionStart: currentSelection?.start ?? 0,
-        selectionEnd: currentSelection?.end ?? 0,
-      });
-      redoStack.length = 0;
-      lastSavedText = normalized;
+    const selection = getFallbackSelection();
+    commitEditorUpdate({
+      before,
+      nextOriginalText: normalized,
+      nextSelection: selection,
+      rebuildDom: false,
+      historyKind: "discrete",
+    });
+    isComposing = false;
+    compositionStartState = null;
+    pendingInputState = null;
+
+    isInputting = true;
+    try {
+      updateWysiwygStyle();
+      restoreSelectionByOffset(
+        selection.start,
+        selection.end,
+        selection.direction,
+      );
+    } finally {
+      isInputting = false;
     }
   });
 
@@ -1291,22 +1804,141 @@ export const textWysiwyg = ({
   const TAB = " ".repeat(TAB_SIZE);
   const RE_LEADING_TAB = new RegExp(`^ {1,${TAB_SIZE}}`);
 
-  // TODO: re-enable indent/outdent behavior for contenteditable editor.
-  // For now we keep these as no-ops to avoid breaking keyboard shortcuts.
+  const commitKeyboardTextEdit = (
+    nextText: string,
+    nextSelection: TextEditorSelection,
+    before: TextUndoState,
+    textStyleRanges?: readonly TextStyleRange[],
+  ) => {
+    if (!onChange || nextText === lastSavedText) {
+      restoreSelectionByOffset(
+        nextSelection.start,
+        nextSelection.end,
+        nextSelection.direction,
+      );
+      return;
+    }
+    commitEditorUpdate({
+      before,
+      nextOriginalText: nextText,
+      nextSelection,
+      textStyleRanges,
+    });
+  };
+
+  const getSelectedLinesStartIndices = (
+    text: string,
+    selection: { start: number; end: number },
+  ) => {
+    const firstLineStart = text.lastIndexOf("\n", selection.start - 1) + 1;
+    const effectiveEnd =
+      selection.end > selection.start && text[selection.end - 1] === "\n"
+        ? selection.end - 1
+        : selection.end;
+    const lineStarts = [firstLineStart];
+    let lineBreak = text.indexOf("\n", firstLineStart);
+    while (lineBreak !== -1 && lineBreak < effectiveEnd) {
+      lineStarts.push(lineBreak + 1);
+      lineBreak = text.indexOf("\n", lineBreak + 1);
+    }
+    return lineStarts;
+  };
+
   const indent = () => {
-    return;
+    const selection = getSelectionState() ?? currentSelection;
+    if (!selection) {
+      return;
+    }
+    const text = getEditableText();
+    const before = captureEditorState(selection);
+    const lineStarts = getSelectedLinesStartIndices(text, selection);
+    let nextText = text;
+    let nextRanges = before.textStyleRanges;
+    for (let index = lineStarts.length - 1; index >= 0; index--) {
+      const lineStart = lineStarts[index];
+      const previousText = nextText;
+      nextText = `${previousText.slice(0, lineStart)}${TAB}${previousText.slice(
+        lineStart,
+      )}`;
+      nextRanges = getRangesAfterEdit({
+        before: {
+          ...before,
+          originalText: previousText,
+          textStyleRanges: nextRanges,
+        },
+        nextOriginalText: nextText,
+        edit: { start: lineStart, end: lineStart, insertedText: TAB },
+      });
+    }
+    commitKeyboardTextEdit(
+      nextText,
+      {
+        start: selection.start + TAB_SIZE,
+        end: selection.end + TAB_SIZE * lineStarts.length,
+        direction: selection.direction,
+      },
+      before,
+      nextRanges,
+    );
   };
 
   const outdent = () => {
-    return;
-  };
+    const selection = getSelectionState() ?? currentSelection;
+    if (!selection) {
+      return;
+    }
+    const text = getEditableText();
+    const before = captureEditorState(selection);
+    const lineStarts = getSelectedLinesStartIndices(text, selection);
+    const removals = lineStarts.map((lineStart) => ({
+      lineStart,
+      count: text.slice(lineStart).match(RE_LEADING_TAB)?.[0].length ?? 0,
+    }));
+    let nextText = text;
+    let nextRanges = before.textStyleRanges;
+    for (let index = removals.length - 1; index >= 0; index--) {
+      const { lineStart, count } = removals[index];
+      if (count > 0) {
+        const previousText = nextText;
+        nextText = `${previousText.slice(0, lineStart)}${previousText.slice(
+          lineStart + count,
+        )}`;
+        nextRanges = getRangesAfterEdit({
+          before: {
+            ...before,
+            originalText: previousText,
+            textStyleRanges: nextRanges,
+          },
+          nextOriginalText: nextText,
+          edit: {
+            start: lineStart,
+            end: lineStart + count,
+            insertedText: "",
+          },
+        });
+      }
+    }
 
-  /**
-   * @returns indices of start positions of selected lines.
-   * Currently unused for contenteditable implementation.
-   */
-  const getSelectedLinesStartIndices = () => {
-    return [] as number[];
+    const adjustOffset = (offset: number) => {
+      let nextOffset = offset;
+      for (const { lineStart, count } of removals) {
+        if (count === 0 || lineStart >= offset) {
+          continue;
+        }
+        nextOffset -= Math.min(count, offset - lineStart);
+      }
+      return nextOffset;
+    };
+    commitKeyboardTextEdit(
+      nextText,
+      {
+        start: adjustOffset(selection.start),
+        end: adjustOffset(selection.end),
+        direction: selection.direction,
+      },
+      before,
+      nextRanges,
+    );
   };
 
   const stopEvent = (event: Event) => {
@@ -1387,7 +2019,10 @@ export const textWysiwyg = ({
     editable.onkeyup = null;
 
     // Clear text editor selection state
-    app.setState({ textEditorSelection: null });
+    app.setState({
+      textEditorSelection: null,
+      textEditorPendingStyle: null,
+    });
 
     if (observer) {
       observer.disconnect();
@@ -1464,7 +2099,10 @@ export const textWysiwyg = ({
     // panning canvas
     if (event.button === POINTER_BUTTON.WHEEL) {
       // trying to pan by clicking inside text area itself -> handle here
-      if (target instanceof HTMLTextAreaElement) {
+      if (
+        target === editable ||
+        (target instanceof Node && editable.contains(target))
+      ) {
         event.preventDefault();
         app.handleCanvasPanUsingWheelOrSpaceDrag(event);
       }
@@ -1517,6 +2155,9 @@ export const textWysiwyg = ({
 
   // handle updates of textElement properties of editing element
   const unbindUpdate = app.scene.onUpdate(() => {
+    if (!isInputting) {
+      syncExternalEditorHistory();
+    }
     updateWysiwygStyle();
     const isPopupOpened = !!document.activeElement?.closest(
       ".properties-content",

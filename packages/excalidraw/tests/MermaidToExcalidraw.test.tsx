@@ -109,7 +109,7 @@ describe("Test <MermaidToExcalidraw/>", () => {
     expect(editor.textContent).toMatchSnapshot();
 
     updateTextEditor(editor, "flowchart TD1");
-    editor = await getTextEditor({ selector, waitForEditor: false });
+    editor = (await getTextEditor({ selector, waitForEditor: false }))!;
 
     expect(editor.textContent).toBe("flowchart TD1");
     expect(

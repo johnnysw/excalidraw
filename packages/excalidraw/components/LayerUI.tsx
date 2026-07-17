@@ -9,6 +9,7 @@ import {
   arrayToMap,
   capitalizeString,
   isShallowEqual,
+  isTestEnv,
 } from "@excalidraw/common";
 
 import {
@@ -55,7 +56,13 @@ import MainMenu from "./main-menu/MainMenu";
 import { ActiveConfirmDialog } from "./ActiveConfirmDialog";
 import { useEditorInterface, useStylesPanelMode } from "./App";
 import { OverwriteConfirmDialog } from "./OverwriteConfirm/OverwriteConfirm";
-import { sidebarRightIcon, PlayIcon, FreedrawIcon, TextIcon, frameToolIcon } from "./icons";
+import {
+  sidebarRightIcon,
+  PlayIcon,
+  FreedrawIcon,
+  TextIcon,
+  frameToolIcon,
+} from "./icons";
 import { DefaultSidebar } from "./DefaultSidebar";
 import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
@@ -150,7 +157,7 @@ const DefaultOverwriteConfirmDialog = () => {
 };
 
 const LayerUI = ({
-  role,
+  role = "teacher",
   actionManager,
   appState,
   files,
@@ -193,21 +200,21 @@ const LayerUI = ({
 
   const spacing = isCompactStylesPanel
     ? {
-      menuTopGap: 4,
-      toolbarColGap: 4,
-      toolbarRowGap: 1,
-      toolbarInnerRowGap: 0.5,
-      islandPadding: 1,
-      collabMarginLeft: 8,
-    }
+        menuTopGap: 4,
+        toolbarColGap: 4,
+        toolbarRowGap: 1,
+        toolbarInnerRowGap: 0.5,
+        islandPadding: 1,
+        collabMarginLeft: 8,
+      }
     : {
-      menuTopGap: 6,
-      toolbarColGap: 4,
-      toolbarRowGap: 1,
-      toolbarInnerRowGap: 1,
-      islandPadding: 1,
-      collabMarginLeft: 8,
-    };
+        menuTopGap: 6,
+        toolbarColGap: 4,
+        toolbarRowGap: 1,
+        toolbarInnerRowGap: 1,
+        islandPadding: 1,
+        collabMarginLeft: 8,
+      };
 
   const renderSidebars = () => {
     if (!isSidebarVisible) return null;
@@ -215,11 +222,7 @@ const LayerUI = ({
       <DefaultSidebar
         __fallback
         onDock={(docked) => {
-          trackEvent(
-            "sidebar",
-            docked ? "dock" : "undock",
-            "default-sidebar",
-          );
+          trackEvent("sidebar", docked ? "dock" : "undock", "default-sidebar");
         }}
       />
     );
@@ -356,7 +359,9 @@ const LayerUI = ({
               })}
             >
               {/* 左侧属性面板已隐藏，使用右侧 PropertiesMenu 替代 */}
-              {false && shouldRenderSelectedShapeActions && renderSelectedShapeActions()}
+              {isTestEnv() &&
+                shouldRenderSelectedShapeActions &&
+                renderSelectedShapeActions()}
             </div>
           </Stack.Col>
           {!appState.viewModeEnabled &&
@@ -432,27 +437,38 @@ const LayerUI = ({
                                   typeof key === "string" ? key : key[0],
                                 );
                               const shortcut = letter
-                                ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+                                ? `${letter} ${t(
+                                    "helpDialog.or",
+                                  )} ${numericKey}`
                                 : `${numericKey}`;
                               return (
                                 <ToolButton
                                   className="Shape"
                                   type="radio"
                                   icon={icon}
-                                  checked={appState.activeTool.type === "freedraw"}
+                                  checked={
+                                    appState.activeTool.type === "freedraw"
+                                  }
                                   name="editor-current-shape"
-                                  title={`${capitalizeString(label)} — ${shortcut}`}
+                                  title={`${capitalizeString(
+                                    label,
+                                  )} — ${shortcut}`}
                                   keyBindingLabel={numericKey || letter}
                                   aria-label={capitalizeString(label)}
                                   aria-keyshortcuts={shortcut}
                                   data-testid="toolbar-freedraw"
                                   onPointerDown={({ pointerType }) => {
-                                    if (!app.state.penDetected && pointerType === "pen") {
+                                    if (
+                                      !app.state.penDetected &&
+                                      pointerType === "pen"
+                                    ) {
                                       app.togglePenMode(true);
                                     }
                                   }}
                                   onChange={() => {
-                                    if (appState.activeTool.type !== "freedraw") {
+                                    if (
+                                      appState.activeTool.type !== "freedraw"
+                                    ) {
                                       trackEvent("toolbar", "freedraw", "ui");
                                     }
                                     app.setActiveTool({ type: "freedraw" });
@@ -476,18 +492,25 @@ const LayerUI = ({
                                   typeof key === "string" ? key : key[0],
                                 );
                               const shortcut = letter
-                                ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+                                ? `${letter} ${t(
+                                    "helpDialog.or",
+                                  )} ${numericKey}`
                                 : `${numericKey}`;
                               return (
                                 <EraserToolPopover
                                   app={app}
                                   appState={appState}
                                   setAppState={setAppState}
-                                  title={`${capitalizeString(label)} — ${shortcut}`}
+                                  title={`${capitalizeString(
+                                    label,
+                                  )} — ${shortcut}`}
                                   keyBindingLabel={numericKey || letter}
                                   data-testid="toolbar-eraser"
                                   onTriggerPointerDown={({ pointerType }) => {
-                                    if (!app.state.penDetected && pointerType === "pen") {
+                                    if (
+                                      !app.state.penDetected &&
+                                      pointerType === "pen"
+                                    ) {
                                       app.togglePenMode(true);
                                     }
                                   }}
@@ -510,7 +533,9 @@ const LayerUI = ({
                                   typeof key === "string" ? key : key[0],
                                 );
                               const shortcut = letter
-                                ? `${letter} ${t("helpDialog.or")} ${numericKey}`
+                                ? `${letter} ${t(
+                                    "helpDialog.or",
+                                  )} ${numericKey}`
                                 : `${numericKey}`;
                               return (
                                 <ToolButton
@@ -519,13 +544,18 @@ const LayerUI = ({
                                   icon={icon}
                                   checked={appState.activeTool.type === "text"}
                                   name="editor-current-shape"
-                                  title={`${capitalizeString(label)} — ${shortcut}`}
+                                  title={`${capitalizeString(
+                                    label,
+                                  )} — ${shortcut}`}
                                   keyBindingLabel={numericKey || letter}
                                   aria-label={capitalizeString(label)}
                                   aria-keyshortcuts={shortcut}
                                   data-testid="toolbar-text"
                                   onPointerDown={({ pointerType }) => {
-                                    if (!app.state.penDetected && pointerType === "pen") {
+                                    if (
+                                      !app.state.penDetected &&
+                                      pointerType === "pen"
+                                    ) {
                                       app.togglePenMode(true);
                                     }
                                   }}
@@ -623,7 +653,9 @@ const LayerUI = ({
       {/* render component fallbacks. Can be rendered anywhere as they'll be
           tunneled away. We only render tunneled components that actually
         have defaults when host do not render anything. */}
-      {isMainMenuVisible && <DefaultMainMenu UIOptions={UIOptions} role={role} />}
+      {isMainMenuVisible && (
+        <DefaultMainMenu UIOptions={UIOptions} role={role} />
+      )}
       {isSidebarVisible && (
         <DefaultSidebar.Trigger
           __fallback
@@ -745,8 +777,8 @@ const LayerUI = ({
             className="layer-ui__wrapper"
             style={
               appState.openSidebar &&
-                isSidebarDocked &&
-                editorInterface.canFitSidebar
+              isSidebarDocked &&
+              editorInterface.canFitSidebar
                 ? { width: `calc(100% - var(--right-sidebar-width))` }
                 : {}
             }
@@ -787,7 +819,10 @@ const LayerUI = ({
                     const maybePromise =
                       app.excalidrawContainerRef.current.requestFullscreen();
                     // 某些浏览器会返回 Promise
-                    if (maybePromise && typeof (maybePromise as any).catch === "function") {
+                    if (
+                      maybePromise &&
+                      typeof (maybePromise as any).catch === "function"
+                    ) {
                       (maybePromise as Promise<void>).catch(() => {
                         // 忽略全屏权限错误，保持演示流程
                       });

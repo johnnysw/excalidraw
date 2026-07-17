@@ -7,6 +7,11 @@ import {
 } from "@excalidraw/common";
 import { getContainerElement } from "@excalidraw/element";
 import { charWidth } from "@excalidraw/element";
+import { invalidateTextLayoutCache } from "@excalidraw/element";
+import {
+  getTextElementBaseStyle,
+  normalizeTextStyleRanges,
+} from "@excalidraw/element";
 import { containsCJK } from "@excalidraw/element";
 
 import {
@@ -120,6 +125,8 @@ export class Fonts {
       return;
     }
 
+    invalidateTextLayoutCache();
+
     let didUpdate = false;
 
     const elementsMap = this.scene.getNonDeletedElementsMap();
@@ -129,8 +136,21 @@ export class Fonts {
         didUpdate = true;
         ShapeCache.delete(element);
 
-        // clear the width cache, so that we don't perform subsequent wrapping based on the stale fallback font metrics
-        charWidth.clearCache(getFontString(element));
+        // Clear all base and local run metrics so subsequent wrapping does not
+        // reuse widths measured against fallback fonts.
+        const fontStrings = new Set<ReturnType<typeof getFontString>>([
+          getFontString(element),
+        ]);
+        for (const range of Fonts.getNormalizedTextStyleRanges(element)) {
+          fontStrings.add(
+            getFontString({
+              fontFamily: range.fontFamily ?? element.fontFamily,
+              fontSize: range.fontSize ?? element.fontSize,
+              fontWeight: range.fontWeight ?? element.fontWeight ?? "normal",
+            }),
+          );
+        }
+        fontStrings.forEach((fontString) => charWidth.clearCache(fontString));
 
         const container = getContainerElement(element, elementsMap);
         if (container) {
@@ -411,6 +431,11 @@ export class Fonts {
       elements.reduce((families, element) => {
         if (isTextElement(element)) {
           families.add(element.fontFamily);
+          for (const range of Fonts.getNormalizedTextStyleRanges(element)) {
+            if (range.fontFamily != null) {
+              families.add(range.fontFamily);
+            }
+          }
         }
         return families;
       }, new Set<number>()),
@@ -430,17 +455,41 @@ export class Fonts {
         continue;
       }
 
-      // gather unique codepoints only when inlining fonts
-      for (const char of element.originalText) {
-        if (!charsPerFamily[element.fontFamily]) {
-          charsPerFamily[element.fontFamily] = new Set();
-        }
+      const ranges = Fonts.getNormalizedTextStyleRanges(element);
+      let rangeIndex = 0;
+      let sourceIndex = 0;
 
-        charsPerFamily[element.fontFamily].add(char);
+      // Gather unique codepoints per final run family for font subsetting.
+      for (const char of element.originalText) {
+        while (
+          rangeIndex < ranges.length &&
+          ranges[rangeIndex].end <= sourceIndex
+        ) {
+          rangeIndex++;
+        }
+        const range = ranges[rangeIndex];
+        const fontFamily =
+          range && range.start <= sourceIndex && sourceIndex < range.end
+            ? range.fontFamily ?? element.fontFamily
+            : element.fontFamily;
+
+        if (!charsPerFamily[fontFamily]) {
+          charsPerFamily[fontFamily] = new Set();
+        }
+        charsPerFamily[fontFamily].add(char);
+        sourceIndex += char.length;
       }
     }
 
     return charsPerFamily;
+  }
+
+  private static getNormalizedTextStyleRanges(element: ExcalidrawTextElement) {
+    return normalizeTextStyleRanges(
+      element.originalText.length,
+      element.textStyleRanges,
+      getTextElementBaseStyle(element),
+    );
   }
 
   /**

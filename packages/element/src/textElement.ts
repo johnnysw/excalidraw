@@ -22,8 +22,10 @@ import {
 } from "./containerCache";
 import { LinearElementEditor } from "./linearElementEditor";
 
-import { measureText, measureTextWithStyleRanges } from "./textMeasurements";
+import { measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
+import { layoutTextElement } from "./textLayout";
+import { isRichTextV2Enabled } from "./textStyleRanges";
 import {
   isBoundToContainer,
   isArrowElement,
@@ -74,30 +76,29 @@ export const redrawTextBoundingBox = (
 
   boundTextUpdates.text = textElement.text;
 
+  const hasTextStyles =
+    isRichTextV2Enabled() && !!textElement.textStyleRanges?.length;
   if (container || !textElement.autoResize) {
     maxWidth = container
       ? getBoundTextMaxWidth(container, textElement)
       : textElement.width;
-    boundTextUpdates.text = wrapText(
-      textElement.originalText,
-      getFontString(textElement),
-      maxWidth,
-    );
+    if (!hasTextStyles) {
+      boundTextUpdates.text = wrapText(
+        textElement.originalText,
+        getFontString(textElement),
+        maxWidth,
+      );
+    }
   }
 
-  const shouldUseStyledMetrics =
-    textElement.autoResize &&
-    !container &&
-    !!textElement.textStyleRanges?.length;
-  const metrics = shouldUseStyledMetrics
-    ? measureTextWithStyleRanges(
-        textElement.originalText,
-        textElement.fontSize,
-        textElement.fontFamily,
-        textElement.lineHeight,
-        textElement.textStyleRanges,
-        textElement.fontWeight,
-      )
+  const styledLayout = hasTextStyles
+    ? layoutTextElement(textElement, { maxWidth })
+    : null;
+  if (styledLayout) {
+    boundTextUpdates.text = styledLayout.wrappedText;
+  }
+  const metrics = styledLayout
+    ? { width: styledLayout.contentWidth, height: styledLayout.height }
     : measureText(
         boundTextUpdates.text,
         getFontString(textElement),
@@ -180,20 +181,25 @@ export const handleBindTextResize = (
       shouldMaintainAspectRatio ||
       (transformHandleType !== "n" && transformHandleType !== "s")
     ) {
-      if (text) {
+      if (isRichTextV2Enabled() && textElement.textStyleRanges?.length) {
+        const layout = layoutTextElement(textElement, { maxWidth });
+        text = layout.wrappedText;
+        nextHeight = layout.height;
+        nextWidth = layout.contentWidth;
+      } else if (text) {
         text = wrapText(
           textElement.originalText,
           getFontString(textElement),
           maxWidth,
         );
+        const metrics = measureText(
+          text,
+          getFontString(textElement),
+          textElement.lineHeight,
+        );
+        nextHeight = metrics.height;
+        nextWidth = metrics.width;
       }
-      const metrics = measureText(
-        text,
-        getFontString(textElement),
-        textElement.lineHeight,
-      );
-      nextHeight = metrics.height;
-      nextWidth = metrics.width;
     }
     // increase height in case text element height exceeds
     if (nextHeight > maxHeight) {

@@ -144,8 +144,8 @@ export class Keyboard {
     });
   };
 
-  static exitTextEditor = (textarea: HTMLTextAreaElement) => {
-    fireEvent.keyDown(textarea, { key: KEYS.ESCAPE });
+  static exitTextEditor = (editor: HTMLElement) => {
+    fireEvent.keyDown(editor, { key: KEYS.ESCAPE });
   };
 }
 
@@ -554,7 +554,7 @@ export class UI {
     T extends ExcalidrawTextElement | ExcalidrawTextContainer,
   >(element: T, text: string) {
     const openedEditor =
-      document.querySelector<HTMLTextAreaElement>(TEXT_EDITOR_SELECTOR);
+      document.querySelector<HTMLElement>(TEXT_EDITOR_SELECTOR);
 
     if (!openedEditor) {
       mouse.select(element);

@@ -89,6 +89,53 @@ describe("restoreElements", () => {
     });
   });
 
+  it("migrates legacy rich text colors into canonical text style ranges", () => {
+    const textElement = {
+      ...API.createElement({
+        type: "text",
+        text: "abcd",
+        strokeColor: "#000000",
+      }),
+      textStyleRanges: [
+        { start: 0, end: 4, color: "#ff0000", fontSize: 30 },
+        { start: -2, end: 20, fontWeight: "bold" },
+      ],
+      richTextRanges: [{ start: 1, end: 3, color: "#00ff00" }],
+    } as ExcalidrawTextElement;
+
+    const restoredText = restore.restoreElements(
+      [textElement],
+      null,
+    )[0] as ExcalidrawTextElement;
+
+    expect(restoredText).not.toHaveProperty("richTextRanges");
+    expect(restoredText.textStyleRanges).toEqual([
+      { start: 0, end: 1, color: "#ff0000", fontSize: 30, fontWeight: "bold" },
+      { start: 1, end: 3, color: "#00ff00", fontSize: 30, fontWeight: "bold" },
+      { start: 3, end: 4, color: "#ff0000", fontSize: 30, fontWeight: "bold" },
+    ]);
+  });
+
+  it("removes legacy and redundant style ranges when normalization is empty", () => {
+    const textElement = {
+      ...API.createElement({
+        type: "text",
+        text: "abcd",
+        strokeColor: "#000000",
+      }),
+      textStyleRanges: [{ start: -10, end: 99, color: "#000000" }],
+      richTextRanges: [{ start: 2, end: 2, color: "#ff0000" }],
+    } as ExcalidrawTextElement;
+
+    const restoredText = restore.restoreElements(
+      [textElement],
+      null,
+    )[0] as ExcalidrawTextElement;
+
+    expect(restoredText).not.toHaveProperty("richTextRanges");
+    expect(restoredText).not.toHaveProperty("textStyleRanges");
+  });
+
   it("should not delete empty text element when opts.deleteInvisibleElements is not defined", () => {
     const textElement = API.createElement({
       type: "text",

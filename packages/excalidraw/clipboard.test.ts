@@ -7,6 +7,29 @@ import {
 import { API } from "./tests/helpers/api";
 
 describe("parseClipboard()", () => {
+  it("serializes text elements with canonical style ranges only", () => {
+    const text = {
+      ...API.createElement({
+        type: "text",
+        text: "abcd",
+        strokeColor: "#000000",
+      }),
+      textStyleRanges: [{ start: -1, end: 9, fontWeight: "bold" }],
+      richTextRanges: [{ start: 1, end: 3, color: "#ff0000" }],
+    } as ReturnType<typeof API.createElement>;
+
+    const data = JSON.parse(
+      serializeAsClipboardJSON({ elements: [text], files: null }),
+    );
+
+    expect(data.elements[0]).not.toHaveProperty("richTextRanges");
+    expect(data.elements[0].textStyleRanges).toEqual([
+      { start: 0, end: 1, fontWeight: "bold" },
+      { start: 1, end: 3, color: "#ff0000", fontWeight: "bold" },
+      { start: 3, end: 4, fontWeight: "bold" },
+    ]);
+  });
+
   it("should parse JSON as plaintext if not excalidraw-api/clipboard data", async () => {
     let text;
     let clipboardData;

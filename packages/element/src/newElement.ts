@@ -24,12 +24,13 @@ import {
 } from "./bounds";
 import { newElementWith } from "./mutateElement";
 import { getBoundTextMaxWidth } from "./textElement";
-import {
-  normalizeText,
-  measureText,
-  measureTextWithStyleRanges,
-} from "./textMeasurements";
+import { normalizeText, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
+import {
+  isRichTextV2Enabled,
+  normalizeTextStyleRanges,
+} from "./textStyleRanges";
+import { layoutText, layoutTextElement } from "./textLayout";
 
 import { isLineElement } from "./typeChecks";
 
@@ -256,6 +257,8 @@ export const newTextElement = (
     autoResize?: ExcalidrawTextElement["autoResize"];
     textOutlineColor?: string;
     textOutlineWidth?: number;
+    textStyleRanges?: ExcalidrawTextElement["textStyleRanges"];
+    /** @deprecated Use textStyleRanges. */
     richTextRanges?: ExcalidrawTextElement["richTextRanges"];
   } & ElementConstructorOpts,
 ): NonDeleted<ExcalidrawTextElement> => {
@@ -263,17 +266,64 @@ export const newTextElement = (
   const fontSize = opts.fontSize || DEFAULT_FONT_SIZE;
   const fontWeight = opts.fontWeight || "normal";
   const lineHeight = opts.lineHeight || getLineHeight(fontFamily);
-  const text = normalizeText(opts.text);
-  const metrics = measureText(
-    text,
-    getFontString({ fontFamily, fontSize, fontWeight }),
-    lineHeight,
+  let text = normalizeText(opts.text);
+  const originalText = normalizeText(opts.originalText ?? text);
+  const textOutlineColor = opts.textOutlineColor ?? DEFAULT_TEXT_OUTLINE_COLOR;
+  const textOutlineWidth = opts.textOutlineWidth ?? DEFAULT_TEXT_OUTLINE_WIDTH;
+  const legacyColorRanges = (opts.richTextRanges ?? []).flatMap((range) =>
+    range.color == null
+      ? []
+      : [{ start: range.start, end: range.end, color: range.color }],
   );
+  const textStyleRanges = normalizeTextStyleRanges(
+    originalText.length,
+    [...(opts.textStyleRanges ?? []), ...legacyColorRanges],
+    {
+      color: opts.strokeColor ?? DEFAULT_ELEMENT_PROPS.strokeColor,
+      fontSize,
+      fontFamily,
+      fontWeight,
+      textOutlineColor,
+      textOutlineWidth,
+    },
+  );
+  const styledLayout =
+    textStyleRanges.length && isRichTextV2Enabled()
+      ? layoutText({
+          originalText,
+          baseStyle: {
+            color: opts.strokeColor ?? DEFAULT_ELEMENT_PROPS.strokeColor,
+            fontSize,
+            fontFamily,
+            fontWeight,
+            textOutlineColor,
+            textOutlineWidth,
+          },
+          textStyleRanges,
+          lineHeight,
+          maxWidth: opts.autoResize === false ? opts.width : undefined,
+          textAlign: opts.textAlign,
+        })
+      : null;
+  if (styledLayout) {
+    text = styledLayout.wrappedText;
+  }
+  const metrics = styledLayout
+    ? { width: styledLayout.contentWidth, height: styledLayout.height }
+    : measureText(
+        text,
+        getFontString({ fontFamily, fontSize, fontWeight }),
+        lineHeight,
+      );
+  const elementWidth =
+    opts.autoResize === false && opts.width != null
+      ? opts.width
+      : metrics.width;
   const textAlign = opts.textAlign || DEFAULT_TEXT_ALIGN;
   const verticalAlign = opts.verticalAlign || DEFAULT_VERTICAL_ALIGN;
   const offsets = getTextElementPositionOffsets(
     { textAlign, verticalAlign },
-    metrics,
+    { ...metrics, width: elementWidth },
   );
 
   const textElementProps: ExcalidrawTextElement = {
@@ -286,15 +336,15 @@ export const newTextElement = (
     verticalAlign,
     x: opts.x - offsets.x,
     y: opts.y - offsets.y,
-    width: metrics.width,
+    width: elementWidth,
     height: metrics.height,
     containerId: opts.containerId || null,
-    originalText: opts.originalText ?? text,
-    textOutlineColor: opts.textOutlineColor ?? DEFAULT_TEXT_OUTLINE_COLOR,
-    textOutlineWidth: opts.textOutlineWidth ?? DEFAULT_TEXT_OUTLINE_WIDTH,
+    originalText,
+    textOutlineColor,
+    textOutlineWidth,
     autoResize: opts.autoResize ?? true,
     lineHeight,
-    richTextRanges: opts.richTextRanges,
+    ...(textStyleRanges.length ? { textStyleRanges } : {}),
   };
 
   const textElement: ExcalidrawTextElement = newElementWith(
@@ -308,27 +358,15 @@ export const newTextElement = (
 const getAdjustedDimensions = (
   element: ExcalidrawTextElement,
   elementsMap: ElementsMap,
-  nextText: string,
+  nextMetrics: { width: number; height: number },
+  previousMetrics: { width: number; height: number },
 ): {
   x: number;
   y: number;
   width: number;
   height: number;
 } => {
-  const shouldUseStyledMetrics =
-    element.autoResize &&
-    !element.containerId &&
-    !!element.textStyleRanges?.length;
-  let { width: nextWidth, height: nextHeight } = shouldUseStyledMetrics
-    ? measureTextWithStyleRanges(
-        nextText,
-        element.fontSize,
-        element.fontFamily,
-        element.lineHeight,
-        element.textStyleRanges,
-        element.fontWeight,
-      )
-    : measureText(nextText, getFontString(element), element.lineHeight);
+  let { width: nextWidth, height: nextHeight } = nextMetrics;
 
   // wrapped text
   if (!element.autoResize) {
@@ -344,19 +382,9 @@ const getAdjustedDimensions = (
     !element.containerId &&
     element.autoResize
   ) {
-    const prevMetrics = shouldUseStyledMetrics
-      ? measureTextWithStyleRanges(
-          element.text,
-          element.fontSize,
-          element.fontFamily,
-          element.lineHeight,
-          element.textStyleRanges,
-          element.fontWeight,
-        )
-      : measureText(element.text, getFontString(element), element.lineHeight);
     const offsets = getTextElementPositionOffsets(element, {
-      width: nextWidth - prevMetrics.width,
-      height: nextHeight - prevMetrics.height,
+      width: nextWidth - previousMetrics.width,
+      height: nextHeight - previousMetrics.height,
     });
 
     x = element.x - offsets.x;
@@ -450,21 +478,57 @@ export const refreshTextDimensions = (
   textElement: ExcalidrawTextElement,
   container: ExcalidrawTextContainer | null,
   elementsMap: ElementsMap,
-  text = textElement.text,
+  text = textElement.originalText,
 ) => {
   if (textElement.isDeleted) {
     return;
   }
-  if (container || !textElement.autoResize) {
-    text = wrapText(
+  const maxWidth = container
+    ? getBoundTextMaxWidth(container, textElement)
+    : !textElement.autoResize
+    ? textElement.width
+    : undefined;
+  const layoutStyledText = (originalText: string) =>
+    layoutTextElement(textElement, {
+      originalText,
+      maxWidth,
+      textAlign: textElement.textAlign,
+    });
+  let nextMetrics: { width: number; height: number };
+  let previousMetrics: { width: number; height: number };
+  if (textElement.textStyleRanges?.length && isRichTextV2Enabled()) {
+    const nextLayout = layoutStyledText(text);
+    const previousLayout = layoutStyledText(textElement.originalText);
+    text = nextLayout.wrappedText;
+    nextMetrics = {
+      width: nextLayout.contentWidth,
+      height: nextLayout.height,
+    };
+    previousMetrics = {
+      width: previousLayout.contentWidth,
+      height: previousLayout.height,
+    };
+  } else {
+    if (maxWidth !== undefined) {
+      text = wrapText(text, getFontString(textElement), maxWidth);
+    }
+    nextMetrics = measureText(
       text,
       getFontString(textElement),
-      container
-        ? getBoundTextMaxWidth(container, textElement)
-        : textElement.width,
+      textElement.lineHeight,
+    );
+    previousMetrics = measureText(
+      textElement.text,
+      getFontString(textElement),
+      textElement.lineHeight,
     );
   }
-  const dimensions = getAdjustedDimensions(textElement, elementsMap, text);
+  const dimensions = getAdjustedDimensions(
+    textElement,
+    elementsMap,
+    nextMetrics,
+    previousMetrics,
+  );
   return { text, ...dimensions };
 };
 

@@ -53,6 +53,8 @@ import {
   getBoundTextMaxWidth,
 } from "./textElement";
 import { getLineHeightInPx } from "./textMeasurements";
+import { layoutTextElement } from "./textLayout";
+import { isRichTextV2Enabled } from "./textStyleRanges";
 import {
   isTextElement,
   isLinearElement,
@@ -134,7 +136,7 @@ const getSyntheticBoldStrokeWidth = (fontSize: number, fontFamily: number) =>
     ? Math.min(0.6, Math.max(0.2, fontSize * 0.018))
     : Math.min(1.9, Math.max(0.6, fontSize * 0.05));
 
-const fillTextWithWeight = (
+export const fillTextWithWeight = (
   context: CanvasRenderingContext2D,
   text: string,
   x: number,
@@ -144,6 +146,7 @@ const fillTextWithWeight = (
   fontWeight: ExcalidrawTextElement["fontWeight"],
   fillStyle: string,
 ) => {
+  context.fillStyle = fillStyle;
   if (fontWeight === "bold") {
     context.lineWidth = getSyntheticBoldStrokeWidth(fontSize, fontFamily);
     context.strokeStyle = fillStyle;
@@ -305,7 +308,7 @@ const generateElementCanvas = (
     context.filter = IMAGE_INVERT_FILTER;
   }
 
-  drawElementOnCanvas(element, rc, context, renderConfig);
+  drawElementOnCanvas(element, elementsMap, rc, context, renderConfig);
 
   context.restore();
 
@@ -435,9 +438,7 @@ const drawImagePlaceholder = (
   );
 };
 
-const isSlideBackgroundSolidEllipse = (
-  element: NonDeletedExcalidrawElement,
-) =>
+const isSlideBackgroundSolidEllipse = (element: NonDeletedExcalidrawElement) =>
   element.type === "ellipse" &&
   element.customData?.type === "slideBackground" &&
   (element.fillStyle || "solid") === "solid" &&
@@ -476,6 +477,7 @@ const drawSlideBackgroundSolidEllipse = (
 
 const drawElementOnCanvas = (
   element: NonDeletedExcalidrawElement,
+  elementsMap: NonDeletedSceneElementsMap,
   rc: RoughCanvas,
   context: CanvasRenderingContext2D,
   renderConfig: StaticCanvasRenderConfig,
@@ -590,222 +592,130 @@ const drawElementOnCanvas = (
             ? element.width
             : 0;
 
-        const hasRichTextRanges =
-          element.richTextRanges && element.richTextRanges.length > 0;
         const hasTextStyleRanges =
           element.textStyleRanges && element.textStyleRanges.length > 0;
 
-        // Calculate max font size for proper line height when rich text is used
-        let maxFontSize = element.fontSize;
-        if (hasTextStyleRanges && element.textStyleRanges) {
-          for (const range of element.textStyleRanges) {
-            if (range.fontSize != null && range.fontSize > maxFontSize) {
-              maxFontSize = range.fontSize;
+        if (hasTextStyleRanges && isRichTextV2Enabled()) {
+          const textContainer = getContainerElement(element, elementsMap);
+          const layout = layoutTextElement(element, {
+            maxWidth: textContainer
+              ? getBoundTextMaxWidth(textContainer, element)
+              : !element.autoResize
+              ? element.width
+              : undefined,
+            textAlign: element.textAlign,
+          });
+          context.textAlign = "left";
+          for (const layoutLine of layout.lines) {
+            const baseline = layoutLine.y + layoutLine.baseline;
+            for (const run of layoutLine.runs) {
+              const color = run.style.color ?? element.strokeColor;
+              const outlineColor =
+                run.style.textOutlineColor ?? element.textOutlineColor;
+              const outlineWidth =
+                run.style.textOutlineWidth ?? element.textOutlineWidth;
+              context.font = getFontString({
+                fontSize: run.style.fontSize,
+                fontFamily: run.style.fontFamily,
+                fontWeight: run.style.fontWeight,
+              });
+              if (outlineWidth > 0) {
+                context.lineWidth = outlineWidth;
+                context.strokeStyle = outlineColor;
+                context.strokeText(run.text, run.x, baseline);
+              }
+              fillTextWithWeight(
+                context,
+                run.text,
+                run.x,
+                baseline,
+                run.style.fontSize,
+                run.style.fontFamily,
+                run.style.fontWeight,
+                color,
+              );
             }
           }
-        }
-
-        const lineHeightPx = getLineHeightInPx(
-          maxFontSize,
-          element.lineHeight,
-        );
-
-        const verticalOffset = getVerticalOffset(
-          element.fontFamily,
-          maxFontSize,
-          lineHeightPx,
-        );
-
-        // Track global character index across all lines
-        let globalCharIndex = 0;
-
-        for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-          const line = lines[lineIndex];
-          const lineY = lineIndex * lineHeightPx + verticalOffset;
-
-          if (hasRichTextRanges || hasTextStyleRanges) {
-            // Rich text rendering: render each segment with its own style
-            const richTextRanges = element.richTextRanges || [];
-            const textStyleRanges = element.textStyleRanges || [];
-
-            // Helper to get color for a character at global index
-            const getColorForIndex = (index: number): string => {
-              for (const range of richTextRanges) {
-                if (index >= range.start && index < range.end) {
-                  return range.color ?? element.strokeColor;
-                }
+          context.textAlign = element.textAlign as CanvasTextAlign;
+        } else if (hasTextStyleRanges) {
+          const colorRanges = element.textStyleRanges!.filter(
+            (range) => range.color !== undefined,
+          );
+          const getColorAt = (index: number) => {
+            for (const range of colorRanges) {
+              if (index >= range.start && index < range.end) {
+                return range.color ?? element.strokeColor;
               }
-              return element.strokeColor;
-            };
-
-            const getFontSizeForIndex = (index: number): number => {
-              let size = element.fontSize;
-              for (const range of textStyleRanges) {
-                if (
-                  index >= range.start &&
-                  index < range.end &&
-                  range.fontSize != null
-                ) {
-                  size = range.fontSize;
-                }
-              }
-              return size;
-            };
-
-            const getFontFamilyForIndex = (index: number): number => {
-              let fontFamily = element.fontFamily;
-              for (const range of textStyleRanges) {
-                if (
-                  index >= range.start &&
-                  index < range.end &&
-                  range.fontFamily != null
-                ) {
-                  fontFamily = range.fontFamily;
-                }
-              }
-              return fontFamily;
-            };
-
-            const getFontWeightForIndex = (
-              index: number,
-            ): ExcalidrawTextElement["fontWeight"] => {
-              let fontWeight = element.fontWeight || "normal";
-              for (const range of textStyleRanges) {
-                if (
-                  index >= range.start &&
-                  index < range.end &&
-                  range.fontWeight != null
-                ) {
-                  fontWeight = range.fontWeight;
-                }
-              }
-              return fontWeight;
-            };
-
-            const getTextOutlineWidthForIndex = (index: number): number => {
-              let width = element.textOutlineWidth;
-              for (const range of textStyleRanges) {
-                if (
-                  index >= range.start &&
-                  index < range.end &&
-                  range.textOutlineWidth != null
-                ) {
-                  width = range.textOutlineWidth;
-                }
-              }
-              return width;
-            };
-
-            const getTextOutlineColorForIndex = (index: number): string => {
-              let color = element.textOutlineColor;
-              for (const range of textStyleRanges) {
-                if (
-                  index >= range.start &&
-                  index < range.end &&
-                  range.textOutlineColor != null
-                ) {
-                  color = range.textOutlineColor;
-                }
-              }
-              return color;
-            };
-
-            // Calculate x position based on textAlign
-            let baseX = horizontalOffset;
-            if (element.textAlign === "center") {
-              // For center align, we need to start from the left edge of the text
-              const lineWidth = context.measureText(line).width;
-              baseX = (element.width - lineWidth) / 2;
-            } else if (element.textAlign === "right") {
-              const lineWidth = context.measureText(line).width;
-              baseX = element.width - lineWidth;
             }
-
-            // Group consecutive characters by style for efficient rendering
-            let currentX = baseX;
+            return element.strokeColor;
+          };
+          const lineHeightPx = getLineHeightInPx(
+            element.fontSize,
+            element.lineHeight,
+          );
+          const verticalOffset = getVerticalOffset(
+            element.fontFamily,
+            element.fontSize,
+            lineHeightPx,
+          );
+          let sourceIndex = 0;
+          context.textAlign = "left";
+          for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+            const lineY = lineIndex * lineHeightPx + verticalOffset;
+            const lineWidth = context.measureText(line).width;
+            let currentX =
+              element.textAlign === "center"
+                ? (element.width - lineWidth) / 2
+                : element.textAlign === "right"
+                ? element.width - lineWidth
+                : 0;
             let segmentStart = 0;
-            let currentColor = getColorForIndex(globalCharIndex);
-            let currentFontSize = getFontSizeForIndex(globalCharIndex);
-            let currentFontFamily = getFontFamilyForIndex(globalCharIndex);
-            let currentFontWeight = getFontWeightForIndex(globalCharIndex);
-            let currentTextOutlineWidth =
-              getTextOutlineWidthForIndex(globalCharIndex);
-            let currentTextOutlineColor =
-              getTextOutlineColorForIndex(globalCharIndex);
+            let currentColor = getColorAt(sourceIndex);
 
-            // Temporarily set textAlign to "left" for character-by-character rendering
-            context.textAlign = "left";
-
-            for (let charIndex = 0; charIndex <= line.length; charIndex++) {
-              const globalIdx = globalCharIndex + charIndex;
-              const nextStyle =
-                charIndex < line.length
-                  ? {
-                      color: getColorForIndex(globalIdx),
-                      fontSize: getFontSizeForIndex(globalIdx),
-                      fontFamily: getFontFamilyForIndex(globalIdx),
-                      fontWeight: getFontWeightForIndex(globalIdx),
-                      textOutlineWidth: getTextOutlineWidthForIndex(globalIdx),
-                      textOutlineColor: getTextOutlineColorForIndex(globalIdx),
-                    }
-                  : null;
-
-              const styleChanged =
-                nextStyle &&
-                (nextStyle.color !== currentColor ||
-                  nextStyle.fontSize !== currentFontSize ||
-                  nextStyle.fontFamily !== currentFontFamily ||
-                  nextStyle.fontWeight !== currentFontWeight ||
-                  nextStyle.textOutlineWidth !== currentTextOutlineWidth ||
-                  nextStyle.textOutlineColor !== currentTextOutlineColor);
-
-              // If style changes or we reached the end, render the current segment
-              if (styleChanged || charIndex === line.length) {
-                if (charIndex > segmentStart) {
-                  const segment = line.substring(segmentStart, charIndex);
-
-                  context.font = getFontString({
-                    fontSize: currentFontSize,
-                    fontFamily: currentFontFamily,
-                    fontWeight: currentFontWeight,
-                  });
-
-                  if (currentTextOutlineWidth > 0) {
-                    context.lineWidth = currentTextOutlineWidth;
-                    context.strokeStyle = currentTextOutlineColor;
-                    context.strokeText(segment, currentX, lineY);
-                  }
-
-                  context.fillStyle = currentColor;
-                  fillTextWithWeight(
-                    context,
-                    segment,
-                    currentX,
-                    lineY,
-                    currentFontSize,
-                    currentFontFamily,
-                    currentFontWeight,
-                    currentColor,
-                  );
-                  currentX += context.measureText(segment).width;
+            for (let index = 1; index <= line.length; index++) {
+              const nextColor =
+                index < line.length
+                  ? getColorAt(sourceIndex + index)
+                  : currentColor;
+              if (index === line.length || nextColor !== currentColor) {
+                const segment = line.slice(segmentStart, index);
+                if (element.textOutlineWidth > 0) {
+                  context.lineWidth = element.textOutlineWidth;
+                  context.strokeStyle = element.textOutlineColor;
+                  context.strokeText(segment, currentX, lineY);
                 }
-
-                segmentStart = charIndex;
-                if (nextStyle) {
-                  currentColor = nextStyle.color;
-                  currentFontSize = nextStyle.fontSize;
-                  currentFontFamily = nextStyle.fontFamily;
-                  currentFontWeight = nextStyle.fontWeight;
-                  currentTextOutlineWidth = nextStyle.textOutlineWidth;
-                  currentTextOutlineColor = nextStyle.textOutlineColor;
-                }
+                fillTextWithWeight(
+                  context,
+                  segment,
+                  currentX,
+                  lineY,
+                  element.fontSize,
+                  element.fontFamily,
+                  element.fontWeight,
+                  currentColor,
+                );
+                currentX += context.measureText(segment).width;
+                segmentStart = index;
+                currentColor = nextColor;
               }
             }
-
-            // Restore textAlign
-            context.textAlign = element.textAlign as CanvasTextAlign;
-          } else {
-            // Original simple rendering for text without rich text ranges
+            sourceIndex += line.length + 1;
+          }
+          context.textAlign = element.textAlign as CanvasTextAlign;
+        } else {
+          const lineHeightPx = getLineHeightInPx(
+            element.fontSize,
+            element.lineHeight,
+          );
+          const verticalOffset = getVerticalOffset(
+            element.fontFamily,
+            element.fontSize,
+            lineHeightPx,
+          );
+          for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            const line = lines[lineIndex];
+            const lineY = lineIndex * lineHeightPx + verticalOffset;
             if (element.textOutlineWidth > 0) {
               context.lineWidth = element.textOutlineWidth;
               context.strokeStyle = element.textOutlineColor;
@@ -823,9 +733,6 @@ const drawElementOnCanvas = (
               element.strokeColor,
             );
           }
-
-          // Update global char index (add line length + 1 for newline character)
-          globalCharIndex += line.length + 1;
         }
         context.restore();
         if (shouldTemporarilyAttach) {
@@ -1073,11 +980,7 @@ export const renderElement = (
           if (shape) {
             context.lineJoin = "round";
             context.lineCap = "round";
-            if (Array.isArray(shape)) {
-              shape.forEach((drawable) => rc.draw(drawable));
-            } else {
-              rc.draw(shape);
-            }
+            rc.draw(shape);
           }
         } else {
           context.lineWidth = strokeWidth / appState.zoom.value;
@@ -1096,13 +999,17 @@ export const renderElement = (
           );
 
           const cornerRadius =
-            getCornerRadius(
-              Math.min(element.width, element.height),
-              element,
-            ) / appState.zoom.value;
+            getCornerRadius(Math.min(element.width, element.height), element) /
+            appState.zoom.value;
           if (cornerRadius > 0 && context.roundRect) {
             context.beginPath();
-            context.roundRect(0, 0, element.width, element.height, cornerRadius);
+            context.roundRect(
+              0,
+              0,
+              element.width,
+              element.height,
+              cornerRadius,
+            );
             context.stroke();
             context.closePath();
           } else {
@@ -1130,7 +1037,7 @@ export const renderElement = (
         context.translate(cx, cy);
         context.rotate(element.angle);
         context.translate(-shiftX, -shiftY);
-        drawElementOnCanvas(element, rc, context, renderConfig);
+        drawElementOnCanvas(element, allElementsMap, rc, context, renderConfig);
         context.restore();
       } else {
         const elementWithCanvas = generateElementWithCanvas(
@@ -1223,7 +1130,13 @@ export const renderElement = (
 
           tempCanvasContext.translate(-shiftX, -shiftY);
 
-          drawElementOnCanvas(element, tempRc, tempCanvasContext, renderConfig);
+          drawElementOnCanvas(
+            element,
+            allElementsMap,
+            tempRc,
+            tempCanvasContext,
+            renderConfig,
+          );
 
           tempCanvasContext.translate(shiftX, shiftY);
 
@@ -1262,7 +1175,13 @@ export const renderElement = (
           }
 
           context.translate(-shiftX, -shiftY);
-          drawElementOnCanvas(element, rc, context, renderConfig);
+          drawElementOnCanvas(
+            element,
+            allElementsMap,
+            rc,
+            context,
+            renderConfig,
+          );
         }
 
         context.restore();

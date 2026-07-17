@@ -27,7 +27,11 @@ import {
 } from "idb-keyval";
 
 import { appJotaiStore, atom } from "excalidraw-app/app-jotai";
-import { getNonDeletedElements } from "@excalidraw/element";
+import {
+  getNonDeletedElements,
+  isTextElement,
+  normalizeTextElementStyleRanges,
+} from "@excalidraw/element";
 
 import type { LibraryPersistedData } from "@excalidraw/excalidraw/data/library";
 import type { ImportedDataState } from "@excalidraw/excalidraw/data/types";
@@ -88,7 +92,13 @@ const saveDataStateToLocalStorage = (
 
     localStorage.setItem(
       STORAGE_KEYS.LOCAL_STORAGE_ELEMENTS,
-      JSON.stringify(getNonDeletedElements(elements)),
+      JSON.stringify(
+        getNonDeletedElements(elements).map((element) =>
+          isTextElement(element)
+            ? normalizeTextElementStyleRanges(element)
+            : element,
+        ),
+      ),
     );
     localStorage.setItem(
       STORAGE_KEYS.LOCAL_STORAGE_APP_STATE,

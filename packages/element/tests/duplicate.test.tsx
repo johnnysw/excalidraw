@@ -26,7 +26,10 @@ import type { LocalPoint } from "@excalidraw/math";
 
 import { duplicateElement, duplicateElements } from "../src/duplicate";
 
-import type { ExcalidrawLinearElement } from "../src/types";
+import type {
+  ExcalidrawLinearElement,
+  ExcalidrawTextElement,
+} from "../src/types";
 
 const { h } = window;
 const mouse = new Pointer("mouse");
@@ -118,6 +121,27 @@ describe("duplicating single elements", () => {
     expect(copy.id).not.toBe(element.id);
     expect(typeof copy.id).toBe("string");
     expect(typeof copy.seed).toBe("number");
+  });
+
+  it("canonicalizes legacy text style ranges while cloning", () => {
+    const element: ExcalidrawTextElement = {
+      ...API.createElement({
+        type: "text",
+        text: "abcd",
+        strokeColor: "#000000",
+      }),
+      textStyleRanges: [{ start: -2, end: 9, fontWeight: "bold" }],
+      richTextRanges: [{ start: 1, end: 3, color: "#ff0000" }],
+    };
+
+    const copy = duplicateElement(null, new Map(), element);
+
+    expect(copy).not.toHaveProperty("richTextRanges");
+    expect(copy.textStyleRanges).toEqual([
+      { start: 0, end: 1, fontWeight: "bold" },
+      { start: 1, end: 3, color: "#ff0000", fontWeight: "bold" },
+      { start: 3, end: 4, fontWeight: "bold" },
+    ]);
   });
 });
 

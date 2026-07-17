@@ -1,7 +1,11 @@
 import { CaptureUpdateAction } from "@excalidraw/excalidraw";
 import { trackEvent } from "@excalidraw/excalidraw/analytics";
 import { encryptData } from "@excalidraw/excalidraw/data/encryption";
-import { newElementWith } from "@excalidraw/element";
+import {
+  isTextElement,
+  newElementWith,
+  normalizeTextElementStyleRanges,
+} from "@excalidraw/element";
 import throttle from "lodash.throttle";
 
 import type { UserIdleState } from "@excalidraw/common";
@@ -158,7 +162,11 @@ class Portal {
           element.version > this.broadcastedElementVersions.get(element.id)!) &&
         isSyncableElement(element)
       ) {
-        acc.push(element);
+        acc.push(
+          (isTextElement(element)
+            ? normalizeTextElementStyleRanges(element)
+            : element) as SyncableExcalidrawElement,
+        );
       }
       return acc;
     }, [] as SyncableExcalidrawElement[]);

@@ -7,6 +7,7 @@ import {
   isFrameLikeElement,
   replaceAllElementsInFrame,
   updateBoundElements,
+  scaleTextStyleRanges,
 } from "@excalidraw/element";
 import {
   rescalePointsInElement,
@@ -68,7 +69,14 @@ const getResizedUpdates = (
     y,
     ...rescalePointsInElement(origElement, nextWidth, nextHeight, false),
     ...(isTextElement(origElement)
-      ? { fontSize: origElement.fontSize * scale }
+      ? {
+          fontSize: origElement.fontSize * scale,
+          textOutlineWidth: origElement.textOutlineWidth * scale,
+          textStyleRanges: scaleTextStyleRanges(
+            origElement.textStyleRanges,
+            scale,
+          ),
+        }
       : {}),
   };
 };
@@ -99,6 +107,11 @@ const resizeElementInGroup = (
     if (latestBoundTextElement && isTextElement(latestBoundTextElement)) {
       scene.mutateElement(latestBoundTextElement, {
         fontSize: newFontSize,
+        textOutlineWidth: boundTextElement.textOutlineWidth * scale,
+        textStyleRanges: scaleTextStyleRanges(
+          boundTextElement.textStyleRanges,
+          scale,
+        ),
       });
       handleBindTextResize(
         latestElement,

@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import {
   DEFAULT_ELEMENT_BACKGROUND_COLOR_PALETTE,
-  DEFAULT_ELEMENT_BACKGROUND_PICKS,
   DEFAULT_ELEMENT_STROKE_COLOR_PALETTE,
   DEFAULT_ELEMENT_STROKE_PICKS,
   COLOR_PALETTE,
@@ -42,7 +41,12 @@ import { newElementWith } from "@excalidraw/element";
 import {
   getBoundTextElement,
   redrawTextBoundingBox,
-  measureTextWithStyleRanges,
+  refreshTextDimensions,
+  applyTextStyleToRange,
+  clearTextStyleProperty,
+  resolveSelectionTextStyle,
+  getTextElementBaseStyle,
+  isRichTextV2Enabled,
 } from "@excalidraw/element";
 
 import {
@@ -73,12 +77,11 @@ import type {
   ExcalidrawBindableElement,
   ExcalidrawElement,
   ExcalidrawLinearElement,
+  ExcalidrawTextContainer,
   ExcalidrawTextElement,
   FontFamilyValues,
   TextAlign,
   VerticalAlign,
-  RichTextRange,
-  TextStyleRange,
 } from "@excalidraw/element/types";
 
 import type { Scene } from "@excalidraw/element";
@@ -90,7 +93,6 @@ import { RadioSelection } from "../components/RadioSelection";
 import { EditableDropdown } from "../components/EditableDropdown";
 import { NumberInput } from "../components/NumberInput";
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
-import { TopPicks } from "../components/ColorPicker/TopPicks";
 import { FontPicker } from "../components/FontPicker/FontPicker";
 import { IconPicker } from "../components/IconPicker";
 import { Range } from "../components/Range";
@@ -295,19 +297,20 @@ const changeFontSize = (
         newFontSizes.add(newFontSize);
 
         const textLength = oldElement.originalText.length;
-        const newTextStyleRanges = applyFontSizeToRange(
+        const newTextStyleRanges = clearTextStyleProperty(
+          textLength,
           oldElement.textStyleRanges,
           0,
           textLength,
-          newFontSize,
-          newFontSize,
+          "fontSize",
+          getTextElementBaseStyle(oldElement),
         );
 
-        let newElement: ExcalidrawTextElement = newElementWith(oldElement, {
-          fontSize: newFontSize,
-          textStyleRanges:
-            newTextStyleRanges.length > 0 ? newTextStyleRanges : undefined,
-        });
+        let newElement = newTextElementWithStyleRanges(
+          oldElement,
+          newTextStyleRanges,
+          { fontSize: newFontSize },
+        );
         redrawTextBoundingBox(
           newElement,
           app.scene.getContainerElement(oldElement),
@@ -353,329 +356,89 @@ const changeFontSize = (
 
 // -----------------------------------------------------------------------------
 
-/**
- * Helper function to apply a color to a specific range in richTextRanges.
- * Handles merging and splitting of ranges.
- */
-const applyColorToRichTextRange = (
-  existingRanges: readonly RichTextRange[] | undefined,
-  start: number,
-  end: number,
-  color: string,
-  defaultColor: string,
-): RichTextRange[] => {
-  const ranges: RichTextRange[] = existingRanges ? [...existingRanges] : [];
-
-  // If the new color is the same as default, we need to "remove" the range
-  // by not adding it and potentially splitting existing ranges
-  const isDefaultColor = color === defaultColor;
-
-  // Remove or split existing ranges that overlap with the new range
-  const newRanges: RichTextRange[] = [];
-
-  for (const range of ranges) {
-    if (range.end <= start || range.start >= end) {
-      // No overlap, keep the range
-      newRanges.push(range);
-    } else if (range.start >= start && range.end <= end) {
-      // Range is completely inside the new range, remove it
-      continue;
-    } else if (range.start < start && range.end > end) {
-      // New range is inside this range, split it
-      newRanges.push({ start: range.start, end: start, color: range.color });
-      newRanges.push({ start: end, end: range.end, color: range.color });
-    } else if (range.start < start && range.end > start) {
-      // Overlap at the start
-      newRanges.push({ start: range.start, end: start, color: range.color });
-    } else if (range.start < end && range.end > end) {
-      // Overlap at the end
-      newRanges.push({ start: end, end: range.end, color: range.color });
-    }
-  }
-
-  // Add the new range if it's not the default color
-  if (!isDefaultColor) {
-    newRanges.push({ start, end, color });
-  }
-
-  // Sort by start position
-  newRanges.sort((a, b) => a.start - b.start);
-
-  // Merge adjacent ranges with the same color
-  const mergedRanges: RichTextRange[] = [];
-  for (const range of newRanges) {
-    const last = mergedRanges[mergedRanges.length - 1];
-    if (last && last.end === range.start && last.color === range.color) {
-      last.end = range.end;
-    } else {
-      mergedRanges.push({ ...range });
-    }
-  }
-
-  return mergedRanges;
-};
-
-type TextStylePropKey =
-  | "fontSize"
-  | "fontFamily"
-  | "fontWeight"
-  | "textOutlineColor"
-  | "textOutlineWidth";
-
-const applyTextStylePropToRange = <K extends TextStylePropKey>(
-  existingRanges: readonly TextStyleRange[] | undefined,
-  start: number,
-  end: number,
-  prop: K,
-  value: TextStyleRange[K],
-  defaultValue: TextStyleRange[K],
-): TextStyleRange[] => {
-  const ranges: TextStyleRange[] = existingRanges ? [...existingRanges] : [];
-
-  const isDefault = value === defaultValue;
-  const processed: TextStyleRange[] = [];
-
-  for (const range of ranges) {
-    if (range.end <= start || range.start >= end) {
-      // No overlap with [start, end), keep as is
-      processed.push(range);
-      continue;
-    }
-
-    // Overlapping case: potentially split into left / middle / right
-    if (range.start < start) {
-      processed.push({ ...range, end: start });
-    }
-
-    const middleStart = Math.max(range.start, start);
-    const middleEnd = Math.min(range.end, end);
-
-    if (middleStart < middleEnd) {
-      const middleRange: TextStyleRange = {
-        ...range,
-        start: middleStart,
-        end: middleEnd,
-      };
-
-      if (isDefault) {
-        // Clear local override for this property in the middle segment
-        (middleRange as any)[prop] = undefined;
-
-        if (
-          middleRange.color !== undefined ||
-          middleRange.fontSize !== undefined ||
-          middleRange.fontFamily !== undefined ||
-          middleRange.fontWeight !== undefined ||
-          middleRange.textOutlineColor !== undefined ||
-          middleRange.textOutlineWidth !== undefined
-        ) {
-          processed.push(middleRange);
-        }
-      } else {
-        (middleRange as any)[prop] = value;
-        processed.push(middleRange);
-      }
-    }
-
-    if (range.end > end) {
-      processed.push({ ...range, start: end });
-    }
-  }
-
-  // If we are applying a non-default value, ensure that any gaps in
-  // [start, end) not covered by existing ranges receive the new style.
-  if (!isDefault) {
-    // Sort first to compute coverage within [start, end)
-    processed.sort((a, b) => a.start - b.start);
-
-    const additions: TextStyleRange[] = [];
-    let cursor = start;
-
-    for (const range of processed) {
-      if (range.end <= start || range.start >= end) {
-        continue;
-      }
-
-      if (range.start > cursor) {
-        const gapEnd = Math.min(range.start, end);
-        if (gapEnd > cursor) {
-          const gapRange: TextStyleRange = {
-            start: cursor,
-            end: gapEnd,
-          } as TextStyleRange;
-          (gapRange as any)[prop] = value;
-          additions.push(gapRange);
-        }
-      }
-
-      cursor = Math.max(cursor, range.end);
-    }
-
-    if (cursor < end) {
-      const gapRange: TextStyleRange = {
-        start: cursor,
-        end,
-      } as TextStyleRange;
-      (gapRange as any)[prop] = value;
-      additions.push(gapRange);
-    }
-
-    processed.push(...additions);
-  }
-
-  // Final sort and merge adjacent ranges with identical style
-  processed.sort((a, b) => a.start - b.start);
-
-  const merged: TextStyleRange[] = [];
-  for (const range of processed) {
-    if (range.start >= range.end) {
-      continue;
-    }
-
-    const last = merged[merged.length - 1];
-    if (
-      last &&
-      last.end === range.start &&
-      last.color === range.color &&
-      last.fontSize === range.fontSize &&
-      last.fontFamily === range.fontFamily &&
-      last.fontWeight === range.fontWeight &&
-      last.textOutlineColor === range.textOutlineColor &&
-      last.textOutlineWidth === range.textOutlineWidth
-    ) {
-      last.end = range.end;
-    } else {
-      merged.push({ ...range });
-    }
-  }
-
-  return merged;
-};
-
-const applyFontSizeToRange = (
-  existingRanges: readonly TextStyleRange[] | undefined,
-  start: number,
-  end: number,
-  fontSize: number,
-  defaultFontSize: number,
-): TextStyleRange[] => {
-  return applyTextStylePropToRange(
-    existingRanges,
-    start,
-    end,
-    "fontSize",
-    fontSize,
-    defaultFontSize,
-  );
-};
-
-const applyFontFamilyToRange = (
-  existingRanges: readonly TextStyleRange[] | undefined,
-  start: number,
-  end: number,
-  fontFamily: FontFamilyValues,
-  defaultFontFamily: FontFamilyValues,
-): TextStyleRange[] => {
-  return applyTextStylePropToRange(
-    existingRanges,
-    start,
-    end,
-    "fontFamily",
-    fontFamily,
-    defaultFontFamily,
-  );
-};
-
-const applyFontWeightToRange = (
-  existingRanges: readonly TextStyleRange[] | undefined,
-  start: number,
-  end: number,
-  fontWeight: ExcalidrawTextElement["fontWeight"],
-  defaultFontWeight: ExcalidrawTextElement["fontWeight"],
-): TextStyleRange[] => {
-  return applyTextStylePropToRange(
-    existingRanges,
-    start,
-    end,
-    "fontWeight",
-    fontWeight,
-    defaultFontWeight,
-  );
-};
-
 const normalizeFontWeight = (
   fontWeight: ExcalidrawTextElement["fontWeight"],
 ): ExcalidrawTextElement["fontWeight"] =>
   fontWeight === "bold" ? "bold" : "normal";
 
-const getFontWeightAtIndex = (
+const newTextElementWithStyleRanges = (
   element: ExcalidrawTextElement,
-  index: number,
-): ExcalidrawTextElement["fontWeight"] => {
-  let fontWeight = normalizeFontWeight(element.fontWeight);
-  for (const range of element.textStyleRanges || []) {
-    if (index >= range.start && index < range.end && range.fontWeight) {
-      fontWeight = normalizeFontWeight(range.fontWeight);
-    }
-  }
-  return fontWeight;
+  textStyleRanges: readonly NonNullable<
+    ExcalidrawTextElement["textStyleRanges"]
+  >[number][],
+  updates: Partial<ExcalidrawTextElement> = {},
+) =>
+  newElementWith(
+    element,
+    {
+      ...updates,
+      textStyleRanges: textStyleRanges.length ? textStyleRanges : undefined,
+      richTextRanges: undefined,
+    },
+    textStyleRanges.length === 0 &&
+      Boolean(
+        element.textStyleRanges?.length || element.richTextRanges?.length,
+      ),
+  );
+
+const updateTextStyleRangesAndDimensions = (
+  element: ExcalidrawTextElement,
+  textStyleRanges: ExcalidrawTextElement["textStyleRanges"],
+  app: AppClassProperties,
+) => {
+  const elementWithRanges = {
+    ...element,
+    textStyleRanges,
+  };
+  const dimensions = refreshTextDimensions(
+    elementWithRanges,
+    app.scene.getContainerElement(element) as ExcalidrawTextContainer | null,
+    app.scene.getNonDeletedElementsMap(),
+    element.originalText,
+  );
+  return newTextElementWithStyleRanges(element, textStyleRanges ?? [], {
+    ...(dimensions ?? {}),
+  });
 };
 
-const getSelectionFontWeight = (
-  element: ExcalidrawTextElement,
-  start: number,
-  end: number,
-): ExcalidrawTextElement["fontWeight"] | null => {
-  if (start === end) {
-    return getFontWeightAtIndex(
-      element,
-      Math.max(0, Math.min(start, element.originalText.length - 1)),
-    );
+export const getEditingSelectionTextStyle = (
+  elements: readonly ExcalidrawElement[],
+  appState: AppState,
+) => {
+  if (!appState.editingTextElement || !appState.textEditorSelection) {
+    return null;
   }
 
-  const weights = new Set<ExcalidrawTextElement["fontWeight"]>();
-  for (let index = start; index < end; index++) {
-    weights.add(getFontWeightAtIndex(element, index));
-    if (weights.size > 1) {
-      return null;
-    }
+  const editingElement = elements.find(
+    (element) => element.id === appState.editingTextElement?.id,
+  );
+  if (!editingElement || !isTextElement(editingElement)) {
+    return null;
   }
-  return weights.values().next().value ?? normalizeFontWeight(element.fontWeight);
+
+  const { start, end } = appState.textEditorSelection;
+  const baseStyle = getTextElementBaseStyle(editingElement);
+  const selectionStyle = resolveSelectionTextStyle(
+    start,
+    end,
+    editingElement.textStyleRanges,
+    baseStyle,
+  );
+
+  if (!isRichTextV2Enabled()) {
+    return {
+      ...baseStyle,
+      color:
+        start === end && appState.textEditorPendingStyle?.color
+          ? appState.textEditorPendingStyle.color
+          : selectionStyle.color,
+    };
+  }
+
+  return start === end && appState.textEditorPendingStyle
+    ? { ...selectionStyle, ...appState.textEditorPendingStyle }
+    : selectionStyle;
 };
-
- const applyTextOutlineColorToRange = (
-   existingRanges: readonly TextStyleRange[] | undefined,
-   start: number,
-   end: number,
-   textOutlineColor: string,
-   defaultTextOutlineColor: string,
- ): TextStyleRange[] => {
-   return applyTextStylePropToRange(
-     existingRanges,
-     start,
-     end,
-     "textOutlineColor",
-     textOutlineColor,
-     defaultTextOutlineColor,
-   );
- };
-
- const applyTextOutlineWidthToRange = (
-   existingRanges: readonly TextStyleRange[] | undefined,
-   start: number,
-   end: number,
-   textOutlineWidth: number,
-   defaultTextOutlineWidth: number,
- ): TextStyleRange[] => {
-   return applyTextStylePropToRange(
-     existingRanges,
-     start,
-     end,
-     "textOutlineWidth",
-     textOutlineWidth,
-     defaultTextOutlineWidth,
-   );
- };
 
 export const actionChangeStrokeColor = register<
   Pick<AppState, "currentItemStrokeColor">
@@ -685,33 +448,42 @@ export const actionChangeStrokeColor = register<
   trackEvent: false,
   perform: (elements, appState, value, app) => {
     const color = value?.currentItemStrokeColor;
-    // Check if we're editing text with a selection
-    if (
-      color &&
-      appState.editingTextElement &&
-      appState.textEditorSelection &&
-      appState.textEditorSelection.start !== appState.textEditorSelection.end
-    ) {
+    if (color && appState.editingTextElement && appState.textEditorSelection) {
       const editingElement = elements.find(
         (el) => el.id === appState.editingTextElement?.id,
       ) as ExcalidrawTextElement | undefined;
 
       if (editingElement && isTextElement(editingElement)) {
         const { start, end } = appState.textEditorSelection;
-        const newRichTextRanges = applyColorToRichTextRange(
-          editingElement.richTextRanges,
+        if (start === end) {
+          return {
+            appState: {
+              ...appState,
+              ...value,
+              textEditorPendingStyle: {
+                ...appState.textEditorPendingStyle,
+                color,
+              },
+            },
+            captureUpdate: CaptureUpdateAction.EVENTUALLY,
+          };
+        }
+        const nextRanges = applyTextStyleToRange(
+          editingElement.originalText.length,
+          editingElement.textStyleRanges,
           start,
           end,
-          color,
-          editingElement.strokeColor,
+          { color },
+          getTextElementBaseStyle(editingElement),
         );
 
-        const nextElements = {
+        return {
           elements: elements.map((el) =>
             el.id === editingElement.id
-              ? newElementWith(el as ExcalidrawTextElement, {
-                  richTextRanges: newRichTextRanges.length > 0 ? newRichTextRanges : undefined,
-                })
+              ? newTextElementWithStyleRanges(
+                  el as ExcalidrawTextElement,
+                  nextRanges,
+                )
               : el,
           ),
           appState: {
@@ -720,8 +492,6 @@ export const actionChangeStrokeColor = register<
           },
           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
         };
-
-        return nextElements;
       }
     }
 
@@ -732,6 +502,19 @@ export const actionChangeStrokeColor = register<
           elements,
           appState,
           (el) => {
+            if (isTextElement(el)) {
+              const nextRanges = clearTextStyleProperty(
+                el.originalText.length,
+                el.textStyleRanges,
+                0,
+                el.originalText.length,
+                "color",
+                getTextElementBaseStyle(el),
+              );
+              return newTextElementWithStyleRanges(el, nextRanges, {
+                strokeColor: color,
+              });
+            }
             return hasStrokeColor(el.type)
               ? newElementWith(el, {
                   strokeColor: color,
@@ -751,8 +534,6 @@ export const actionChangeStrokeColor = register<
     };
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => {
-    const { stylesPanelMode, isCompact } = getStylesPanelInfo(app);
-
     const selectedElements = getSelectedElements(elements, appState);
     const isTextContext =
       appState.activeTool.type === "text" ||
@@ -760,6 +541,8 @@ export const actionChangeStrokeColor = register<
         selectedElements.every((el) => isTextElement(el)));
 
     const strokeLabel = isTextContext ? "文字色" : t("labels.stroke");
+    const selectionStyle = getEditingSelectionTextStyle(elements, appState);
+    const selectionColor = selectionStyle?.color;
 
     return (
       <>
@@ -768,14 +551,18 @@ export const actionChangeStrokeColor = register<
           palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
           type="elementStroke"
           label={strokeLabel}
-          color={getFormValue(
-            elements,
-            app,
-            (element) => element.strokeColor,
-            true,
-            (hasSelection) =>
-              !hasSelection ? appState.currentItemStrokeColor : null,
-          )}
+          color={
+            selectionStyle
+              ? selectionColor ?? null
+              : getFormValue(
+                  elements,
+                  app,
+                  (element) => element.strokeColor,
+                  true,
+                  (hasSelection) =>
+                    !hasSelection ? appState.currentItemStrokeColor : null,
+                )
+          }
           onChange={(color) => updateData({ currentItemStrokeColor: color })}
           elements={elements}
           appState={appState}
@@ -796,45 +583,57 @@ export const actionChangeTextOutlineColor = register<
   perform: (elements, appState, value) => {
     const color = value?.currentItemTextOutlineColor;
 
-     if (
-       color != null &&
-       appState.editingTextElement &&
-       appState.textEditorSelection &&
-       appState.textEditorSelection.start !== appState.textEditorSelection.end
-     ) {
-       const editingElement = elements.find(
-         (el) => el.id === appState.editingTextElement?.id,
-       ) as ExcalidrawTextElement | undefined;
+    if (
+      isRichTextV2Enabled() &&
+      color != null &&
+      appState.editingTextElement &&
+      appState.textEditorSelection
+    ) {
+      const editingElement = elements.find(
+        (el) => el.id === appState.editingTextElement?.id,
+      ) as ExcalidrawTextElement | undefined;
 
-       if (editingElement && isTextElement(editingElement)) {
-         const { start, end } = appState.textEditorSelection;
-         const newTextStyleRanges = applyTextOutlineColorToRange(
-           editingElement.textStyleRanges,
-           start,
-           end,
-           color,
-           editingElement.textOutlineColor,
-         );
+      if (editingElement && isTextElement(editingElement)) {
+        const { start, end } = appState.textEditorSelection;
+        if (start === end) {
+          return {
+            appState: {
+              ...appState,
+              ...value,
+              textEditorPendingStyle: {
+                ...appState.textEditorPendingStyle,
+                textOutlineColor: color,
+              },
+            },
+            captureUpdate: CaptureUpdateAction.EVENTUALLY,
+          };
+        }
+        const newTextStyleRanges = applyTextStyleToRange(
+          editingElement.originalText.length,
+          editingElement.textStyleRanges,
+          start,
+          end,
+          { textOutlineColor: color },
+          getTextElementBaseStyle(editingElement),
+        );
 
-         return {
-           elements: elements.map((el) =>
-             el.id === editingElement.id
-               ? newElementWith(el as ExcalidrawTextElement, {
-                   textStyleRanges:
-                     newTextStyleRanges.length > 0
-                       ? newTextStyleRanges
-                       : undefined,
-                 })
-               : el,
-           ),
-           appState: {
-             ...appState,
-             ...value,
-           },
-           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-         };
-       }
-     }
+        return {
+          elements: elements.map((el) =>
+            el.id === editingElement.id
+              ? newTextElementWithStyleRanges(
+                  el as ExcalidrawTextElement,
+                  newTextStyleRanges,
+                )
+              : el,
+          ),
+          appState: {
+            ...appState,
+            ...value,
+          },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        };
+      }
+    }
 
     const nextElements =
       color != null
@@ -843,9 +642,19 @@ export const actionChangeTextOutlineColor = register<
             appState,
             (el) =>
               isTextElement(el)
-                ? newElementWith(el, {
-                    textOutlineColor: color,
-                  })
+                ? (() => {
+                    const ranges = clearTextStyleProperty(
+                      el.originalText.length,
+                      el.textStyleRanges,
+                      0,
+                      el.originalText.length,
+                      "textOutlineColor",
+                      getTextElementBaseStyle(el),
+                    );
+                    return newTextElementWithStyleRanges(el, ranges, {
+                      textOutlineColor: color,
+                    });
+                  })()
                 : el,
             true,
           )
@@ -865,6 +674,18 @@ export const actionChangeTextOutlineColor = register<
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => {
     const { stylesPanelMode } = getStylesPanelInfo(app);
+    const selectionStyle = getEditingSelectionTextStyle(elements, appState);
+    const color = selectionStyle
+      ? selectionStyle.textOutlineColor ?? null
+      : getFormValue(
+          elements,
+          app,
+          (element) =>
+            isTextElement(element) ? element.textOutlineColor : null,
+          (element) => isTextElement(element),
+          (hasSelection) =>
+            !hasSelection ? appState.currentItemTextOutlineColor : null,
+        );
 
     return (
       <>
@@ -876,15 +697,7 @@ export const actionChangeTextOutlineColor = register<
           palette={DEFAULT_ELEMENT_STROKE_COLOR_PALETTE}
           type="textOutline"
           label={t("labels.stroke")}
-          color={getFormValue(
-            elements,
-            app,
-            (element) =>
-              isTextElement(element) ? element.textOutlineColor : null,
-            (element) => isTextElement(element),
-            (hasSelection) =>
-              !hasSelection ? appState.currentItemTextOutlineColor : null,
-          )}
+          color={color}
           onChange={(color) =>
             updateData({ currentItemTextOutlineColor: color })
           }
@@ -1146,45 +959,57 @@ export const actionChangeTextOutlineWidth = register<
   perform: (elements, appState, value) => {
     const width = value?.currentItemTextOutlineWidth;
 
-     if (
-       typeof width === "number" &&
-       appState.editingTextElement &&
-       appState.textEditorSelection &&
-       appState.textEditorSelection.start !== appState.textEditorSelection.end
-     ) {
-       const editingElement = elements.find(
-         (el) => el.id === appState.editingTextElement?.id,
-       ) as ExcalidrawTextElement | undefined;
+    if (
+      isRichTextV2Enabled() &&
+      typeof width === "number" &&
+      appState.editingTextElement &&
+      appState.textEditorSelection
+    ) {
+      const editingElement = elements.find(
+        (el) => el.id === appState.editingTextElement?.id,
+      ) as ExcalidrawTextElement | undefined;
 
-       if (editingElement && isTextElement(editingElement)) {
-         const { start, end } = appState.textEditorSelection;
-         const newTextStyleRanges = applyTextOutlineWidthToRange(
-           editingElement.textStyleRanges,
-           start,
-           end,
-           width,
-           editingElement.textOutlineWidth,
-         );
+      if (editingElement && isTextElement(editingElement)) {
+        const { start, end } = appState.textEditorSelection;
+        if (start === end) {
+          return {
+            appState: {
+              ...appState,
+              currentItemTextOutlineWidth: width,
+              textEditorPendingStyle: {
+                ...appState.textEditorPendingStyle,
+                textOutlineWidth: width,
+              },
+            },
+            captureUpdate: CaptureUpdateAction.EVENTUALLY,
+          };
+        }
+        const newTextStyleRanges = applyTextStyleToRange(
+          editingElement.originalText.length,
+          editingElement.textStyleRanges,
+          start,
+          end,
+          { textOutlineWidth: width },
+          getTextElementBaseStyle(editingElement),
+        );
 
-         return {
-           elements: elements.map((el) =>
-             el.id === editingElement.id
-               ? newElementWith(el as ExcalidrawTextElement, {
-                   textStyleRanges:
-                     newTextStyleRanges.length > 0
-                       ? newTextStyleRanges
-                       : undefined,
-                 })
-               : el,
-           ),
-           appState: {
-             ...appState,
-             currentItemTextOutlineWidth: width,
-           },
-           captureUpdate: CaptureUpdateAction.IMMEDIATELY,
-         };
-       }
-     }
+        return {
+          elements: elements.map((el) =>
+            el.id === editingElement.id
+              ? newTextElementWithStyleRanges(
+                  el as ExcalidrawTextElement,
+                  newTextStyleRanges,
+                )
+              : el,
+          ),
+          appState: {
+            ...appState,
+            currentItemTextOutlineWidth: width,
+          },
+          captureUpdate: CaptureUpdateAction.IMMEDIATELY,
+        };
+      }
+    }
 
     const nextElements =
       typeof width === "number"
@@ -1193,9 +1018,19 @@ export const actionChangeTextOutlineWidth = register<
             appState,
             (el) =>
               isTextElement(el)
-                ? newElementWith(el, {
-                    textOutlineWidth: width,
-                  })
+                ? (() => {
+                    const ranges = clearTextStyleProperty(
+                      el.originalText.length,
+                      el.textStyleRanges,
+                      0,
+                      el.originalText.length,
+                      "textOutlineWidth",
+                      getTextElementBaseStyle(el),
+                    );
+                    return newTextElementWithStyleRanges(el, ranges, {
+                      textOutlineWidth: width,
+                    });
+                  })()
                 : el,
             true,
           )
@@ -1216,33 +1051,43 @@ export const actionChangeTextOutlineWidth = register<
     };
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => {
-    const value = getFormValue(
-      elements,
-      app,
-      (element) =>
-        isTextElement(element) ? element.textOutlineWidth : null,
-      (element) => isTextElement(element),
-      (hasSelection) =>
-        hasSelection ? null : appState.currentItemTextOutlineWidth,
-    );
-
-    const outlineWidth =
-      typeof value === "number"
-        ? value
-        : appState.currentItemTextOutlineWidth ?? 0;
+    const selectionStyle = getEditingSelectionTextStyle(elements, appState);
+    const value = selectionStyle
+      ? selectionStyle.textOutlineWidth ?? null
+      : getFormValue(
+          elements,
+          app,
+          (element) =>
+            isTextElement(element) ? element.textOutlineWidth : null,
+          (element) => isTextElement(element),
+          (hasSelection) =>
+            hasSelection ? null : appState.currentItemTextOutlineWidth,
+        );
 
     return (
       <fieldset>
         <legend>{t("labels.strokeWidth")}</legend>
-        <NumberInput
-          value={outlineWidth}
-          min={0}
-          max={20}
-          step={1}
-          onChange={(next) => {
-            updateData({ currentItemTextOutlineWidth: next });
-          }}
-        />
+        {typeof value === "number" ? (
+          <NumberInput
+            value={value}
+            min={0}
+            max={20}
+            step={1}
+            onChange={(next) => {
+              updateData({ currentItemTextOutlineWidth: next });
+            }}
+          />
+        ) : (
+          <EditableDropdown
+            value=""
+            options={[0, 1, 2, 3, 4, 5]}
+            min={0}
+            max={20}
+            onChange={(next) => {
+              updateData({ currentItemTextOutlineWidth: next });
+            }}
+          />
+        )}
       </fieldset>
     );
   },
@@ -1390,10 +1235,10 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
       // When editing a text element with a selection, apply font size
       // locally via textStyleRanges instead of changing the whole element.
       if (
+        isRichTextV2Enabled() &&
         value &&
         appState.editingTextElement &&
-        appState.textEditorSelection &&
-        appState.textEditorSelection.start !== appState.textEditorSelection.end
+        appState.textEditorSelection
       ) {
         const editingElement = elements.find(
           (el) => el.id === appState.editingTextElement?.id,
@@ -1401,45 +1246,36 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
 
         if (editingElement && isTextElement(editingElement)) {
           const { start, end } = appState.textEditorSelection;
-          const newTextStyleRanges = applyFontSizeToRange(
+          if (start === end) {
+            return {
+              appState: {
+                ...appState,
+                currentItemFontSize: value,
+                textEditorPendingStyle: {
+                  ...appState.textEditorPendingStyle,
+                  fontSize: value,
+                },
+              },
+              captureUpdate: CaptureUpdateAction.EVENTUALLY,
+            };
+          }
+          const newTextStyleRanges = applyTextStyleToRange(
+            editingElement.originalText.length,
             editingElement.textStyleRanges,
             start,
             end,
-            value,
-            editingElement.fontSize,
+            { fontSize: value },
+            getTextElementBaseStyle(editingElement),
           );
-          const maxRangeFontSize = newTextStyleRanges.reduce(
-            (max, range) =>
-              typeof range.fontSize === "number" ? Math.max(max, range.fontSize) : max,
-            editingElement.fontSize,
+          const updatedEditingElement = updateTextStyleRangesAndDimensions(
+            editingElement,
+            newTextStyleRanges.length > 0 ? newTextStyleRanges : undefined,
+            app,
           );
-          const container = app.scene.getContainerElement(editingElement);
-          const shouldAutoResize = editingElement.autoResize && !container;
-          const styledMetrics = shouldAutoResize
-            ? measureTextWithStyleRanges(
-                editingElement.originalText,
-                editingElement.fontSize,
-                editingElement.fontFamily,
-                editingElement.lineHeight,
-                newTextStyleRanges,
-                editingElement.fontWeight,
-              )
-            : null;
-          const updatedEditingElement = newElementWith(editingElement, {
-            textStyleRanges:
-              newTextStyleRanges.length > 0
-                ? newTextStyleRanges
-                : undefined,
-            ...(styledMetrics
-              ? { width: styledMetrics.width, height: styledMetrics.height }
-              : {}),
-          });
 
           const next = {
             elements: elements.map((el) =>
-              el.id === editingElement.id
-                ? updatedEditingElement
-                : el,
+              el.id === editingElement.id ? updatedEditingElement : el,
             ),
             appState: {
               ...appState,
@@ -1466,69 +1302,9 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
     },
     PanelComponent: ({ elements, appState, updateData, app, data }) => {
       const { isCompact } = getStylesPanelInfo(app);
-
-      // Get font size for the current text selection from textStyleRanges
-      const getSelectionFontSize = (): number | null => {
-        if (
-          appState.editingTextElement &&
-          appState.textEditorSelection
-        ) {
-          const editingElement = elements.find(
-            (el) => el.id === appState.editingTextElement?.id,
-          ) as ExcalidrawTextElement | undefined;
-
-          if (editingElement && isTextElement(editingElement)) {
-            const { start, end } = appState.textEditorSelection;
-            const baseFontSize = editingElement.fontSize;
-            const ranges = editingElement.textStyleRanges;
-
-            // If no selection (cursor position), find the font size at cursor
-            if (start === end) {
-              if (!ranges || ranges.length === 0) {
-                return baseFontSize;
-              }
-              // Find range that contains the cursor position
-              for (const range of ranges) {
-                if (start >= range.start && start < range.end) {
-                  return range.fontSize ?? baseFontSize;
-                }
-              }
-              return baseFontSize;
-            }
-
-            // If there's a selection range, check all font sizes in the range
-            if (!ranges || ranges.length === 0) {
-              return baseFontSize;
-            }
-
-            // Collect all font sizes in the selection
-            const fontSizesInSelection: Set<number> = new Set();
-            for (let i = start; i < end; i++) {
-              let charFontSize = baseFontSize;
-              for (const range of ranges) {
-                if (i >= range.start && i < range.end && range.fontSize !== undefined) {
-                  charFontSize = range.fontSize;
-                  break;
-                }
-              }
-              fontSizesInSelection.add(charFontSize);
-            }
-
-            // If all characters have the same font size, return it
-            if (fontSizesInSelection.size === 1) {
-              return fontSizesInSelection.values().next().value;
-            }
-            // Mixed font sizes
-            return null;
-          }
-        }
-        return null;
-      };
-
-      const selectionFontSize = getSelectionFontSize();
-
-      const fontSizeValue = selectionFontSize !== null
-        ? selectionFontSize
+      const selectionStyle = getEditingSelectionTextStyle(elements, appState);
+      const fontSizeValue = selectionStyle
+        ? selectionStyle.fontSize ?? null
         : getFormValue(
             elements,
             app,
@@ -1556,11 +1332,6 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
                 ? null
                 : appState.currentItemFontSize || DEFAULT_FONT_SIZE,
           );
-
-      const numericFontSize =
-        typeof fontSizeValue === "number"
-          ? fontSizeValue
-          : appState.currentItemFontSize || DEFAULT_FONT_SIZE;
 
       const commitFontSize = (next: number) => {
         if (!Number.isFinite(next) || next <= 0) {
@@ -1612,7 +1383,7 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
               }}
             />
             <EditableDropdown
-              value={numericFontSize}
+              value={typeof fontSizeValue === "number" ? fontSizeValue : ""}
               options={[12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 64, 72, 96]}
               onChange={commitFontSize}
               min={1}
@@ -1680,9 +1451,9 @@ export const actionChangeFontWeight = register<
     const nextFontWeight = normalizeFontWeight(value);
 
     if (
+      isRichTextV2Enabled() &&
       appState.editingTextElement &&
-      appState.textEditorSelection &&
-      appState.textEditorSelection.start !== appState.textEditorSelection.end
+      appState.textEditorSelection
     ) {
       const editingElement = elements.find(
         (el) => el.id === appState.editingTextElement?.id,
@@ -1690,41 +1461,36 @@ export const actionChangeFontWeight = register<
 
       if (editingElement && isTextElement(editingElement)) {
         const { start, end } = appState.textEditorSelection;
-        const newTextStyleRanges = applyFontWeightToRange(
+        if (start === end) {
+          return {
+            appState: {
+              ...appState,
+              textEditorPendingStyle: {
+                ...appState.textEditorPendingStyle,
+                fontWeight: nextFontWeight,
+              },
+            },
+            captureUpdate: CaptureUpdateAction.EVENTUALLY,
+          };
+        }
+        const newTextStyleRanges = applyTextStyleToRange(
+          editingElement.originalText.length,
           editingElement.textStyleRanges,
           start,
           end,
-          nextFontWeight,
-          normalizeFontWeight(editingElement.fontWeight),
+          { fontWeight: nextFontWeight },
+          getTextElementBaseStyle(editingElement),
         );
-        const container = app.scene.getContainerElement(editingElement);
-        const shouldAutoResize = editingElement.autoResize && !container;
-        const styledMetrics = shouldAutoResize
-          ? measureTextWithStyleRanges(
-              editingElement.originalText,
-              editingElement.fontSize,
-              editingElement.fontFamily,
-              editingElement.lineHeight,
-              newTextStyleRanges,
-              editingElement.fontWeight,
-            )
-          : null;
-
         return {
           elements: elements.map((el) =>
             el.id === editingElement.id
-              ? newElementWith(el as ExcalidrawTextElement, {
-                  textStyleRanges:
-                    newTextStyleRanges.length > 0
-                      ? newTextStyleRanges
-                      : undefined,
-                  ...(styledMetrics
-                    ? {
-                        width: styledMetrics.width,
-                        height: styledMetrics.height,
-                      }
-                    : {}),
-                })
+              ? updateTextStyleRangesAndDimensions(
+                  el as ExcalidrawTextElement,
+                  newTextStyleRanges.length > 0
+                    ? newTextStyleRanges
+                    : undefined,
+                  app,
+                )
               : el,
           ),
           appState,
@@ -1739,19 +1505,20 @@ export const actionChangeFontWeight = register<
       (oldElement) => {
         if (isTextElement(oldElement)) {
           const textLength = oldElement.originalText.length;
-          const newTextStyleRanges = applyFontWeightToRange(
+          const newTextStyleRanges = clearTextStyleProperty(
+            textLength,
             oldElement.textStyleRanges,
             0,
             textLength,
-            nextFontWeight,
-            nextFontWeight,
+            "fontWeight",
+            getTextElementBaseStyle(oldElement),
           );
 
-          let newElement: ExcalidrawTextElement = newElementWith(oldElement, {
-            fontWeight: nextFontWeight,
-            textStyleRanges:
-              newTextStyleRanges.length > 0 ? newTextStyleRanges : undefined,
-          });
+          let newElement = newTextElementWithStyleRanges(
+            oldElement,
+            newTextStyleRanges,
+            { fontWeight: nextFontWeight },
+          );
           redrawTextBoundingBox(
             newElement,
             app.scene.getContainerElement(oldElement),
@@ -1785,46 +1552,40 @@ export const actionChangeFontWeight = register<
   },
   PanelComponent: ({ elements, appState, updateData, app, data }) => {
     const { isCompact } = getStylesPanelInfo(app);
+    const selectionStyle = getEditingSelectionTextStyle(elements, appState);
+    const selectedFontWeight = selectionStyle
+      ? selectionStyle.fontWeight ?? null
+      : getFormValue(
+          elements,
+          app,
+          (element) => {
+            if (isTextElement(element)) {
+              return normalizeFontWeight(element.fontWeight);
+            }
+            const boundTextElement = getBoundTextElement(
+              element,
+              app.scene.getNonDeletedElementsMap(),
+            );
+            if (boundTextElement) {
+              return normalizeFontWeight(boundTextElement.fontWeight);
+            }
+            return null;
+          },
+          (element) =>
+            isTextElement(element) ||
+            getBoundTextElement(
+              element,
+              app.scene.getNonDeletedElementsMap(),
+            ) !== null,
+          () => "normal",
+        );
 
-    const selectedFontWeight = (() => {
-      if (appState.editingTextElement && appState.textEditorSelection) {
-        const editingElement = elements.find(
-          (el) => el.id === appState.editingTextElement?.id,
-        ) as ExcalidrawTextElement | undefined;
-
-        if (editingElement && isTextElement(editingElement)) {
-          const { start, end } = appState.textEditorSelection;
-          return getSelectionFontWeight(editingElement, start, end);
-        }
-      }
-
-      return getFormValue(
-        elements,
-        app,
-        (element) => {
-          if (isTextElement(element)) {
-            return normalizeFontWeight(element.fontWeight);
-          }
-          const boundTextElement = getBoundTextElement(
-            element,
-            app.scene.getNonDeletedElementsMap(),
-          );
-          if (boundTextElement) {
-            return normalizeFontWeight(boundTextElement.fontWeight);
-          }
-          return null;
-        },
-        (element) =>
-          isTextElement(element) ||
-          getBoundTextElement(
-            element,
-            app.scene.getNonDeletedElementsMap(),
-          ) !== null,
-        () => "normal",
-      );
-    })();
-
-    const currentFontWeight = selectedFontWeight === "bold" ? "bold" : "normal";
+    const currentFontWeight =
+      selectedFontWeight === "bold"
+        ? "bold"
+        : selectedFontWeight === "normal"
+        ? "normal"
+        : null;
     const nextFontWeight = currentFontWeight === "bold" ? "normal" : "bold";
 
     return (
@@ -1882,14 +1643,14 @@ export const actionChangeFontFamily = register<{
     // currentItemFontFamily, apply font family locally via
     // textStyleRanges instead of changing the whole element set.
     if (
+      isRichTextV2Enabled() &&
       appState.editingTextElement &&
       appState.textEditorSelection &&
-      appState.textEditorSelection.start !== appState.textEditorSelection.end &&
       value &&
       (value as ChangeFontFamilyData).currentItemFontFamily != null
     ) {
-      const nextFontFamily =
-        (value as ChangeFontFamilyData).currentItemFontFamily as FontFamilyValues;
+      const nextFontFamily = (value as ChangeFontFamilyData)
+        .currentItemFontFamily as FontFamilyValues;
 
       const editingElement = elements.find(
         (el) => el.id === appState.editingTextElement?.id,
@@ -1897,23 +1658,38 @@ export const actionChangeFontFamily = register<{
 
       if (editingElement && isTextElement(editingElement)) {
         const { start, end } = appState.textEditorSelection;
-        const newTextStyleRanges = applyFontFamilyToRange(
+        if (start === end) {
+          return {
+            appState: {
+              ...appState,
+              currentItemFontFamily: nextFontFamily,
+              textEditorPendingStyle: {
+                ...appState.textEditorPendingStyle,
+                fontFamily: nextFontFamily,
+              },
+            },
+            captureUpdate: CaptureUpdateAction.EVENTUALLY,
+          };
+        }
+        const newTextStyleRanges = applyTextStyleToRange(
+          editingElement.originalText.length,
           editingElement.textStyleRanges,
           start,
           end,
-          nextFontFamily,
-          editingElement.fontFamily,
+          { fontFamily: nextFontFamily },
+          getTextElementBaseStyle(editingElement),
         );
 
         const next = {
           elements: elements.map((el) =>
             el.id === editingElement.id
-              ? newElementWith(el as ExcalidrawTextElement, {
-                  textStyleRanges:
-                    newTextStyleRanges.length > 0
-                      ? newTextStyleRanges
-                      : undefined,
-                })
+              ? updateTextStyleRangesAndDimensions(
+                  el as ExcalidrawTextElement,
+                  newTextStyleRanges.length > 0
+                    ? newTextStyleRanges
+                    : undefined,
+                  app,
+                )
               : el,
           ),
           appState: {
@@ -2044,23 +1820,21 @@ export const actionChangeFontFamily = register<{
                 currentItemFontFamily) // force update on selection
             ) {
               const textLength = oldElement.originalText.length;
-              const newTextStyleRanges = applyFontFamilyToRange(
+              const newTextStyleRanges = clearTextStyleProperty(
+                textLength,
                 oldElement.textStyleRanges,
                 0,
                 textLength,
-                nextFontFamily!,
-                nextFontFamily!,
+                "fontFamily",
+                getTextElementBaseStyle(oldElement),
               );
 
-              const newElement: ExcalidrawTextElement = newElementWith(
+              const newElement = newTextElementWithStyleRanges(
                 oldElement,
+                newTextStyleRanges,
                 {
                   fontFamily: nextFontFamily,
                   lineHeight: getLineHeight(nextFontFamily!),
-                  textStyleRanges:
-                    newTextStyleRanges.length > 0
-                      ? newTextStyleRanges
-                      : undefined,
                 },
               );
 
@@ -2144,8 +1918,16 @@ export const actionChangeFontFamily = register<{
       const getFontFamily = (
         elementsArray: readonly ExcalidrawElement[],
         elementsMap: ElementsMap,
-      ) =>
-        getFormValue(
+      ) => {
+        const selectionStyle = getEditingSelectionTextStyle(
+          elementsArray,
+          appState,
+        );
+        if (selectionStyle) {
+          return selectionStyle.fontFamily ?? null;
+        }
+
+        return getFormValue(
           elementsArray,
           app,
           (element) => {
@@ -2166,6 +1948,7 @@ export const actionChangeFontFamily = register<{
               ? null
               : appState.currentItemFontFamily || DEFAULT_FONT_FAMILY,
         );
+      };
 
       // popup opened, use cached elements
       if (
@@ -2422,6 +2205,8 @@ export const actionChangeLineHeight = register<number>({
   label: "Change line height",
   trackEvent: false,
   perform: (elements, appState, value, app) => {
+    const lineHeight = (value ??
+      appState.currentItemLineHeight) as ExcalidrawTextElement["lineHeight"];
     return {
       elements: changeProperty(
         elements,
@@ -2430,7 +2215,7 @@ export const actionChangeLineHeight = register<number>({
           if (isTextElement(oldElement)) {
             const newElement: ExcalidrawTextElement = newElementWith(
               oldElement,
-              { lineHeight: value as ExcalidrawTextElement["lineHeight"] },
+              { lineHeight },
             );
             redrawTextBoundingBox(
               newElement,
@@ -2446,7 +2231,7 @@ export const actionChangeLineHeight = register<number>({
       ),
       appState: {
         ...appState,
-        currentItemLineHeight: value,
+        currentItemLineHeight: lineHeight,
       },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
@@ -2462,10 +2247,7 @@ export const actionChangeLineHeight = register<number>({
         if (isTextElement(element)) {
           return element.lineHeight;
         }
-        const boundTextElement = getBoundTextElement(
-          element,
-          elementsMap,
-        );
+        const boundTextElement = getBoundTextElement(element, elementsMap);
         if (boundTextElement) {
           return boundTextElement.lineHeight;
         }
@@ -2474,11 +2256,11 @@ export const actionChangeLineHeight = register<number>({
       (element) =>
         isTextElement(element) ||
         getBoundTextElement(element, elementsMap) !== null,
-      (hasSelection) =>
-        hasSelection ? null : appState.currentItemLineHeight,
+      (hasSelection) => (hasSelection ? null : appState.currentItemLineHeight),
     );
 
-    const isCustomValue = currentValue !== null &&
+    const isCustomValue =
+      currentValue !== null &&
       !(LINE_HEIGHT_OPTIONS as readonly number[]).includes(currentValue);
 
     return (
@@ -2517,7 +2299,9 @@ export const actionChangeLineHeight = register<number>({
             }}
             style={{
               width: "52px",
-              color: isCustomValue ? "var(--color-primary)" : "var(--text-primary-color)",
+              color: isCustomValue
+                ? "var(--color-primary)"
+                : "var(--text-primary-color)",
               fontWeight: isCustomValue ? 600 : 400,
             }}
           />

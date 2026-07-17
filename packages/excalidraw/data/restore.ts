@@ -50,6 +50,7 @@ import {
 import { syncInvalidIndices } from "@excalidraw/element";
 
 import { refreshTextDimensions } from "@excalidraw/element";
+import { normalizeTextStyleRanges } from "@excalidraw/element";
 
 import { getNormalizedDimensions } from "@excalidraw/element";
 
@@ -176,12 +177,12 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
       mode === "inside"
         ? p
         : projectFixedPointOntoDiagonal(
-          element,
-          p,
-          boundElement,
-          startOrEnd,
-          elementsMap,
-        ) || p;
+            element,
+            p,
+            boundElement,
+            startOrEnd,
+            elementsMap,
+          ) || p;
     const { fixedPoint } = calculateFixedPointForNonElbowArrowBinding(
       element,
       boundElement,
@@ -257,19 +258,19 @@ const restoreElementWithProperties = <
     roundness: hasRoundnessProp
       ? element.roundness
       : shouldDefaultFrameRoundness
-        ? {
+      ? {
           type: ROUNDNESS.ADAPTIVE_RADIUS,
           value: FRAME_STYLE.radius,
         }
-        : element.strokeSharpness === "round"
-          ? {
-            // for old elements that would now use adaptive radius algo,
-            // use legacy algo instead
-            type: isUsingAdaptiveRadius(element.type)
-              ? ROUNDNESS.LEGACY
-              : ROUNDNESS.PROPORTIONAL_RADIUS,
-          }
-          : null,
+      : element.strokeSharpness === "round"
+      ? {
+          // for old elements that would now use adaptive radius algo,
+          // use legacy algo instead
+          type: isUsingAdaptiveRadius(element.type)
+            ? ROUNDNESS.LEGACY
+            : ROUNDNESS.PROPORTIONAL_RADIUS,
+        }
+      : null,
     boundElements: element.boundElementIds
       ? element.boundElementIds.map((id) => ({ type: "arrow", id }))
       : element.boundElements ?? [],
@@ -333,6 +334,40 @@ export const restoreElement = (
         (element as ExcalidrawTextElement).fontWeight === "bold"
           ? "bold"
           : "normal";
+      const originalText = element.originalText || text;
+      const textOutlineColor =
+        (element as ExcalidrawTextElement).textOutlineColor ??
+        DEFAULT_TEXT_OUTLINE_COLOR;
+      const textOutlineWidth =
+        (element as ExcalidrawTextElement).textOutlineWidth ??
+        DEFAULT_TEXT_OUTLINE_WIDTH;
+      const legacyColorRanges = (
+        (element as ExcalidrawTextElement).richTextRanges ?? []
+      ).flatMap((range) =>
+        range.color == null
+          ? []
+          : [{ start: range.start, end: range.end, color: range.color }],
+      );
+      const textStyleRanges = normalizeTextStyleRanges(
+        originalText.length,
+        [
+          ...((element as ExcalidrawTextElement).textStyleRanges ?? []),
+          ...legacyColorRanges,
+        ],
+        {
+          color: element.strokeColor,
+          fontSize,
+          fontFamily,
+          fontWeight,
+          textOutlineColor,
+          textOutlineWidth,
+        },
+      );
+      const {
+        richTextRanges: _legacyRichTextRanges,
+        textStyleRanges: _unnormalizedTextStyleRanges,
+        ...elementWithoutTextStyleRanges
+      } = element as ExcalidrawTextElement;
 
       // line-height might not be specified either when creating elements
       // programmatically, or when importing old diagrams.
@@ -343,11 +378,11 @@ export const restoreElement = (
         element.lineHeight ||
         (element.height
           ? // detect line-height from current element height and font-size
-          detectLineHeight(element)
+            detectLineHeight(element)
           : // no element height likely means programmatic use, so default
-          // to a fixed line height
-          getLineHeight(element.fontFamily));
-      element = restoreElementWithProperties(element, {
+            // to a fixed line height
+            getLineHeight(element.fontFamily));
+      element = restoreElementWithProperties(elementWithoutTextStyleRanges, {
         fontSize,
         fontFamily,
         fontWeight,
@@ -355,15 +390,12 @@ export const restoreElement = (
         textAlign: element.textAlign || DEFAULT_TEXT_ALIGN,
         verticalAlign: element.verticalAlign || DEFAULT_VERTICAL_ALIGN,
         containerId: element.containerId ?? null,
-        originalText: element.originalText || text,
+        originalText,
         autoResize: element.autoResize ?? true,
         lineHeight,
-        textOutlineColor:
-          (element as ExcalidrawTextElement).textOutlineColor ??
-          DEFAULT_TEXT_OUTLINE_COLOR,
-        textOutlineWidth:
-          (element as ExcalidrawTextElement).textOutlineWidth ??
-          DEFAULT_TEXT_OUTLINE_WIDTH,
+        textOutlineColor,
+        textOutlineWidth,
+        ...(textStyleRanges.length ? { textStyleRanges } : {}),
       }) as typeof element;
 
       // if empty text, mark as deleted. We keep in array
@@ -417,10 +449,10 @@ export const restoreElement = (
         y,
         ...(isLineElement(element)
           ? {
-            polygon: isValidPolygon(element.points)
-              ? element.polygon ?? false
-              : false,
-          }
+              polygon: isValidPolygon(element.points)
+                ? element.polygon ?? false
+                : false,
+            }
           : {}),
         ...getSizeFromPoints(points),
       }) as typeof element;
@@ -459,15 +491,15 @@ export const restoreElement = (
       // TODO: Separate arrow from linear element
       const restoredElement = isElbowArrow(element)
         ? restoreElementWithProperties(element as ExcalidrawElbowArrowElement, {
-          ...base,
-          elbowed: true,
-          fixedSegments:
-            element.fixedSegments?.length && base.points.length >= 4
-              ? element.fixedSegments
-              : null,
-          startIsSpecial: element.startIsSpecial,
-          endIsSpecial: element.endIsSpecial,
-        })
+            ...base,
+            elbowed: true,
+            fixedSegments:
+              element.fixedSegments?.length && base.points.length >= 4
+                ? element.fixedSegments
+                : null,
+            startIsSpecial: element.startIsSpecial,
+            endIsSpecial: element.endIsSpecial,
+          })
         : restoreElementWithProperties(element as ExcalidrawArrowElement, base);
 
       return {
@@ -611,10 +643,10 @@ export const restoreElements = (
   localElements: readonly ExcalidrawElement[] | null | undefined,
   opts?:
     | {
-      refreshDimensions?: boolean;
-      repairBindings?: boolean;
-      deleteInvisibleElements?: boolean;
-    }
+        refreshDimensions?: boolean;
+        repairBindings?: boolean;
+        deleteInvisibleElements?: boolean;
+      }
     | undefined,
 ): OrderedExcalidrawElement[] => {
   // used to detect duplicate top-level element ids
@@ -801,11 +833,11 @@ const LegacyAppStateMigrations: {
     return [
       "defaultSidebarDockedPreference",
       appState.isSidebarDocked ??
-      coalesceAppStateValue(
-        "defaultSidebarDockedPreference",
-        appState,
-        defaultAppState,
-      ),
+        coalesceAppStateValue(
+          "defaultSidebarDockedPreference",
+          appState,
+          defaultAppState,
+        ),
     ];
   },
 };
@@ -846,8 +878,8 @@ export const restoreAppState = (
       suppliedValue !== undefined
         ? suppliedValue
         : localValue !== undefined
-          ? localValue
-          : defaultValue;
+        ? localValue
+        : defaultValue;
   }
 
   return {

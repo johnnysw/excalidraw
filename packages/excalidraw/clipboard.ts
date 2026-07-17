@@ -8,7 +8,11 @@ import {
   EVENT,
 } from "@excalidraw/common";
 
-import { mutateElement } from "@excalidraw/element";
+import {
+  isTextElement,
+  mutateElement,
+  normalizeTextElementStyleRanges,
+} from "@excalidraw/element";
 import { deepCopyElement } from "@excalidraw/element";
 import {
   isFrameLikeElement,
@@ -180,18 +184,20 @@ export const serializeAsClipboardJSON = ({
   const contents: ElementsClipboard = {
     type: EXPORT_DATA_TYPES.excalidrawClipboard,
     elements: elements.map((element) => {
+      let copiedElement = element;
       if (
         getContainingFrame(element, elementsMap) &&
         !framesToCopy.has(getContainingFrame(element, elementsMap)!)
       ) {
-        const copiedElement = deepCopyElement(element);
+        copiedElement = deepCopyElement(element);
         mutateElement(copiedElement, elementsMap, {
           frameId: null,
         });
-        return copiedElement;
       }
 
-      return element;
+      return isTextElement(copiedElement)
+        ? normalizeTextElementStyleRanges(copiedElement)
+        : copiedElement;
     }),
     files: files ? _files : undefined,
   };

@@ -19,7 +19,11 @@ import type {
 import { Excalidraw } from "../index";
 import { API } from "../tests/helpers/api";
 import { Keyboard, Pointer, UI } from "../tests/helpers/ui";
-import { getTextEditor, updateTextEditor } from "../tests/queries/dom";
+import {
+  getTextEditor,
+  updateTextEditor,
+  type TextEditorElement,
+} from "../tests/queries/dom";
 import {
   GlobalTestState,
   render,
@@ -351,7 +355,7 @@ describe("textWysiwyg", () => {
     const { h } = window;
     const dimensions = { height: 400, width: 800 };
 
-    let textarea: HTMLTextAreaElement;
+    let textarea: TextEditorElement;
     let textElement: ExcalidrawTextElement;
 
     beforeAll(() => {
@@ -1326,7 +1330,7 @@ describe("textWysiwyg", () => {
     });
 
     describe("should align correctly", () => {
-      let editor: HTMLTextAreaElement;
+      let editor: TextEditorElement;
 
       beforeEach(async () => {
         Keyboard.keyPress(KEYS.ENTER);

@@ -22,7 +22,7 @@ polyfill();
 
 const ExcalidrawBase = (props: ExcalidrawProps) => {
   const {
-    role,
+    role = "teacher",
     onChange,
     onPresentationInkRetentionRequest,
     onIncrement,
@@ -329,10 +329,7 @@ export { isElementLink } from "@excalidraw/element";
 
 export { setCustomTextMetricsProvider } from "@excalidraw/element";
 
-export {
-  AnswerStatusContext,
-  useAnswerStatus,
-} from "./context/answer-status";
+export { AnswerStatusContext, useAnswerStatus } from "./context/answer-status";
 export type {
   AnswerStatusConfig,
   SelectedQuestionInfo,

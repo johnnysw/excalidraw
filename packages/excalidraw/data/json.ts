@@ -6,6 +6,11 @@ import {
   VERSIONS,
 } from "@excalidraw/common";
 
+import {
+  isTextElement,
+  normalizeTextElementStyleRanges,
+} from "@excalidraw/element";
+
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 import { cleanAppStateForExport, clearAppStateForDatabase } from "../appState";
@@ -42,24 +47,36 @@ const filterOutDeletedFiles = (
   return nextFiles;
 };
 
+export const normalizeElementsForSerialization = <
+  Element extends ExcalidrawElement,
+>(
+  elements: readonly Element[],
+): Element[] =>
+  elements.map((element) =>
+    isTextElement(element)
+      ? (normalizeTextElementStyleRanges(element) as Element)
+      : element,
+  );
+
 export const serializeAsJSON = (
   elements: readonly ExcalidrawElement[],
   appState: Partial<AppState>,
   files: BinaryFiles,
   type: "local" | "database",
 ): string => {
+  const normalizedElements = normalizeElementsForSerialization(elements);
   const data: ExportedDataState = {
     type: EXPORT_DATA_TYPES.excalidraw,
     version: VERSIONS.excalidraw,
     source: getExportSource(),
-    elements,
+    elements: normalizedElements,
     appState:
       type === "local"
         ? cleanAppStateForExport(appState)
         : clearAppStateForDatabase(appState),
     files:
       type === "local"
-        ? filterOutDeletedFiles(elements, files)
+        ? filterOutDeletedFiles(normalizedElements, files)
         : // will be stripped from JSON
           undefined,
   };
@@ -126,11 +143,15 @@ export const isValidLibrary = (json: any): json is ImportedLibraryData => {
 };
 
 export const serializeLibraryAsJSON = (libraryItems: LibraryItems) => {
+  const normalizedLibraryItems = libraryItems.map((item) => ({
+    ...item,
+    elements: normalizeElementsForSerialization(item.elements),
+  }));
   const data: ExportedLibraryData = {
     type: EXPORT_DATA_TYPES.excalidrawLibrary,
     version: VERSIONS.excalidrawLibrary,
     source: getExportSource(),
-    libraryItems,
+    libraryItems: normalizedLibraryItems,
   };
   return JSON.stringify(data, null, 2);
 };

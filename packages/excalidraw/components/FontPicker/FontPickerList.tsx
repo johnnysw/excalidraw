@@ -19,6 +19,10 @@ import {
 import type { ValueOf } from "@excalidraw/common/utility-types";
 
 import { Fonts } from "../../fonts";
+import {
+  restoreCaretPosition,
+  saveCaretPosition,
+} from "../../hooks/useTextEditorFocus";
 import { t } from "../../i18n";
 import {
   useApp,
@@ -198,33 +202,15 @@ export const FontPickerList = React.memo(
     const wrappedOnSelect = useCallback(
       (fontFamily: FontFamilyValues) => {
         // Save caret position before font selection if editing text
-        let savedSelection: { start: number; end: number } | null = null;
-        if (app.state.editingTextElement) {
-          const textEditor = document.querySelector(
-            ".excalidraw-wysiwyg",
-          ) as HTMLTextAreaElement;
-          if (textEditor) {
-            savedSelection = {
-              start: textEditor.selectionStart,
-              end: textEditor.selectionEnd,
-            };
-          }
-        }
+        const savedSelection = app.state.editingTextElement
+          ? saveCaretPosition()
+          : null;
 
         onSelect(fontFamily);
 
         // Restore caret position after font selection if editing text
         if (app.state.editingTextElement && savedSelection) {
-          setTimeout(() => {
-            const textEditor = document.querySelector(
-              ".excalidraw-wysiwyg",
-            ) as HTMLTextAreaElement;
-            if (textEditor && savedSelection) {
-              textEditor.focus();
-              textEditor.selectionStart = savedSelection.start;
-              textEditor.selectionEnd = savedSelection.end;
-            }
-          }, 0);
+          restoreCaretPosition(savedSelection);
         }
       },
       [onSelect, app.state.editingTextElement],

@@ -13,6 +13,7 @@ import type {
   FontFamilyValues,
   TextStyleRange,
 } from "./types";
+import { normalizeTextStyleRanges } from "./textStyleRanges";
 
 export const measureText = (
   text: string,
@@ -26,7 +27,9 @@ export const measureText = (
     .map((x) => x || " ")
     .join("\n");
   const fontSizeMatch = font.match(/(\d+(?:\.\d+)?)px/);
-  const fontSize = fontSizeMatch ? parseFloat(fontSizeMatch[1]) : parseFloat(font);
+  const fontSize = fontSizeMatch
+    ? parseFloat(fontSizeMatch[1])
+    : parseFloat(font);
   const height = getTextHeight(_text, fontSize, lineHeight);
   const width = getTextWidth(_text, font);
   return { width, height };
@@ -52,88 +55,82 @@ export const measureTextWithStyleRanges = (
     );
   }
 
-  const normalized = normalizeText(text);
-  const lines = normalized.split("\n");
-  let maxWidth = 0;
-  let totalHeight = 0;
-  let globalIndex = 0;
-
-  const getStyleAt = (index: number) => {
-    let fontSize = baseFontSize;
-    let fontFamily = baseFontFamily;
-    let fontWeight = baseFontWeight;
-    for (const range of textStyleRanges) {
-      if (index >= range.start && index < range.end) {
-        if (range.fontSize != null) {
-          fontSize = range.fontSize;
-        }
-        if (range.fontFamily != null) {
-          fontFamily = range.fontFamily;
-        }
-        if (range.fontWeight != null) {
-          fontWeight = range.fontWeight;
-        }
-      }
-    }
-    return { fontSize, fontFamily, fontWeight };
-  };
-
-  for (const rawLine of lines) {
-    const lineStart = globalIndex;
-    const lineEnd = globalIndex + rawLine.length;
-
-    if (rawLine.length === 0) {
-      const font = getFontString({
+  const normalizedText = normalizeText(text);
+  const normalizedRanges = normalizeTextStyleRanges(
+    normalizedText.length,
+    textStyleRanges,
+    {
+      fontSize: baseFontSize,
+      fontFamily: baseFontFamily,
+      fontWeight: baseFontWeight,
+    },
+  );
+  const runs: Array<{
+    start: number;
+    end: number;
+    fontSize: number;
+    fontFamily: FontFamilyValues;
+    fontWeight: ExcalidrawTextElement["fontWeight"];
+  }> = [];
+  let sourceIndex = 0;
+  for (const range of normalizedRanges) {
+    if (sourceIndex < range.start) {
+      runs.push({
+        start: sourceIndex,
+        end: range.start,
         fontSize: baseFontSize,
         fontFamily: baseFontFamily,
         fontWeight: baseFontWeight,
       });
-      maxWidth = Math.max(maxWidth, getLineWidth(" ", font));
-      totalHeight += getLineHeightInPx(baseFontSize, lineHeight);
-      globalIndex = lineEnd + 1;
-      continue;
     }
-
-    let width = 0;
-    let maxLineFontSize = baseFontSize;
-    let segmentStart = 0;
-    let currentStyle = getStyleAt(lineStart);
-    maxLineFontSize = Math.max(maxLineFontSize, currentStyle.fontSize);
-
-    for (let localIndex = 0; localIndex < rawLine.length; localIndex++) {
-      const global = lineStart + localIndex;
-      const nextStyle = getStyleAt(global);
-      if (
-        nextStyle.fontSize !== currentStyle.fontSize ||
-        nextStyle.fontFamily !== currentStyle.fontFamily ||
-        nextStyle.fontWeight !== currentStyle.fontWeight
-      ) {
-        const segmentText = rawLine.slice(segmentStart, localIndex);
-        const segmentFont = getFontString({
-          fontSize: currentStyle.fontSize,
-          fontFamily: currentStyle.fontFamily,
-          fontWeight: currentStyle.fontWeight,
-        });
-        width += getLineWidth(segmentText, segmentFont);
-        segmentStart = localIndex;
-        currentStyle = nextStyle;
-      }
-      maxLineFontSize = Math.max(maxLineFontSize, nextStyle.fontSize);
-    }
-
-    const tailText = rawLine.slice(segmentStart);
-    const tailFont = getFontString({
-      fontSize: currentStyle.fontSize,
-      fontFamily: currentStyle.fontFamily,
-      fontWeight: currentStyle.fontWeight,
+    runs.push({
+      start: range.start,
+      end: range.end,
+      fontSize: range.fontSize ?? baseFontSize,
+      fontFamily: range.fontFamily ?? baseFontFamily,
+      fontWeight: range.fontWeight ?? baseFontWeight,
     });
-    width += getLineWidth(tailText, tailFont);
-
-    maxWidth = Math.max(maxWidth, width);
-    totalHeight += getLineHeightInPx(maxLineFontSize, lineHeight);
-
-    globalIndex = lineEnd + 1;
+    sourceIndex = range.end;
   }
+  if (sourceIndex < normalizedText.length) {
+    runs.push({
+      start: sourceIndex,
+      end: normalizedText.length,
+      fontSize: baseFontSize,
+      fontFamily: baseFontFamily,
+      fontWeight: baseFontWeight,
+    });
+  }
+
+  let maxWidth = 0;
+  let totalHeight = 0;
+  let lineWidth = 0;
+  let maxLineFontSize = baseFontSize;
+  const finishLine = () => {
+    maxWidth = Math.max(maxWidth, lineWidth);
+    totalHeight += getLineHeightInPx(maxLineFontSize, lineHeight);
+    lineWidth = 0;
+    maxLineFontSize = baseFontSize;
+  };
+
+  for (const run of runs) {
+    const font = getFontString(run);
+    let partStart = run.start;
+    for (let index = run.start; index < run.end; index++) {
+      if (normalizedText[index] !== "\n") {
+        continue;
+      }
+      lineWidth += getLineWidth(normalizedText.slice(partStart, index), font);
+      maxLineFontSize = Math.max(maxLineFontSize, run.fontSize);
+      finishLine();
+      partStart = index + 1;
+    }
+    lineWidth += getLineWidth(normalizedText.slice(partStart, run.end), font);
+    if (partStart < run.end) {
+      maxLineFontSize = Math.max(maxLineFontSize, run.fontSize);
+    }
+  }
+  finishLine();
 
   return { width: maxWidth, height: totalHeight };
 };
@@ -216,6 +213,9 @@ export const getApproxMinLineHeight = (
 };
 
 let textMetricsProvider: TextMetricsProvider | undefined;
+let textMetricsProviderVersion = 0;
+
+export const getTextMetricsProviderVersion = () => textMetricsProviderVersion;
 
 /**
  * Set a custom text metrics provider.
@@ -224,6 +224,7 @@ let textMetricsProvider: TextMetricsProvider | undefined;
  */
 export const setCustomTextMetricsProvider = (provider: TextMetricsProvider) => {
   textMetricsProvider = provider;
+  textMetricsProviderVersion++;
 };
 
 export interface TextMetricsProvider {

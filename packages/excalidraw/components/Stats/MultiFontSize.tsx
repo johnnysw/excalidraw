@@ -1,6 +1,8 @@
 import {
   getBoundTextElement,
   redrawTextBoundingBox,
+  clearTextStyleProperty,
+  getTextElementBaseStyle,
 } from "@excalidraw/element";
 import { hasBoundTextElement, isTextElement } from "@excalidraw/element";
 
@@ -81,8 +83,18 @@ const handleFontSizeChange: DragInputCallbackType<
     nextFontSize = Math.max(Math.round(nextValue), MIN_FONT_SIZE);
 
     for (const textElement of latestTextElements) {
+      const textStyleRanges = clearTextStyleProperty(
+        textElement.originalText.length,
+        textElement.textStyleRanges,
+        0,
+        textElement.originalText.length,
+        "fontSize",
+        getTextElementBaseStyle(textElement),
+      );
       scene.mutateElement(textElement, {
         fontSize: nextFontSize,
+        textStyleRanges,
+        richTextRanges: undefined,
       });
 
       redrawTextBoundingBox(
@@ -109,8 +121,18 @@ const handleFontSizeChange: DragInputCallbackType<
       if (shouldChangeByStepSize) {
         nextFontSize = getStepSizedValue(nextFontSize, STEP_SIZE);
       }
+      const textStyleRanges = clearTextStyleProperty(
+        latestElement.originalText.length,
+        latestElement.textStyleRanges,
+        0,
+        latestElement.originalText.length,
+        "fontSize",
+        getTextElementBaseStyle(latestElement),
+      );
       scene.mutateElement(latestElement, {
         fontSize: nextFontSize,
+        textStyleRanges,
+        richTextRanges: undefined,
       });
 
       redrawTextBoundingBox(

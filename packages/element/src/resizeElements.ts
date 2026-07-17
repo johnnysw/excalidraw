@@ -48,6 +48,8 @@ import {
   getApproxMinLineHeight,
 } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
+import { isRichTextV2Enabled, scaleTextStyleRanges } from "./textStyleRanges";
+import { layoutTextElement } from "./textLayout";
 import {
   isArrowElement,
   isBindingElement,
@@ -326,6 +328,7 @@ export const resizeSingleTextElement = (
   }
 
   if (transformHandleType.includes("n") || transformHandleType.includes("s")) {
+    const fontScale = metrics.size / element.fontSize;
     const previousOrigin = pointFrom<GlobalPoint>(origElement.x, origElement.y);
 
     const newOrigin = getResizedOrigin(
@@ -342,6 +345,8 @@ export const resizeSingleTextElement = (
 
     scene.mutateElement(element, {
       fontSize: metrics.size,
+      textOutlineWidth: element.textOutlineWidth * fontScale,
+      textStyleRanges: scaleTextStyleRanges(element.textStyleRanges, fontScale),
       width: metricsWidth,
       height: nextHeight,
       x: newOrigin.x,
@@ -351,26 +356,40 @@ export const resizeSingleTextElement = (
   }
 
   if (transformHandleType === "e" || transformHandleType === "w") {
-    const minWidth = getMinTextElementWidth(
+    const baseMinWidth = getMinTextElementWidth(
       getFontString({
         fontSize: element.fontSize,
         fontFamily: element.fontFamily,
       }),
       element.lineHeight,
     );
+    const minWidth =
+      isRichTextV2Enabled() && element.textStyleRanges?.length
+        ? Math.max(
+            baseMinWidth,
+            layoutTextElement(element, { maxWidth: 0 }).contentWidth,
+          )
+        : baseMinWidth;
 
     const newWidth = Math.max(minWidth, nextWidth);
 
-    const text = wrapText(
-      element.originalText,
-      getFontString(element),
-      Math.abs(newWidth),
-    );
-    const metrics = measureText(
-      text,
-      getFontString(element),
-      element.lineHeight,
-    );
+    const styledLayout =
+      isRichTextV2Enabled() && element.textStyleRanges?.length
+        ? layoutTextElement(element, {
+            maxWidth: Math.abs(newWidth),
+            textAlign: element.textAlign,
+          })
+        : null;
+    const text = styledLayout
+      ? styledLayout.wrappedText
+      : wrapText(
+          element.originalText,
+          getFontString(element),
+          Math.abs(newWidth),
+        );
+    const metrics = styledLayout
+      ? { width: styledLayout.contentWidth, height: styledLayout.height }
+      : measureText(text, getFontString(element), element.lineHeight);
 
     const newHeight = metrics.height;
 
@@ -1334,6 +1353,8 @@ export const resizeMultipleElements = (
       > & {
         points?: ExcalidrawLinearElement["points"];
         fontSize?: ExcalidrawTextElement["fontSize"];
+        textOutlineWidth?: ExcalidrawTextElement["textOutlineWidth"];
+        textStyleRanges?: ExcalidrawTextElement["textStyleRanges"];
         scale?: ExcalidrawImageElement["scale"];
         boundTextFontSize?: ExcalidrawTextElement["fontSize"];
         startBinding?: ExcalidrawElbowArrowElement["startBinding"];
@@ -1430,6 +1451,12 @@ export const resizeMultipleElements = (
           return;
         }
         update.fontSize = metrics.size;
+        const fontScale = metrics.size / orig.fontSize;
+        update.textOutlineWidth = orig.textOutlineWidth * fontScale;
+        update.textStyleRanges = scaleTextStyleRanges(
+          orig.textStyleRanges,
+          fontScale,
+        );
       }
 
       const boundTextElement = originalElementsMap.get(
@@ -1487,8 +1514,14 @@ export const resizeMultipleElements = (
 
       const boundTextElement = getBoundTextElement(element, elementsMap);
       if (boundTextElement && boundTextFontSize) {
+        const boundTextScale = boundTextFontSize / boundTextElement.fontSize;
         scene.mutateElement(boundTextElement, {
           fontSize: boundTextFontSize,
+          textOutlineWidth: boundTextElement.textOutlineWidth * boundTextScale,
+          textStyleRanges: scaleTextStyleRanges(
+            boundTextElement.textStyleRanges,
+            boundTextScale,
+          ),
           angle: isLinearElement(element) ? undefined : angle,
         });
         handleBindTextResize(element, scene, handleDirection, true);

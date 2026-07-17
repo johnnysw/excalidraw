@@ -32,7 +32,9 @@ import {
   hasBoundTextElement,
   isBoundToContainer,
   isFrameLikeElement,
+  isTextElement,
 } from "./typeChecks";
+import { normalizeTextElementStyleRanges } from "./textStyleRanges";
 
 import { getBoundTextElement, getContainerElement } from "./textElement";
 
@@ -64,7 +66,13 @@ export const duplicateElement = <TElement extends ExcalidrawElement>(
   element: TElement,
   randomizeSeed?: boolean,
 ): Readonly<TElement> => {
-  const copy = deepCopyElement(element);
+  const clonedElement = deepCopyElement(element);
+  const clonedElementUnion = clonedElement as ExcalidrawElement;
+  const copy = (
+    isTextElement(clonedElementUnion)
+      ? normalizeTextElementStyleRanges(clonedElementUnion)
+      : clonedElement
+  ) as Mutable<TElement>;
 
   if (isTestEnv()) {
     __test__defineOrigId(copy, element.id);

@@ -1,4 +1,8 @@
-import { DEFAULT_FONT_FAMILY } from "@excalidraw/common";
+import {
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_TEXT_OUTLINE_COLOR,
+  DEFAULT_TEXT_OUTLINE_WIDTH,
+} from "@excalidraw/common";
 
 import type { Radians } from "@excalidraw/math";
 
@@ -64,6 +68,8 @@ export const textFixture: ExcalidrawElement = {
   textAlign: "left",
   verticalAlign: "top",
   containerId: null,
+  textOutlineColor: DEFAULT_TEXT_OUTLINE_COLOR,
+  textOutlineWidth: DEFAULT_TEXT_OUTLINE_WIDTH,
   lineHeight: 1.25 as any,
   autoResize: false,
 };

@@ -9,7 +9,11 @@ import {
 } from "@excalidraw/excalidraw/data/encryption";
 import { serializeAsJSON } from "@excalidraw/excalidraw/data/json";
 import { restore } from "@excalidraw/excalidraw/data/restore";
-import { isInvisiblySmallElement } from "@excalidraw/element";
+import {
+  isInvisiblySmallElement,
+  isTextElement,
+  normalizeTextElementStyleRanges,
+} from "@excalidraw/element";
 import { isInitializedImageElement } from "@excalidraw/element";
 import { t } from "@excalidraw/excalidraw/i18n";
 import { bytesToHexString } from "@excalidraw/common";
@@ -59,9 +63,15 @@ export const isSyncableElement = (
 export const getSyncableElements = (
   elements: readonly OrderedExcalidrawElement[],
 ) =>
-  elements.filter((element) =>
-    isSyncableElement(element),
-  ) as SyncableExcalidrawElement[];
+  elements
+    .map((element) =>
+      isTextElement(element)
+        ? normalizeTextElementStyleRanges(element)
+        : element,
+    )
+    .filter((element) =>
+      isSyncableElement(element),
+    ) as SyncableExcalidrawElement[];
 
 const BACKEND_V2_GET = import.meta.env.VITE_APP_BACKEND_V2_GET_URL;
 const BACKEND_V2_POST = import.meta.env.VITE_APP_BACKEND_V2_POST_URL;

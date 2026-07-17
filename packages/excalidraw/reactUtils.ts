@@ -64,6 +64,9 @@ export const isRenderThrottlingEnabled = (() => {
 export const isFreedrawPerfV2Enabled = () =>
   window.EXCALIDRAW_FREEDRAW_PERF_V2 === true;
 
+export const isRichTextV2Enabled = () =>
+  window.EXCALIDRAW_RICH_TEXT_V2 === true;
+
 export const isExcalidrawPerfDebugEnabled = () =>
   isDevEnv() && window.EXCALIDRAW_PERF_DEBUG === true;
 
