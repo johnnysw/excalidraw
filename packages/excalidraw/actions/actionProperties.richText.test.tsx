@@ -55,12 +55,7 @@ const setEditingSelection = (
 
 describe("rich-text property actions", () => {
   beforeEach(async () => {
-    window.EXCALIDRAW_RICH_TEXT_V2 = true;
     await render(<Excalidraw />);
-  });
-
-  afterEach(() => {
-    window.EXCALIDRAW_RICH_TEXT_V2 = undefined;
   });
 
   it("changes selected red 哈哈 to base black without losing other local styles", () => {
@@ -129,8 +124,7 @@ describe("rich-text property actions", () => {
     ]);
   });
 
-  it("falls back to whole-element non-color formatting when V2 is disabled", () => {
-    window.EXCALIDRAW_RICH_TEXT_V2 = false;
+  it("applies selected non-color formatting locally", () => {
     const text = createStyledText([
       { start: 0, end: 1, color: "red", fontSize: 28 },
       { start: 1, end: 2, color: "blue", fontSize: 36 },
@@ -146,10 +140,10 @@ describe("rich-text property actions", () => {
     });
 
     const updated = window.h.elements[0] as ExcalidrawTextElement;
-    expect(updated.fontSize).toBe(30);
+    expect(updated.fontSize).toBe(20);
     expect(updated.textStyleRanges).toEqual([
-      { start: 0, end: 1, color: "red" },
-      { start: 1, end: 2, color: "blue" },
+      { start: 0, end: 1, color: "red", fontSize: 30 },
+      { start: 1, end: 2, color: "blue", fontSize: 36 },
     ]);
     expect(window.h.state.textEditorPendingStyle).toBeNull();
   });

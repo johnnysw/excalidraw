@@ -76,7 +76,7 @@ import {
   mutateElement,
   ROUNDNESS,
   sceneCoordsToViewportCoords,
-} from "..";
+} from "../index";
 import { trackEvent } from "../analytics";
 import { atom } from "../editor-jotai";
 

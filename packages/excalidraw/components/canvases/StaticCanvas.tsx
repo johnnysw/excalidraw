@@ -2,32 +2,25 @@ import React, { useEffect, useRef } from "react";
 
 import { isShallowEqual } from "@excalidraw/common";
 
-import type {
-  NonDeletedExcalidrawElement,
-  NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
-
 import { isRenderThrottlingEnabled } from "../../reactUtils";
 import { renderStaticScene } from "../../renderer/staticScene";
 
-import type {
-  RenderableElementsMap,
-  StaticCanvasRenderConfig,
-} from "../../scene/types";
+import type { StaticCanvasRenderConfig } from "../../scene/types";
 import type { AppState, StaticCanvasAppState } from "../../types";
+import type { ReadCanvasRenderData } from "./renderData";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 
 type StaticCanvasProps = {
   canvas: HTMLCanvasElement;
   rc: RoughCanvas;
-  elementsMap: RenderableElementsMap;
-  allElementsMap: NonDeletedSceneElementsMap;
-  visibleElements: readonly NonDeletedExcalidrawElement[];
+  readRenderData: ReadCanvasRenderData;
   sceneNonce: number | undefined;
   selectionNonce: number | undefined;
   scale: number;
   appState: StaticCanvasAppState;
   renderConfig: StaticCanvasRenderConfig;
+  shouldReconcileFreedrawOverlay?: () => boolean;
+  onFreedrawOverlayReconciled?: () => void;
 };
 
 const StaticCanvas = (props: StaticCanvasProps) => {
@@ -56,25 +49,40 @@ const StaticCanvas = (props: StaticCanvasProps) => {
       canvas.classList.add("excalidraw__canvas", "static");
     }
 
+    const { elementsMap, allElementsMap, visibleElements } =
+      props.readRenderData();
+
+    const shouldReconcileFreedrawOverlay =
+      props.shouldReconcileFreedrawOverlay?.() ?? false;
+
     renderStaticScene(
       {
         canvas,
         rc: props.rc,
         scale: props.scale,
-        elementsMap: props.elementsMap,
-        allElementsMap: props.allElementsMap,
-        visibleElements: props.visibleElements,
+        elementsMap,
+        allElementsMap,
+        visibleElements,
         appState: props.appState,
         renderConfig: props.renderConfig,
       },
-      isRenderThrottlingEnabled(),
+      shouldReconcileFreedrawOverlay
+        ? false
+        : isRenderThrottlingEnabled(),
     );
+
+    if (shouldReconcileFreedrawOverlay) {
+      props.onFreedrawOverlayReconciled?.();
+    }
   });
 
   return <div className="excalidraw__canvas-wrapper" ref={wrapperRef} />;
 };
 
-const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {
+const getRelevantAppStateProps = (
+  appState: AppState,
+): StaticCanvasAppState &
+  Pick<AppState, "editingTextElement" | "newElement"> => {
   const relevantAppStateProps = {
     zoom: appState.zoom,
     scrollX: appState.scrollX,
@@ -98,6 +106,8 @@ const getRelevantAppStateProps = (appState: AppState): StaticCanvasAppState => {
     frameToHighlight: appState.frameToHighlight,
     editingGroupId: appState.editingGroupId,
     currentHoveredFontFamily: appState.currentHoveredFontFamily,
+    editingTextElement: appState.editingTextElement,
+    newElement: appState.newElement,
     croppingElementId: appState.croppingElementId,
     suggestedBinding: appState.suggestedBinding,
     presentationMode: appState.presentationMode,
@@ -116,11 +126,11 @@ const areEqual = (
   if (
     prevProps.sceneNonce !== nextProps.sceneNonce ||
     prevProps.scale !== nextProps.scale ||
-    // we need to memoize on elementsMap because they may have renewed
-    // even if sceneNonce didn't change (e.g. we filter elements out based
-    // on appState)
-    prevProps.elementsMap !== nextProps.elementsMap ||
-    prevProps.visibleElements !== nextProps.visibleElements
+    prevProps.readRenderData !== nextProps.readRenderData ||
+    prevProps.shouldReconcileFreedrawOverlay !==
+      nextProps.shouldReconcileFreedrawOverlay ||
+    prevProps.onFreedrawOverlayReconciled !==
+      nextProps.onFreedrawOverlayReconciled
   ) {
     return false;
   }
@@ -131,6 +141,13 @@ const areEqual = (
       // but resolve to only the StaticCanvas-relevant props
       getRelevantAppStateProps(prevProps.appState as AppState),
       getRelevantAppStateProps(nextProps.appState as AppState),
+      {
+        newElement: (prevElement, nextElement) =>
+          prevElement === nextElement ||
+          (prevProps.sceneNonce === nextProps.sceneNonce &&
+            ((prevElement?.type === "freedraw" && nextElement === null) ||
+              (prevElement === null && nextElement?.type === "freedraw"))),
+      },
     ) && isShallowEqual(prevProps.renderConfig, nextProps.renderConfig)
   );
 };

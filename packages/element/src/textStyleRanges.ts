@@ -16,10 +16,6 @@ export type TransformTextStyleRangesForEditParams = {
   baseStyle: Readonly<TextStyle>;
 };
 
-export const isRichTextV2Enabled = () =>
-  (globalThis as { EXCALIDRAW_RICH_TEXT_V2?: boolean })
-    .EXCALIDRAW_RICH_TEXT_V2 === true;
-
 export const getTextElementBaseStyle = (element: ExcalidrawTextElement) => ({
   color: element.strokeColor,
   fontSize: element.fontSize,

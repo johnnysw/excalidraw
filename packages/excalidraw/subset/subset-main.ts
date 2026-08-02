@@ -120,7 +120,7 @@ const getOrCreateWorkerPool = () => {
       const pool = WorkerPool.create<
         SubsetWorkerData,
         SubsetWorkerResult<SubsetWorkerData["command"]>
-      >(WorkerUrl);
+      >(WorkerUrl, { jobTimeout: 30_000 });
 
       return pool;
     });

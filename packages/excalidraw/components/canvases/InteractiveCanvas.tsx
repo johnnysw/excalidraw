@@ -12,14 +12,8 @@ import type {
   InteractiveCanvasRenderConfig,
   InteractiveSceneRenderAnimationState,
   InteractiveSceneRenderConfig,
-  RenderableElementsMap,
   RenderInteractiveSceneCallback,
 } from "@excalidraw/excalidraw/scene/types";
-
-import type {
-  NonDeletedExcalidrawElement,
-  NonDeletedSceneElementsMap,
-} from "@excalidraw/element/types";
 
 import { t } from "../../i18n";
 import { renderInteractiveScene } from "../../renderer/interactiveScene";
@@ -29,16 +23,14 @@ import type {
   AppState,
   InteractiveCanvasAppState,
 } from "../../types";
+import type { ReadCanvasRenderData } from "./renderData";
 import type { DOMAttributes } from "react";
 
 type InteractiveCanvasProps = {
   containerRef: React.RefObject<HTMLDivElement | null>;
   canvas: HTMLCanvasElement | null;
-  elementsMap: RenderableElementsMap;
-  visibleElements: readonly NonDeletedExcalidrawElement[];
-  selectedElements: readonly NonDeletedExcalidrawElement[];
-  allElementsMap: NonDeletedSceneElementsMap;
-  sceneNonce: number | undefined;
+  readRenderData: ReadCanvasRenderData;
+  sceneRevision: number;
   selectionNonce: number | undefined;
   scale: number;
   appState: InteractiveCanvasAppState;
@@ -140,13 +132,20 @@ const InteractiveCanvas = (props: InteractiveCanvasProps) => {
         )) ||
       "#6965db";
 
+    const {
+      elementsMap,
+      visibleElements,
+      selectedElements,
+      allElementsMap,
+    } = props.readRenderData();
+
     rendererParams.current = {
       app: props.app,
       canvas: props.canvas,
-      elementsMap: props.elementsMap,
-      visibleElements: props.visibleElements,
-      selectedElements: props.selectedElements,
-      allElementsMap: props.allElementsMap,
+      elementsMap,
+      visibleElements,
+      selectedElements,
+      allElementsMap,
       scale: window.devicePixelRatio,
       appState: props.appState,
       renderConfig: {
@@ -274,14 +273,9 @@ const areEqual = (
   // This could be further optimised if needed, as we don't have to render interactive canvas on each scene mutation
   if (
     prevProps.selectionNonce !== nextProps.selectionNonce ||
-    prevProps.sceneNonce !== nextProps.sceneNonce ||
+    prevProps.sceneRevision !== nextProps.sceneRevision ||
     prevProps.scale !== nextProps.scale ||
-    // we need to memoize on elementsMap because they may have renewed
-    // even if sceneNonce didn't change (e.g. we filter elements out based
-    // on appState)
-    prevProps.elementsMap !== nextProps.elementsMap ||
-    prevProps.visibleElements !== nextProps.visibleElements ||
-    prevProps.selectedElements !== nextProps.selectedElements ||
+    prevProps.readRenderData !== nextProps.readRenderData ||
     prevProps.renderScrollbars !== nextProps.renderScrollbars
   ) {
     return false;
@@ -293,6 +287,13 @@ const areEqual = (
     // but resolve to only the InteractiveCanvas-relevant props
     getRelevantAppStateProps(prevProps.appState as AppState),
     getRelevantAppStateProps(nextProps.appState as AppState),
+    {
+      newElement: (prevElement, nextElement) =>
+        prevElement === nextElement ||
+        (prevProps.sceneRevision === nextProps.sceneRevision &&
+          ((prevElement?.type === "freedraw" && nextElement === null) ||
+            (prevElement === null && nextElement?.type === "freedraw"))),
+    },
   );
 };
 

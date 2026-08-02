@@ -169,7 +169,6 @@ import {
   embeddableURLValidator,
   maybeParseEmbedSrc,
   getEmbedLink,
-  getInitializedImageElements,
   normalizeSVG,
   updateImageCache as _updateImageCache,
   getBoundTextElement,
@@ -191,7 +190,6 @@ import {
   isElementInFrame,
   getFrameLikeTitle,
   getOrderedFrames as getOrderedFramesForScene,
-  getPresentationFrames as getPresentationFramesForScene,
   mergePresentationFrameOrder,
   isFrameExcludedFromPresentation,
   getElementsOverlappingFrame,
@@ -215,6 +213,9 @@ import {
   getApproxMinLineHeight,
   getMinTextElementWidth,
   ShapeCache,
+  cacheFreedrawGeometry,
+  clearFreedrawPendingPreview,
+  setFreedrawPendingPreview,
   getRenderOpacity,
   editGroupForSelectedElement,
   getElementsInGroup,
@@ -258,7 +259,6 @@ import {
   maxBindingDistance_simple,
   transformTextStyleRangesForEdit,
   applyTextStyleToRange,
-  isRichTextV2Enabled,
 } from "@excalidraw/element";
 
 import type { GlobalPoint, LocalPoint, Radians } from "@excalidraw/math";
@@ -275,6 +275,7 @@ import type {
   FileId,
   NonDeletedExcalidrawElement,
   ExcalidrawTextContainer,
+  ExcalidrawFrameElement,
   ExcalidrawFrameLikeElement,
   ExcalidrawMagicFrameElement,
   ExcalidrawIframeLikeElement,
@@ -421,21 +422,30 @@ import { ElementCanvasButtons } from "../components/ElementCanvasButtons";
 import { SlideOrderButton } from "../components/SlideOrderButton";
 import { LaserTrails } from "../laser-trails";
 import {
-  isFreedrawPerfV2Enabled,
   markExcalidrawPerf,
   measureExcalidrawPerf,
+  isRenderThrottlingEnabled,
   withBatchedUpdates,
   withBatchedUpdatesThrottled,
 } from "../reactUtils";
 import {
-  applyActiveFreedrawStroke,
   appendFreedrawPoint,
   clearActiveFreedrawBounds,
+  clearActiveFreedrawStroke,
   createActiveFreedrawStroke,
+  getFreedrawPointerEventSamples,
+  setActiveFreedrawStroke,
   type ActiveFreedrawStroke,
+  updateActiveFreedrawBounds,
 } from "../freedrawPerf";
+import { createIncrementSubscriptionController } from "../incrementSubscription";
 import { textWysiwyg } from "../wysiwyg/textWysiwyg";
 import { isOverScrollBars } from "../scene/scrollbars";
+import {
+  prepareFreedrawGeometryWorker,
+  requestFreedrawGeometry,
+} from "../freedrawGeometry";
+import { renderStaticScene } from "../renderer/staticScene";
 
 import { isMaybeMermaidDefinition } from "../mermaid";
 
@@ -459,7 +469,6 @@ import ConvertElementTypePopup, {
 import { activeConfirmDialogAtom } from "./ActiveConfirmDialog";
 import BraveMeasureTextError from "./BraveMeasureTextError";
 import { ContextMenu, CONTEXT_MENU_SEPARATOR } from "./ContextMenu";
-import { activeEyeDropperAtom } from "./EyeDropper";
 import FollowMode from "./FollowMode/FollowMode";
 import LayerUI from "./LayerUI";
 import Presentation from "./Presentation/Presentation";
@@ -467,7 +476,11 @@ import { ElementCanvasButton } from "./MagicButton";
 import { SVGLayer } from "./SVGLayer";
 import { searchItemInFocusAtom } from "./SearchMenu";
 import { isSidebarDockedAtom } from "./Sidebar/Sidebar";
-import { StaticCanvas, InteractiveCanvas } from "./canvases";
+import {
+  FreedrawOverlayCanvas,
+  StaticCanvas,
+  InteractiveCanvas,
+} from "./canvases";
 import NewElementCanvas from "./canvases/NewElementCanvas";
 import {
   isPointHittingLink,
@@ -478,12 +491,9 @@ import {
   Comment01Icon,
   copyIcon,
   fullscreenIcon,
-  PlayIcon,
   PresenterModeIcon,
   Presentation05Icon,
   SlideBackgroundIcon,
-  pencilIcon,
-  ListOrderedIcon,
 } from "./icons";
 import { Toast } from "./Toast";
 
@@ -501,6 +511,7 @@ import type {
 import type { ClipboardData, PastedMixedContent } from "../clipboard";
 import type { ExportedElements } from "../data";
 import type { ContextMenuItems } from "./ContextMenu";
+import type { CanvasRenderData } from "./canvases/renderData";
 import type { FileSystemHandle } from "../data/filesystem";
 import type { ExcalidrawElementSkeleton } from "../data/transform";
 import type {
@@ -556,9 +567,16 @@ export const ExcalidrawContainerContext = React.createContext<{
 }>({ container: null, id: null });
 ExcalidrawContainerContext.displayName = "ExcalidrawContainerContext";
 
-const ExcalidrawElementsContext = React.createContext<
-  readonly NonDeletedExcalidrawElement[]
->([]);
+type ExcalidrawElementsContextValue = {
+  scene: Scene | null;
+  revision: number;
+};
+
+const ExcalidrawElementsContext =
+  React.createContext<ExcalidrawElementsContextValue>({
+    scene: null,
+    revision: 0,
+  });
 ExcalidrawElementsContext.displayName = "ExcalidrawElementsContext";
 
 const ExcalidrawAppStateContext = React.createContext<AppState>({
@@ -590,8 +608,8 @@ export const useStylesPanelMode = () =>
   deriveStylesPanelMode(useEditorInterface());
 export const useExcalidrawContainer = () =>
   useContext(ExcalidrawContainerContext);
-export const useExcalidrawElements = () =>
-  useContext(ExcalidrawElementsContext);
+export const useExcalidrawElements = (): readonly NonDeletedExcalidrawElement[] =>
+  useContext(ExcalidrawElementsContext).scene?.getNonDeletedElements() ?? [];
 export const useExcalidrawAppState = () =>
   useContext(ExcalidrawAppStateContext);
 export const useExcalidrawSetAppState = () =>
@@ -654,6 +672,15 @@ class App extends React.Component<AppProps, AppState> {
   public fonts: Fonts;
   public renderer: Renderer;
   public visibleElements: readonly NonDeletedExcalidrawElement[];
+  private canvasRenderData!: CanvasRenderData;
+  private readCanvasRenderData = () => this.canvasRenderData;
+  private elementsContextValue: ExcalidrawElementsContextValue = {
+    scene: null,
+    revision: 0,
+  };
+  private uiSceneRevision = 0;
+  private staticSceneRevision = 0;
+  private nextSceneUpdateKind: "standard" | "freedraw-append" = "standard";
   private resizeObserver: ResizeObserver | undefined;
   public library: AppClassProperties["library"];
   public libraryItemsFromStorage: LibraryItems | undefined;
@@ -664,6 +691,11 @@ class App extends React.Component<AppProps, AppState> {
     History["createSnapshot"]
   > | null = null;
   private store: Store;
+  private onIncrementSubscriptionController: {
+    sync: () => void;
+    dispose: () => void;
+    isSubscribed: () => boolean;
+  } | null = null;
   private history: History;
   public excalidrawContainerValue: {
     container: HTMLDivElement | null;
@@ -680,6 +712,19 @@ class App extends React.Component<AppProps, AppState> {
    * the validation came from a trusted source (the editor).
    **/
   private embedsValidationStatus: EmbedsValidationStatus = new Map();
+  private iframeLikeElementsCacheSceneNonce: number | undefined | null = null;
+  private iframeLikeElementsCache: readonly Ordered<
+    NonDeleted<ExcalidrawIframeLikeElement>
+  >[] = [];
+  private embeddablesUpdateSceneNonce: number | undefined | null = null;
+  private frameOrderSceneNonce: number | undefined | null = null;
+  private frameOrderSlideOrder: string[] | undefined;
+  private orderedSceneFramesCache: {
+    framesNonce: number;
+    slideOrder: readonly string[] | undefined;
+    orderedFrames: readonly NonDeleted<ExcalidrawFrameElement>[];
+    presentationFrames: readonly NonDeleted<ExcalidrawFrameElement>[];
+  } | null = null;
   /** embeds that have been inserted to DOM (as a perf optim, we don't want to
    * insert to DOM before user initially scrolls to them) */
   private initializedEmbeds = new Set<ExcalidrawIframeLikeElement["id"]>();
@@ -703,6 +748,33 @@ class App extends React.Component<AppProps, AppState> {
   lastPointerMoveCoords: { x: number; y: number } | null = null;
   lastViewportPosition = { x: 0, y: 0 };
   private activeFreedrawStroke: ActiveFreedrawStroke | null = null;
+  private activeFreedrawPreviewRenderer: (() => void) | null = null;
+  private activeFreedrawCanvas: HTMLCanvasElement | null = null;
+  private freedrawOverlayCanvas: HTMLCanvasElement | null = null;
+  private hasPendingFreedrawOverlayContent = false;
+  private pendingFreedrawOverlayElementId: ExcalidrawElement["id"] | null =
+    null;
+  private pendingDetachedFreedrawElementId: ExcalidrawElement["id"] | null =
+    null;
+  private activeFreedrawInsertionAnchor: {
+    afterElementId: ExcalidrawElement["id"] | null;
+    elementCount: number;
+    sceneNonce: number;
+  } | null = null;
+  private pendingIncrementalFreedrawStoreCapture: NonDeleted<ExcalidrawFreeDrawElement> | null =
+    null;
+  private freedrawGeometryRequestId = 0;
+  private freedrawGeometryJobs = new Map<
+    ExcalidrawElement["id"],
+    {
+      requestId: number;
+      element: ExcalidrawFreeDrawElement;
+      version: number;
+      versionNonce: number;
+    }
+  >();
+  private hasWarnedActiveFreedrawPreviewRenderFailure = false;
+  private hasWarnedFreedrawFinalGeometryFailure = false;
 
   animationFrameHandler = new AnimationFrameHandler();
 
@@ -711,16 +783,106 @@ class App extends React.Component<AppProps, AppState> {
   lassoTrail = new LassoTrail(this.animationFrameHandler, this);
 
   private startActiveFreedrawStroke(element: ExcalidrawFreeDrawElement) {
-    if (!isFreedrawPerfV2Enabled()) {
-      this.activeFreedrawStroke = null;
-      return;
-    }
-
+    const sceneElements = this.scene.getElementsIncludingDeleted();
+    this.activeFreedrawInsertionAnchor = {
+      afterElementId: sceneElements.at(-1)?.id ?? null,
+      elementCount: sceneElements.length,
+      sceneNonce: this.scene.getSceneNonce() ?? 0,
+    };
     this.activeFreedrawStroke = createActiveFreedrawStroke(element);
+    setActiveFreedrawStroke(element, this.activeFreedrawStroke);
     markExcalidrawPerf("freedraw:stroke-start", {
       elementId: element.id,
     });
   }
+
+  private registerActiveFreedrawPreviewRenderer = (
+    renderer: (() => void) | null,
+  ) => {
+    this.activeFreedrawPreviewRenderer = renderer;
+  };
+
+  private registerActiveFreedrawCanvas = (
+    canvas: HTMLCanvasElement | null,
+  ) => {
+    this.activeFreedrawCanvas = canvas;
+  };
+
+  private registerFreedrawOverlayCanvas = (
+    canvas: HTMLCanvasElement | null,
+  ) => {
+    this.freedrawOverlayCanvas = canvas;
+  };
+
+  private commitActiveFreedrawPreviewToOverlay(
+    element: ExcalidrawFreeDrawElement,
+  ) {
+    const sourceCanvas = this.activeFreedrawCanvas;
+    const overlayCanvas = this.freedrawOverlayCanvas;
+    const renderPreview = this.activeFreedrawPreviewRenderer;
+    if (!sourceCanvas || !overlayCanvas || !renderPreview) {
+      return false;
+    }
+
+    try {
+      renderPreview();
+      if (
+        sourceCanvas.width !== overlayCanvas.width ||
+        sourceCanvas.height !== overlayCanvas.height
+      ) {
+        return false;
+      }
+
+      const context = overlayCanvas.getContext("2d");
+      if (!context) {
+        return false;
+      }
+      context.save();
+      try {
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.globalAlpha = 1;
+        context.globalCompositeOperation = "source-over";
+        context.filter = "none";
+        context.drawImage(sourceCanvas, 0, 0);
+      } finally {
+        context.restore();
+      }
+
+      this.hasPendingFreedrawOverlayContent = true;
+      this.pendingFreedrawOverlayElementId = element.id;
+      return true;
+    } catch (error) {
+      if (isDevEnv() && !this.hasWarnedActiveFreedrawPreviewRenderFailure) {
+        this.hasWarnedActiveFreedrawPreviewRenderFailure = true;
+        console.warn(
+          "Excalidraw: active freedraw preview could not be committed; the static canvas will render the stroke.",
+          error,
+        );
+      }
+      return false;
+    }
+  }
+
+  private shouldReconcileFreedrawOverlay = () =>
+    this.hasPendingFreedrawOverlayContent;
+
+  private clearFreedrawOverlayCanvas = () => {
+    const canvas = this.freedrawOverlayCanvas;
+    if (canvas) {
+      const context = canvas.getContext("2d");
+      if (context) {
+        context.save();
+        try {
+          context.setTransform(1, 0, 0, 1, 0, 0);
+          context.clearRect(0, 0, canvas.width, canvas.height);
+        } finally {
+          context.restore();
+        }
+      }
+    }
+    this.hasPendingFreedrawOverlayContent = false;
+    this.pendingFreedrawOverlayElementId = null;
+  };
 
   private cancelActiveFreedrawStroke() {
     const activeElement = this.getActiveFreedrawElement();
@@ -729,9 +891,32 @@ class App extends React.Component<AppProps, AppState> {
     }
     if (activeElement) {
       clearActiveFreedrawBounds(activeElement);
+      clearActiveFreedrawStroke(activeElement);
     }
     this.activeFreedrawStroke = null;
+    this.pendingDetachedFreedrawElementId = null;
+    this.activeFreedrawInsertionAnchor = null;
   }
+
+  public getDetachedFreedrawInsertionIndex = (
+    elements: readonly ExcalidrawElement[],
+  ) => {
+    const anchor = this.activeFreedrawInsertionAnchor;
+    if (!anchor || anchor.sceneNonce === this.scene.getSceneNonce()) {
+      return elements.length;
+    }
+
+    if (anchor.afterElementId === null) {
+      return 0;
+    }
+
+    const anchorIndex = elements.findIndex(
+      (element) => element.id === anchor.afterElementId,
+    );
+    return anchorIndex >= 0
+      ? anchorIndex + 1
+      : Math.min(anchor.elementCount, elements.length);
+  };
 
   private getActiveFreedrawElement(): NonDeleted<ExcalidrawFreeDrawElement> | null {
     const stroke = this.activeFreedrawStroke;
@@ -780,11 +965,8 @@ class App extends React.Component<AppProps, AppState> {
       this.scene.mutateElement(
         newElement,
         {
-          points: stroke.points.slice(),
-          pressures: newElement.simulatePressure
-            ? []
-            : stroke.pressures.slice(),
-          version: stroke.startVersion + 1,
+          points: stroke.points,
+          pressures: newElement.simulatePressure ? [] : stroke.pressures,
         },
         {
           informMutation: true,
@@ -793,14 +975,34 @@ class App extends React.Component<AppProps, AppState> {
       );
       clearActiveFreedrawBounds(newElement);
     } else {
-      applyActiveFreedrawStroke(newElement, stroke);
-      ShapeCache.delete(newElement);
+      updateActiveFreedrawBounds(newElement, stroke);
     }
 
     stroke.dirty = false;
-    this.setState({
-      newElement,
-    });
+    if (finalize) {
+      this.setState({
+        newElement,
+      });
+    } else if (this.activeFreedrawPreviewRenderer) {
+      try {
+        this.activeFreedrawPreviewRenderer();
+      } catch (error) {
+        this.activeFreedrawPreviewRenderer = null;
+        if (
+          isDevEnv() &&
+          !this.hasWarnedActiveFreedrawPreviewRenderFailure
+        ) {
+          this.hasWarnedActiveFreedrawPreviewRenderFailure = true;
+          console.warn(
+            "Excalidraw: active freedraw preview render failed; React rendering will continue the stroke.",
+            error,
+          );
+        }
+        this.setState({ newElement });
+      }
+    } else {
+      this.setState({ newElement });
+    }
 
     markExcalidrawPerf("freedraw:flush-end", {
       finalize,
@@ -835,7 +1037,7 @@ class App extends React.Component<AppProps, AppState> {
   ) {
     const stroke = this.activeFreedrawStroke;
     if (!stroke || stroke.elementId !== element.id) {
-      return false;
+      return { rawAdded: false, previewChanged: false };
     }
 
     const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
@@ -855,37 +1057,42 @@ class App extends React.Component<AppProps, AppState> {
     );
   }
 
+  private appendActiveFreedrawPointerSamples(
+    element: ExcalidrawFreeDrawElement,
+    event: PointerEvent,
+  ) {
+    const pointerEvents = getFreedrawPointerEventSamples(event);
+    let rawAdded = false;
+    let previewChanged = false;
+
+    for (const pointerEvent of pointerEvents) {
+      const result = this.appendActiveFreedrawPoint(element, pointerEvent);
+      rawAdded = result.rawAdded || rawAdded;
+      previewChanged = result.previewChanged || previewChanged;
+    }
+
+    return { rawAdded, previewChanged };
+  }
+
   private handleActiveFreedrawPointerMove(
     event: PointerEvent,
     pointerDownState: PointerDownState,
   ) {
     const newElement = this.getActiveFreedrawElement();
-    if (
-      !isFreedrawPerfV2Enabled() ||
-      !newElement ||
-      !this.activeFreedrawStroke
-    ) {
+    if (!newElement || !this.activeFreedrawStroke) {
       return false;
     }
 
-    const events =
-      typeof event.getCoalescedEvents === "function"
-        ? event.getCoalescedEvents()
-        : [];
-    const pointerEvents = events.length ? events : [event];
-    let appended = false;
-
-    for (const pointerEvent of pointerEvents) {
-      appended =
-        this.appendActiveFreedrawPoint(newElement, pointerEvent) || appended;
-    }
+    const appended = this.appendActiveFreedrawPointerSamples(newElement, event);
 
     const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
     pointerDownState.lastCoords.x = pointerCoords.x;
     pointerDownState.lastCoords.y = pointerCoords.y;
 
-    if (appended) {
+    if (appended.rawAdded) {
       pointerDownState.drag.hasOccurred = true;
+    }
+    if (appended.previewChanged) {
       this.scheduleActiveFreedrawFlush();
     }
 
@@ -894,7 +1101,7 @@ class App extends React.Component<AppProps, AppState> {
 
   private finalizeActiveFreedrawStroke(
     element: ExcalidrawFreeDrawElement,
-    event: PointerEvent,
+    event: PointerEvent | null,
   ) {
     const stroke = this.activeFreedrawStroke;
     if (!stroke || stroke.elementId !== element.id) {
@@ -906,35 +1113,44 @@ class App extends React.Component<AppProps, AppState> {
       stroke.rafId = null;
     }
 
-    const pointerCoords = viewportCoordsToSceneCoords(event, this.state);
-    let dx = pointerCoords.x - element.x;
-    let dy = pointerCoords.y - element.y;
-    const firstPoint = stroke.points[0];
+    if (event) {
+      this.appendActiveFreedrawPointerSamples(element, event);
+    }
 
-    // Allows dots to avoid being flagged as infinitely small.
-    if (
-      stroke.points.length === 1 &&
-      firstPoint &&
-      dx === firstPoint[0] &&
-      dy === firstPoint[1]
-    ) {
-      dx += 0.0001;
-      dy += 0.0001;
-      stroke.points.push(pointFrom<LocalPoint>(dx, dy));
-      if (!stroke.simulatePressure) {
-        stroke.pressures.push(event.pressure);
-      }
-      stroke.dirty = true;
-    } else {
+    // Allows dots to avoid being flagged as infinitely small. Coalesced
+    // pointerup samples may contain repeated coordinates, so use bounds rather
+    // than the raw sample count to detect a dot.
+    if (stroke.minX === stroke.maxX && stroke.minY === stroke.maxY) {
       appendFreedrawPoint(
         stroke,
-        pointFrom<LocalPoint>(dx, dy),
-        event.pressure,
+        pointFrom<LocalPoint>(stroke.maxX + 0.0001, stroke.maxY + 0.0001),
+        event?.pressure ?? stroke.pressures.at(-1) ?? 0.5,
         this.state.zoom.value,
       );
     }
 
     const finalizedElement = this.flushActiveFreedrawStroke(true);
+    if (finalizedElement) {
+      if (
+        isPathALoop(finalizedElement.points, this.state.zoom.value) &&
+        finalizedElement.points.length > 1
+      ) {
+        const firstPoint = finalizedElement.points[0];
+        const points = finalizedElement.points.map((point, index) =>
+          index === finalizedElement.points.length - 1
+            ? pointFrom<LocalPoint>(firstPoint[0], firstPoint[1])
+            : point,
+        );
+        this.scene.mutateElement(
+          finalizedElement,
+          { points },
+          { informMutation: false, isDragging: false },
+        );
+      }
+      this.commitActiveFreedrawPreviewToOverlay(finalizedElement);
+      this.pendingDetachedFreedrawElementId = finalizedElement.id;
+    }
+    clearActiveFreedrawStroke(element);
     this.activeFreedrawStroke = null;
 
     markExcalidrawPerf("freedraw:stroke-finalize", {
@@ -942,7 +1158,188 @@ class App extends React.Component<AppProps, AppState> {
       points: stroke.points.length,
     });
 
-    return finalizedElement;
+    return finalizedElement
+      ? {
+          element: finalizedElement,
+          previewPoints: stroke.previewPoints as readonly [number, number][],
+        }
+      : null;
+  }
+
+  private clearFreedrawGeometryJobs() {
+    this.freedrawGeometryJobs.clear();
+  }
+
+  private isCurrentFreedrawGeometryJob(job: {
+    requestId: number;
+    element: ExcalidrawFreeDrawElement;
+    version: number;
+    versionNonce: number;
+  }) {
+    return (
+      this.freedrawGeometryJobs.get(job.element.id)?.requestId === job.requestId
+    );
+  }
+
+  private failFreedrawGeometryJob(
+    job: {
+      requestId: number;
+      element: ExcalidrawFreeDrawElement;
+      version: number;
+      versionNonce: number;
+    },
+    error?: unknown,
+  ) {
+    if (!this.isCurrentFreedrawGeometryJob(job)) {
+      return;
+    }
+
+    this.freedrawGeometryJobs.delete(job.element.id);
+    const currentElement = this.scene.getNonDeletedElement(job.element.id);
+    if (
+      this.unmounted ||
+      currentElement !== job.element ||
+      currentElement.version !== job.version ||
+      currentElement.versionNonce !== job.versionNonce
+    ) {
+      return;
+    }
+
+    clearFreedrawPendingPreview(job.element);
+    ShapeCache.delete(job.element);
+    if (isDevEnv() && !this.hasWarnedFreedrawFinalGeometryFailure) {
+      this.hasWarnedFreedrawFinalGeometryFailure = true;
+      const failureReason =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error ?? "unknown error");
+      console.warn(
+        `Excalidraw: final freedraw geometry failed; using the standard renderer. ${failureReason}`,
+      );
+    }
+    this.renderFreedrawGeometryCacheUpdate(false);
+  }
+
+  private renderFreedrawGeometryCacheUpdate(throttle = true) {
+    if (this.unmounted || this.hasPendingFreedrawOverlayContent) {
+      return;
+    }
+
+    const sceneNonce = this.scene.getSceneNonce();
+    const sceneNewElementId = this.state.newElement
+      ? this.scene.getNonDeletedElement(this.state.newElement.id)?.id
+      : undefined;
+    const { elementsMap, visibleElements } =
+      this.renderer.getRenderableElements({
+        sceneNonce,
+        zoom: this.state.zoom,
+        offsetLeft: this.state.offsetLeft,
+        offsetTop: this.state.offsetTop,
+        scrollX: this.state.scrollX,
+        scrollY: this.state.scrollY,
+        height: this.state.height,
+        width: this.state.width,
+        editingTextElement: this.state.editingTextElement,
+        newElementId: sceneNewElementId,
+      });
+    this.visibleElements = visibleElements;
+
+    renderStaticScene(
+      {
+        canvas: this.canvas,
+        rc: this.rc,
+        scale: window.devicePixelRatio,
+        elementsMap,
+        allElementsMap: this.scene.getNonDeletedElementsMap(),
+        visibleElements,
+        appState: this.state,
+        renderConfig: {
+          imageCache: this.imageCache,
+          isExporting: false,
+          renderGrid: isGridModeEnabled(this),
+          canvasBackgroundColor: this.state.viewBackgroundColor,
+          embedsValidationStatus: this.embedsValidationStatus,
+          elementsPendingErasure: this.elementsPendingErasure,
+          pendingFlowchartNodes: this.flowChartCreator.pendingNodes,
+        },
+      },
+      throttle && isRenderThrottlingEnabled(),
+    );
+  }
+
+  private scheduleFreedrawGeometry(element: ExcalidrawFreeDrawElement) {
+    const job = {
+      requestId: ++this.freedrawGeometryRequestId,
+      element,
+      version: element.version,
+      versionNonce: element.versionNonce,
+    };
+    this.freedrawGeometryJobs.set(element.id, job);
+
+    void requestFreedrawGeometry(element)
+      .then((result) => {
+        if (!this.isCurrentFreedrawGeometryJob(job) || this.unmounted) {
+          return;
+        }
+
+        if (!result) {
+          this.failFreedrawGeometryJob(job);
+          return;
+        }
+
+        const currentElement = this.scene.getNonDeletedElement(element.id);
+        if (
+          currentElement !== element ||
+          currentElement.version !== job.version ||
+          currentElement.versionNonce !== job.versionNonce ||
+          result.elementId !== element.id ||
+          result.version !== job.version ||
+          result.versionNonce !== job.versionNonce
+        ) {
+          this.freedrawGeometryJobs.delete(element.id);
+          clearFreedrawPendingPreview(element);
+          return;
+        }
+
+        try {
+          cacheFreedrawGeometry(
+            element,
+            new Float64Array(result.outline),
+            result.svgPath,
+          );
+        } catch (error) {
+          this.failFreedrawGeometryJob(job, error);
+          return;
+        }
+
+        this.freedrawGeometryJobs.delete(element.id);
+        this.renderFreedrawGeometryCacheUpdate();
+      })
+      .catch((error) => {
+        this.failFreedrawGeometryJob(job, error);
+      });
+  }
+
+  private startFinalizedFreedrawGeometry(finalizedStroke: {
+    element: ExcalidrawFreeDrawElement;
+    previewPoints: readonly [number, number][];
+  }) {
+    const element = this.scene.getNonDeletedElement(finalizedStroke.element.id);
+    if (!element || element.type !== "freedraw") {
+      return;
+    }
+
+    try {
+      setFreedrawPendingPreview(element, finalizedStroke.previewPoints);
+    } catch {
+      if (isDevEnv() && !this.hasWarnedFreedrawFinalGeometryFailure) {
+        this.hasWarnedFreedrawFinalGeometryFailure = true;
+        console.warn(
+          "Excalidraw: final freedraw preview failed; using the standard renderer.",
+        );
+      }
+    }
+    this.scheduleFreedrawGeometry(element);
   }
 
   private snapHapticsController = createHapticsController();
@@ -1075,6 +1472,10 @@ class App extends React.Component<AppProps, AppState> {
       this,
     );
     this.scene = new Scene();
+    this.elementsContextValue = {
+      scene: this.scene,
+      revision: this.uiSceneRevision,
+    };
 
     const isPresentationAnnotation = (el: any, sessionId: string | null) => {
       return (
@@ -1236,6 +1637,11 @@ class App extends React.Component<AppProps, AppState> {
 
     this.store = new Store(this);
     this.history = new History(this.store);
+    this.onIncrementSubscriptionController =
+      createIncrementSubscriptionController(
+        this.store.onStoreIncrementEmitter,
+        () => this.props.onIncrement,
+      );
 
     if (excalidrawAPI) {
       const api: ExcalidrawImperativeAPI = {
@@ -1815,11 +2221,33 @@ class App extends React.Component<AppProps, AppState> {
     ShapeCache.delete(element);
   };
 
+  private getSceneIframeLikeElements = () => {
+    const sceneNonce = this.scene.getSceneNonce();
+    if (this.iframeLikeElementsCacheSceneNonce !== sceneNonce) {
+      this.iframeLikeElementsCache = this.scene
+        .getNonDeletedElements()
+        .filter(
+          (
+            element,
+          ): element is Ordered<NonDeleted<ExcalidrawIframeLikeElement>> =>
+            isEmbeddableElement(element) || isIframeElement(element),
+        );
+      this.iframeLikeElementsCacheSceneNonce = sceneNonce;
+    }
+    return this.iframeLikeElementsCache;
+  };
+
   private updateEmbeddables = () => {
+    const sceneNonce = this.scene.getSceneNonce();
+    if (this.embeddablesUpdateSceneNonce === sceneNonce) {
+      return;
+    }
+    this.embeddablesUpdateSceneNonce = sceneNonce;
+
     const iframeLikes = new Set<ExcalidrawIframeLikeElement["id"]>();
 
     let updated = false;
-    this.scene.getNonDeletedElements().filter((element) => {
+    this.getSceneIframeLikeElements().forEach((element) => {
       if (isEmbeddableElement(element)) {
         iframeLikes.add(element.id);
         if (!this.embedsValidationStatus.has(element.id)) {
@@ -1835,7 +2263,6 @@ class App extends React.Component<AppProps, AppState> {
       } else if (isIframeElement(element)) {
         iframeLikes.add(element.id);
       }
-      return false;
     });
 
     if (updated) {
@@ -1850,19 +2277,108 @@ class App extends React.Component<AppProps, AppState> {
     });
   };
 
+  private getSceneFrameOrder = (slideOrder?: readonly string[]) => {
+    const framesNonce = this.scene.getFramesNonce();
+    const cache = this.orderedSceneFramesCache;
+    if (
+      cache &&
+      cache.framesNonce === framesNonce &&
+      cache.slideOrder === slideOrder
+    ) {
+      return cache;
+    }
+
+    // Scene tracks frame-like elements independently, so active freedraw
+    // renders never need to scan the full scene to derive presentation state.
+    const orderedFrames = getOrderedFramesForScene(
+      this.scene.getNonDeletedFramesLikes(),
+      slideOrder,
+    );
+    const presentationFrames = orderedFrames.filter(
+      (frame) => !isFrameExcludedFromPresentation(frame),
+    );
+    const nextCache = {
+      framesNonce,
+      slideOrder,
+      orderedFrames,
+      presentationFrames,
+    };
+    this.orderedSceneFramesCache = nextCache;
+    return nextCache;
+  };
+
+  public getOrderedSceneFrames = (slideOrder?: readonly string[]) =>
+    this.getSceneFrameOrder(slideOrder).orderedFrames;
+
+  public getPresentationSceneFrames = (slideOrder?: readonly string[]) =>
+    this.getSceneFrameOrder(slideOrder).presentationFrames;
+
+  private syncFrameSlideOrder = () => {
+    const sceneNonce = this.scene.getSceneNonce();
+    const currentSlideOrder = (this.state as any).slideOrder as
+      | string[]
+      | undefined;
+    if (
+      this.frameOrderSceneNonce === sceneNonce &&
+      this.frameOrderSlideOrder === currentSlideOrder
+    ) {
+      return;
+    }
+    this.frameOrderSceneNonce = sceneNonce;
+    this.frameOrderSlideOrder = currentSlideOrder;
+
+    const nonDeletedFrameElements = this.scene
+      .getNonDeletedFramesLikes()
+      .filter((element) => isFrameElement(element));
+    if (!nonDeletedFrameElements.length) {
+      return;
+    }
+
+    const frameIds = new Set(
+      nonDeletedFrameElements.map((element) => element.id),
+    );
+    const normalizedOrder = (
+      Array.isArray(currentSlideOrder) ? currentSlideOrder : []
+    ).filter((id) => frameIds.has(id));
+    const normalizedFrameIds = new Set(normalizedOrder);
+    const missingFrameIds = nonDeletedFrameElements
+      .filter((element) => !normalizedFrameIds.has(element.id))
+      .sort((a, b) => {
+        if (Math.abs(a.y - b.y) > 10) {
+          return a.y - b.y;
+        }
+        return a.x - b.x;
+      })
+      .map((element) => element.id);
+    const nextSlideOrder = [...normalizedOrder, ...missingFrameIds];
+    const isSameSlideOrder =
+      Array.isArray(currentSlideOrder) &&
+      currentSlideOrder.length === nextSlideOrder.length &&
+      currentSlideOrder.every((id, index) => id === nextSlideOrder[index]);
+
+    if (!isSameSlideOrder) {
+      this.frameOrderSlideOrder = nextSlideOrder;
+      this.setAppState(
+        (state) =>
+          ({
+            ...(state as any),
+            slideOrder: nextSlideOrder,
+          } as any),
+      );
+    }
+  };
+
   private renderEmbeddables() {
     const scale = this.state.zoom.value;
     const normalizedWidth = this.state.width;
     const normalizedHeight = this.state.height;
 
-    const embeddableElements = this.scene
-      .getNonDeletedElements()
-      .filter(
-        (el): el is Ordered<NonDeleted<ExcalidrawIframeLikeElement>> =>
-          (isEmbeddableElement(el) &&
-            this.embedsValidationStatus.get(el.id) === true) ||
-          isIframeElement(el),
-      );
+    const embeddableElements = this.getSceneIframeLikeElements().filter(
+      (el) =>
+        (isEmbeddableElement(el) &&
+          this.embedsValidationStatus.get(el.id) === true) ||
+        isIframeElement(el),
+    );
 
     return (
       <>
@@ -2212,10 +2728,9 @@ class App extends React.Component<AppProps, AppState> {
     const isDarkTheme = this.state.theme === THEME.DARK;
     const nonDeletedFramesLikes = this.scene.getNonDeletedFramesLikes();
     const presentationFrameIndices = new Map(
-      getPresentationFramesForScene(
-        this.scene.getNonDeletedElements(),
-        this.state.slideOrder,
-      ).map((frame, index) => [frame.id, index + 1]),
+      this.getPresentationSceneFrames(this.state.slideOrder).map(
+        (frame, index) => [frame.id, index + 1],
+      ),
     );
 
     const focusedSearchMatch =
@@ -2413,6 +2928,9 @@ class App extends React.Component<AppProps, AppState> {
     const { renderTopRightUI, renderTopLeftUI, renderCustomStats } = this.props;
 
     const sceneNonce = this.scene.getSceneNonce();
+    const sceneNewElementId = this.state.newElement
+      ? this.scene.getNonDeletedElement(this.state.newElement.id)?.id
+      : undefined;
     const { elementsMap, visibleElements } =
       this.renderer.getRenderableElements({
         sceneNonce,
@@ -2424,11 +2942,17 @@ class App extends React.Component<AppProps, AppState> {
         height: this.state.height,
         width: this.state.width,
         editingTextElement: this.state.editingTextElement,
-        newElementId: this.state.newElement?.id,
+        newElementId: sceneNewElementId,
       });
     this.visibleElements = visibleElements;
 
     const allElementsMap = this.scene.getNonDeletedElementsMap();
+    this.canvasRenderData = {
+      elementsMap,
+      allElementsMap,
+      visibleElements,
+      selectedElements,
+    };
 
     const shouldBlockPointerEvents =
       // default back to `--ui-pointerEvents` flow if setPointerCapture
@@ -2454,7 +2978,9 @@ class App extends React.Component<AppProps, AppState> {
 
     const hasFrameSlideNote = (frame: any): boolean => {
       const raw = getFrameSlideNoteHtml(frame).trim();
-      if (!raw) return false;
+      if (!raw) {
+        return false;
+      }
       const normalized = raw.replace(/\s+/g, "").toLowerCase();
       return (
         normalized !== "<div><br></div>" &&
@@ -2463,15 +2989,8 @@ class App extends React.Component<AppProps, AppState> {
       );
     };
 
-    const sceneElements = this.scene.getNonDeletedElements();
-    const fullOrderedFrames = getOrderedFramesForScene(
-      sceneElements,
-      slideOrder,
-    );
-    const presentationFrames = getPresentationFramesForScene(
-      sceneElements,
-      slideOrder,
-    );
+    const fullOrderedFrames = this.getOrderedSceneFrames(slideOrder);
+    const presentationFrames = this.getPresentationSceneFrames(slideOrder);
 
     const startPresentationFromFrame = (frameId: string) => {
       const slideIndex = presentationFrames.findIndex(
@@ -2641,7 +3160,7 @@ class App extends React.Component<AppProps, AppState> {
                 <ExcalidrawSetAppStateContext.Provider value={this.setAppState}>
                   <ExcalidrawAppStateContext.Provider value={this.state}>
                     <ExcalidrawElementsContext.Provider
-                      value={this.scene.getNonDeletedElements()}
+                      value={this.elementsContextValue}
                     >
                       <ExcalidrawActionManagerContext.Provider
                         value={this.actionManager}
@@ -2654,7 +3173,7 @@ class App extends React.Component<AppProps, AppState> {
                           files={this.files}
                           setAppState={this.setAppState}
                           actionManager={this.actionManager}
-                          elements={this.scene.getNonDeletedElements()}
+                          sceneRevision={this.uiSceneRevision}
                           onLockToggle={this.toggleLock}
                           onPenModeToggle={this.togglePenMode}
                           onHandToolToggle={this.onHandToolToggle}
@@ -2910,10 +3429,8 @@ class App extends React.Component<AppProps, AppState> {
                         <StaticCanvas
                           canvas={this.canvas}
                           rc={this.rc}
-                          elementsMap={elementsMap}
-                          allElementsMap={allElementsMap}
-                          visibleElements={visibleElements}
-                          sceneNonce={sceneNonce}
+                          readRenderData={this.readCanvasRenderData}
+                          sceneNonce={this.staticSceneRevision}
                           selectionNonce={
                             this.state.selectionElement?.versionNonce
                           }
@@ -2930,6 +3447,18 @@ class App extends React.Component<AppProps, AppState> {
                             pendingFlowchartNodes:
                               this.flowChartCreator.pendingNodes,
                           }}
+                          shouldReconcileFreedrawOverlay={
+                            this.shouldReconcileFreedrawOverlay
+                          }
+                          onFreedrawOverlayReconciled={
+                            this.clearFreedrawOverlayCanvas
+                          }
+                        />
+                        <FreedrawOverlayCanvas
+                          width={this.state.width}
+                          height={this.state.height}
+                          scale={window.devicePixelRatio}
+                          registerCanvas={this.registerFreedrawOverlayCanvas}
                         />
                         {this.state.newElement && (
                           <NewElementCanvas
@@ -2950,17 +3479,18 @@ class App extends React.Component<AppProps, AppState> {
                                 this.elementsPendingErasure,
                               pendingFlowchartNodes: null,
                             }}
+                            registerImmediateRender={
+                              this.registerActiveFreedrawPreviewRenderer
+                            }
+                            registerCanvas={this.registerActiveFreedrawCanvas}
                           />
                         )}
                         <InteractiveCanvas
                           app={this}
                           containerRef={this.excalidrawContainerRef}
                           canvas={this.interactiveCanvas}
-                          elementsMap={elementsMap}
-                          visibleElements={visibleElements}
-                          allElementsMap={allElementsMap}
-                          selectedElements={selectedElements}
-                          sceneNonce={sceneNonce}
+                          readRenderData={this.readCanvasRenderData}
+                          sceneRevision={this.uiSceneRevision}
                           selectionNonce={
                             this.state.selectionElement?.versionNonce
                           }
@@ -3353,7 +3883,62 @@ class App extends React.Component<AppProps, AppState> {
 
     let editingTextElement: AppState["editingTextElement"] | null = null;
     if (actionResult.elements) {
-      this.scene.replaceAllElements(actionResult.elements);
+      const pendingFreedrawId = this.pendingDetachedFreedrawElementId;
+      const appendedElement = actionResult.elements.at(-1);
+      const previousSceneNonce = this.scene.getSceneNonce();
+      const previousElementCount = this.scene.getNonDeletedElementsMap().size;
+      const canAppendDetachedFreedraw = Boolean(
+        pendingFreedrawId &&
+          appendedElement?.id === pendingFreedrawId &&
+          isNonDeletedElement(appendedElement) &&
+          appendedElement.type === "freedraw" &&
+          actionResult.elements.length ===
+            this.scene.getElementsIncludingDeleted().length + 1,
+      );
+      const didAppendDetachedFreedraw =
+        canAppendDetachedFreedraw && appendedElement
+          ? (() => {
+              this.nextSceneUpdateKind = "freedraw-append";
+              return this.scene.appendElementFromActionResult(
+                appendedElement,
+                actionResult.elements,
+              );
+            })()
+          : false;
+
+      if (
+        didAppendDetachedFreedraw &&
+        appendedElement &&
+        isNonDeletedElement(appendedElement) &&
+        appendedElement.type === "freedraw"
+      ) {
+        this.renderer.onSceneElementAppended(
+          appendedElement,
+          previousSceneNonce,
+          previousElementCount,
+        );
+        const appendedSceneNonce = this.scene.getSceneNonce();
+        if (this.iframeLikeElementsCacheSceneNonce !== null) {
+          this.iframeLikeElementsCacheSceneNonce = appendedSceneNonce;
+        }
+        if (this.embeddablesUpdateSceneNonce !== null) {
+          this.embeddablesUpdateSceneNonce = appendedSceneNonce;
+        }
+        if (this.frameOrderSceneNonce !== null) {
+          this.frameOrderSceneNonce = appendedSceneNonce;
+          this.frameOrderSlideOrder = (this.state as any).slideOrder;
+        }
+        this.pendingIncrementalFreedrawStoreCapture = appendedElement;
+      } else {
+        this.nextSceneUpdateKind = "standard";
+        this.pendingIncrementalFreedrawStoreCapture = null;
+        this.scene.replaceAllElements(actionResult.elements);
+      }
+      this.pendingFreedrawOverlayElementId = null;
+      this.pendingDetachedFreedrawElementId = null;
+      if (pendingFreedrawId) {
+        this.activeFreedrawInsertionAnchor = null;
+      }
       didUpdate = true;
     }
 
@@ -3466,6 +4051,8 @@ class App extends React.Component<AppProps, AppState> {
    */
   private resetScene = withBatchedUpdates(
     (opts?: { resetLoadingState: boolean }) => {
+      this.clearFreedrawGeometryJobs();
+      this.pendingIncrementalFreedrawStoreCapture = null;
       this.scene.replaceAllElements([]);
       this.setState((state) => ({
         ...getDefaultAppState(),
@@ -3719,14 +4306,9 @@ class App extends React.Component<AppProps, AppState> {
       this.history.record(increment.delta, increment.change, this.state);
     });
 
-    const { onIncrement } = this.props;
-
-    // per. optimmisation, only subscribe if there is the `onIncrement` prop registered, to avoid unnecessary computation
-    if (onIncrement) {
-      this.store.onStoreIncrementEmitter.on((increment) => {
-        onIncrement(increment);
-      });
-    }
+    // Subscribe only while the prop is present. This keeps Store's EVENTUALLY
+    // fast path active when recording/collaboration increments are disabled.
+    this.onIncrementSubscriptionController?.sync();
 
     this.scene.onUpdate(this.triggerRender);
     this.addEventListeners();
@@ -3775,7 +4357,9 @@ class App extends React.Component<AppProps, AppState> {
     this.library.destroy();
     this.laserTrails.stop();
     this.eraserTrail.stop();
+    this.clearFreedrawGeometryJobs();
     this.cancelActiveFreedrawStroke();
+    this.onIncrementSubscriptionController?.dispose();
     this.onChangeEmitter.clear();
     this.store.onStoreIncrementEmitter.clear();
     this.store.onDurableIncrementEmitter.clear();
@@ -3950,6 +4534,10 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   componentDidUpdate(prevProps: AppProps, prevState: AppState) {
+    if (prevProps.onIncrement !== this.props.onIncrement) {
+      this.onIncrementSubscriptionController?.sync();
+    }
+
     this.updateEmbeddables();
     const elements = this.scene.getElementsIncludingDeleted();
     const elementsMap = this.scene.getElementsMapIncludingDeleted();
@@ -4016,44 +4604,7 @@ class App extends React.Component<AppProps, AppState> {
       }
     }
 
-    const nonDeletedFrameElements = this.scene
-      .getNonDeletedElements()
-      .filter((el) => isFrameElement(el));
-
-    if (nonDeletedFrameElements.length > 0) {
-      const frameIds = nonDeletedFrameElements.map((el) => el.id);
-      const currentSlideOrder = (this.state as any).slideOrder as
-        | string[]
-        | undefined;
-
-      const normalizedOrder = (
-        Array.isArray(currentSlideOrder) ? currentSlideOrder : []
-      ).filter((id) => frameIds.includes(id));
-
-      const missingFrameIds = nonDeletedFrameElements
-        .filter((el) => !normalizedOrder.includes(el.id))
-        .sort((a, b) => {
-          if (Math.abs(a.y - b.y) > 10) return a.y - b.y;
-          return a.x - b.x;
-        })
-        .map((el) => el.id);
-
-      const nextSlideOrder = [...normalizedOrder, ...missingFrameIds];
-      const isSameSlideOrder =
-        Array.isArray(currentSlideOrder) &&
-        currentSlideOrder.length === nextSlideOrder.length &&
-        currentSlideOrder.every((id, index) => id === nextSlideOrder[index]);
-
-      if (!isSameSlideOrder) {
-        this.setAppState(
-          (state) =>
-            ({
-              ...(state as any),
-              slideOrder: nextSlideOrder,
-            } as any),
-        );
-      }
-    }
+    this.syncFrameSlideOrder();
 
     const hasFollowedPersonLeft =
       prevState.userToFollow &&
@@ -4200,13 +4751,31 @@ class App extends React.Component<AppProps, AppState> {
       );
     }
 
+    const incrementalFreedrawCapture =
+      this.pendingIncrementalFreedrawStoreCapture;
+    this.pendingIncrementalFreedrawStoreCapture = null;
+    if (
+      incrementalFreedrawCapture &&
+      this.scene.getNonDeletedElement(incrementalFreedrawCapture.id) ===
+        incrementalFreedrawCapture
+    ) {
+      this.store.tryScheduleIncrementalAppendCapture(
+        incrementalFreedrawCapture,
+        this.state,
+      );
+    }
     this.store.commit(elementsMap, this.state);
 
     // Do not notify consumers if we're still loading the scene. Among other
     // potential issues, this fixes a case where the tab isn't focused during
     // init, which would trigger onChange with empty elements, which would then
     // override whatever is in localStorage currently.
-    if (!this.state.isLoading) {
+    const isActiveDetachedFreedraw = Boolean(
+      this.activeFreedrawStroke &&
+        this.state.newElement?.type === "freedraw" &&
+        !this.scene.getNonDeletedElement(this.state.newElement.id),
+    );
+    if (!this.state.isLoading && !isActiveDetachedFreedraw) {
       this.props.onChange?.(elements, this.state, this.files);
       this.onChangeEmitter.trigger(elements, this.state, this.files);
     }
@@ -5326,6 +5895,18 @@ class App extends React.Component<AppProps, AppState> {
     if (force === true) {
       this.scene.triggerUpdate();
     } else {
+      const sceneUpdateKind = this.nextSceneUpdateKind;
+      this.nextSceneUpdateKind = "standard";
+      if (sceneUpdateKind === "standard") {
+        this.uiSceneRevision += 1;
+        this.elementsContextValue = {
+          scene: this.scene,
+          revision: this.uiSceneRevision,
+        };
+        this.staticSceneRevision += 1;
+      } else if (!this.pendingFreedrawOverlayElementId) {
+        this.staticSceneRevision += 1;
+      }
       this.setState({});
     }
   };
@@ -6192,6 +6773,9 @@ class App extends React.Component<AppProps, AppState> {
     if (nextActiveTool.type === "image") {
       this.onImageToolbarButtonClick();
     }
+    if (nextActiveTool.type === "freedraw") {
+      prepareFreedrawGeometryWorker();
+    }
 
     this.setState((prevState) => {
       const shouldApplyFreedrawDefaultStrokeWidth =
@@ -6398,11 +6982,7 @@ class App extends React.Component<AppProps, AppState> {
               },
             });
             const insertedTextLength = newEditEnd - editStart;
-            const pendingTextStyle = isRichTextV2Enabled()
-              ? this.state.textEditorPendingStyle
-              : this.state.textEditorPendingStyle?.color
-              ? { color: this.state.textEditorPendingStyle.color }
-              : null;
+            const pendingTextStyle = this.state.textEditorPendingStyle;
             if (insertedTextLength > 0 && pendingTextStyle) {
               adjustedTextStyleRanges = applyTextStyleToRange(
                 nextOriginalText.length,
@@ -8130,35 +8710,45 @@ class App extends React.Component<AppProps, AppState> {
       this.state.newElement.type === "freedraw"
     ) {
       const element = this.state.newElement as ExcalidrawFreeDrawElement;
-      this.cancelActiveFreedrawStroke();
-      this.updateScene({
-        ...(element.points.length < 10
-          ? {
-              elements: this.scene
-                .getElementsIncludingDeleted()
-                .filter((el) => el.id !== element.id),
-            }
-          : {}),
-        appState: {
-          newElement: null,
-          editingTextElement: null,
-          startBoundElement: null,
-          suggestedBinding: null,
-          selectedElementIds: makeNextSelectedElementIds(
-            Object.keys(this.state.selectedElementIds)
-              .filter((key) => key !== element.id)
-              .reduce((obj: { [id: string]: true }, key) => {
-                obj[key] = this.state.selectedElementIds[key];
-                return obj;
-              }, {}),
-            this.state,
-          ),
-        },
-        captureUpdate:
-          this.state.openDialog?.name === "elementLinkSelector"
-            ? CaptureUpdateAction.EVENTUALLY
-            : CaptureUpdateAction.NEVER,
-      });
+      const activeStroke =
+        this.activeFreedrawStroke?.elementId === element.id
+          ? this.activeFreedrawStroke
+          : null;
+      const pointCount = activeStroke?.points.length ?? element.points.length;
+      const shouldDiscard = pointCount < 10;
+      if (shouldDiscard) {
+        this.cancelActiveFreedrawStroke();
+        this.updateScene({
+          appState: {
+            newElement: null,
+            editingTextElement: null,
+            startBoundElement: null,
+            suggestedBinding: null,
+            selectedElementIds: makeNextSelectedElementIds(
+              Object.keys(this.state.selectedElementIds)
+                .filter((key) => key !== element.id)
+                .reduce((obj: { [id: string]: true }, key) => {
+                  obj[key] = this.state.selectedElementIds[key];
+                  return obj;
+                }, {}),
+              this.state,
+            ),
+          },
+          captureUpdate:
+            this.state.openDialog?.name === "elementLinkSelector"
+              ? CaptureUpdateAction.EVENTUALLY
+              : CaptureUpdateAction.NEVER,
+        });
+      } else {
+        const finalizedStroke = this.finalizeActiveFreedrawStroke(
+          element,
+          null,
+        );
+        this.actionManager.executeAction(actionFinalize);
+        if (finalizedStroke) {
+          this.startFinalizedFreedrawGeometry(finalizedStroke);
+        }
+      }
       return;
     }
 
@@ -8481,11 +9071,15 @@ class App extends React.Component<AppProps, AppState> {
       );
     }
 
-    const onPointerMove =
-      this.onPointerMoveFromPointerDownHandler(pointerDownState);
+    const onPointerMove = this.onPointerMoveFromPointerDownHandler(
+      pointerDownState,
+      event.pointerId,
+    );
 
-    const onPointerUp =
-      this.onPointerUpFromPointerDownHandler(pointerDownState);
+    const onPointerUp = this.onPointerUpFromPointerDownHandler(
+      pointerDownState,
+      event.pointerId,
+    );
 
     const onKeyDown = this.onKeyDownFromPointerDownHandler(pointerDownState);
     const onKeyUp = this.onKeyUpFromPointerDownHandler(pointerDownState);
@@ -8497,6 +9091,7 @@ class App extends React.Component<AppProps, AppState> {
     if (!this.state.viewModeEnabled || this.state.activeTool.type === "laser") {
       window.addEventListener(EVENT.POINTER_MOVE, onPointerMove);
       window.addEventListener(EVENT.POINTER_UP, onPointerUp);
+      window.addEventListener("pointercancel", onPointerUp);
       window.addEventListener(EVENT.KEYDOWN, onKeyDown);
       window.addEventListener(EVENT.KEYUP, onKeyUp);
       pointerDownState.eventListeners.onMove = onPointerMove;
@@ -8764,6 +9359,15 @@ class App extends React.Component<AppProps, AppState> {
     const selectedElements = this.scene.getSelectedElements(this.state);
     const [minX, minY, maxX, maxY] = getCommonBounds(selectedElements);
     const isElbowArrowOnly = selectedElements.findIndex(isElbowArrow) === 0;
+    const originalElements =
+      this.state.activeTool.type === TOOL_TYPE.freedraw
+        ? new Map<string, NonDeleted<ExcalidrawElement>>()
+        : this.scene
+            .getNonDeletedElements()
+            .reduce((acc, element) => {
+              acc.set(element.id, deepCopyElement(element));
+              return acc;
+            }, new Map() as PointerDownState["originalElements"]);
 
     return {
       origin,
@@ -8784,12 +9388,7 @@ class App extends React.Component<AppProps, AppState> {
       ),
       // we need to duplicate because we'll be updating this state
       lastCoords: { ...origin },
-      originalElements: this.scene
-        .getNonDeletedElements()
-        .reduce((acc, element) => {
-          acc.set(element.id, deepCopyElement(element));
-          return acc;
-        }, new Map() as PointerDownState["originalElements"]),
+      originalElements,
       resize: {
         handleType: false,
         isResizing: false,
@@ -8873,14 +9472,25 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   private clearSelectionIfNotUsingSelection = (): void => {
-    if (!isSelectionLikeTool(this.state.activeTool.type)) {
-      this.setState({
-        selectedElementIds: makeNextSelectedElementIds({}, this.state),
-        selectedGroupIds: {},
-        editingGroupId: null,
-        activeEmbeddable: null,
-      });
+    if (isSelectionLikeTool(this.state.activeTool.type)) {
+      return;
     }
+
+    if (
+      Object.keys(this.state.selectedElementIds).length === 0 &&
+      Object.keys(this.state.selectedGroupIds).length === 0 &&
+      this.state.editingGroupId === null &&
+      this.state.activeEmbeddable === null
+    ) {
+      return;
+    }
+
+    this.setState({
+      selectedElementIds: makeNextSelectedElementIds({}, this.state),
+      selectedGroupIds: {},
+      editingGroupId: null,
+      activeEmbeddable: null,
+    });
   };
 
   /**
@@ -9418,7 +10028,6 @@ class App extends React.Component<AppProps, AppState> {
       pressures: simulatePressure ? [] : [event.pressure],
     });
 
-    this.scene.insertElement(element);
     this.startActiveFreedrawStroke(element);
 
     this.setState((prevState) => {
@@ -9434,20 +10043,9 @@ class App extends React.Component<AppProps, AppState> {
       };
     });
 
-    const boundElement = isFreedrawPerfV2Enabled()
-      ? null
-      : getHoveredElementForBinding(
-          pointFrom<GlobalPoint>(
-            pointerDownState.origin.x,
-            pointerDownState.origin.y,
-          ),
-          this.scene.getNonDeletedElements(),
-          this.scene.getNonDeletedElementsMap(),
-        );
-
     this.setState({
       newElement: element,
-      startBoundElement: boundElement,
+      startBoundElement: null,
       suggestedBinding: null,
     });
   };
@@ -10038,9 +10636,13 @@ class App extends React.Component<AppProps, AppState> {
 
   private onPointerMoveFromPointerDownHandler(
     pointerDownState: PointerDownState,
+    owningPointerId: number,
   ) {
-    if (isFreedrawPerfV2Enabled() && this.activeFreedrawStroke) {
+    if (this.activeFreedrawStroke) {
       return withBatchedUpdates((event: PointerEvent) => {
+        if (event.pointerId !== owningPointerId) {
+          return;
+        }
         if (this.state.openDialog?.name === "elementLinkSelector") {
           return;
         }
@@ -10941,8 +11543,13 @@ class App extends React.Component<AppProps, AppState> {
 
   private onPointerUpFromPointerDownHandler(
     pointerDownState: PointerDownState,
+    owningPointerId: number,
   ): (event: PointerEvent) => void {
     return withBatchedUpdates((childEvent: PointerEvent) => {
+      if (childEvent.pointerId !== owningPointerId) {
+        return;
+      }
+
       const elementsMap = this.scene.getNonDeletedElementsMap();
 
       this.removePointer(childEvent);
@@ -11147,6 +11754,10 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState.eventListeners.onUp!,
       );
       window.removeEventListener(
+        "pointercancel",
+        pointerDownState.eventListeners.onUp!,
+      );
+      window.removeEventListener(
         EVENT.KEYDOWN,
         pointerDownState.eventListeners.onKeyDown!,
       );
@@ -11155,46 +11766,33 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState.eventListeners.onKeyUp!,
       );
 
+      if (newElement?.type === "freedraw") {
+        const finalizedStroke = this.finalizeActiveFreedrawStroke(
+          newElement,
+          childEvent,
+        );
+
+        this.actionManager.executeAction(actionFinalize);
+        if (finalizedStroke) {
+          this.startFinalizedFreedrawGeometry(finalizedStroke);
+        }
+
+        this.props?.onPointerUp?.(activeTool, pointerDownState);
+        this.onPointerUpEmitter.trigger(
+          this.state.activeTool,
+          pointerDownState,
+          childEvent,
+        );
+
+        return;
+      }
+
       this.props?.onPointerUp?.(activeTool, pointerDownState);
       this.onPointerUpEmitter.trigger(
         this.state.activeTool,
         pointerDownState,
         childEvent,
       );
-
-      if (newElement?.type === "freedraw") {
-        if (isFreedrawPerfV2Enabled()) {
-          this.finalizeActiveFreedrawStroke(newElement, childEvent);
-        } else {
-          const pointerCoords = viewportCoordsToSceneCoords(
-            childEvent,
-            this.state,
-          );
-
-          const points = newElement.points;
-          let dx = pointerCoords.x - newElement.x;
-          let dy = pointerCoords.y - newElement.y;
-
-          // Allows dots to avoid being flagged as infinitely small
-          if (dx === points[0][0] && dy === points[0][1]) {
-            dy += 0.0001;
-            dx += 0.0001;
-          }
-
-          const pressures = newElement.simulatePressure
-            ? []
-            : [...newElement.pressures, childEvent.pressure];
-
-          this.scene.mutateElement(newElement, {
-            points: [...points, pointFrom<LocalPoint>(dx, dy)],
-            pressures,
-          });
-        }
-
-        this.actionManager.executeAction(actionFinalize);
-
-        return;
-      }
 
       if (isLinearElement(newElement)) {
         if (
@@ -12267,9 +12865,8 @@ class App extends React.Component<AppProps, AppState> {
 
   /** adds new images to imageCache and re-renders if needed */
   private addNewImagesToImageCache = async (
-    imageElements: InitializedExcalidrawImageElement[] = getInitializedImageElements(
-      this.scene.getNonDeletedElements(),
-    ),
+    imageElements: readonly InitializedExcalidrawImageElement[] =
+      this.scene.getNonDeletedInitializedImageElements(),
     files: BinaryFiles = this.files,
   ) => {
     const uncachedImageElements = imageElements.filter(

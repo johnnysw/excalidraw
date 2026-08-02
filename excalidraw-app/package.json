@@ -38,7 +38,6 @@
     "socket.io-client": "4.7.2",
     "vite-plugin-html": "3.2.2"
   },
-  "prettier": "@excalidraw/prettier-config",
   "scripts": {
     "build-node": "node ./scripts/build-node.js",
     "build:app:docker": "cross-env VITE_APP_DISABLE_SENTRY=true vite build",

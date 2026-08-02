@@ -85,6 +85,7 @@ export class Store {
 
   private scheduledMacroActions: Set<CaptureUpdateActionType> = new Set();
   private scheduledMicroActions: MicroActionsQueue = [];
+  private skipNextMacroAction = false;
 
   private _snapshot = StoreSnapshot.empty();
 
@@ -109,6 +110,63 @@ export class Store {
   // TODO: Suspicious that this is called so many places. Seems error-prone.
   public scheduleCapture() {
     this.scheduleAction(CaptureUpdateAction.IMMEDIATELY);
+  }
+
+  /**
+   * Replaces a standalone full-scene capture with an exact append delta. The
+   * snapshot still gets copied once to preserve immutability, but change and
+   * history calculation no longer scan every existing element.
+   */
+  public tryScheduleIncrementalAppendCapture(
+    element: ExcalidrawElement,
+    appState: AppState,
+  ) {
+    if (
+      this.scheduledMicroActions.length > 0 ||
+      this.scheduledMacroActions.size !== 1 ||
+      !this.scheduledMacroActions.has(CaptureUpdateAction.IMMEDIATELY) ||
+      element.index === null ||
+      this.snapshot.elements.has(element.id)
+    ) {
+      return false;
+    }
+
+    const elementSnapshot = deepCopyElement(
+      element as OrderedExcalidrawElement,
+    );
+    const nextObservedAppState = getObservedAppState(appState);
+    const changedAppState = Delta.getRightDifferences(
+      this.snapshot.appState,
+      nextObservedAppState,
+    ).reduce(
+      (changed, key) =>
+        Object.assign(changed, {
+          [key]: nextObservedAppState[key as keyof ObservedAppState],
+        }),
+      {} as Partial<ObservedAppState>,
+    );
+    const changedElements = {
+      [element.id]: elementSnapshot,
+    };
+    const change = StoreChange.createAppend(elementSnapshot, changedAppState);
+    const addedElementMap = new Map([
+      [element.id, elementSnapshot],
+    ]) as SceneElementsMap;
+    const delta = StoreDelta.create(
+      ElementsDelta.calculate(new Map() as SceneElementsMap, addedElementMap),
+      AppStateDelta.calculate(this.snapshot.appState, nextObservedAppState),
+    );
+
+    this.scheduledMacroActions.clear();
+    this.skipNextMacroAction = true;
+    this.scheduledMicroActions.push(() =>
+      this.processAction({
+        action: CaptureUpdateAction.IMMEDIATELY,
+        change,
+        delta,
+      }),
+    );
+    return true;
   }
 
   /**
@@ -188,6 +246,13 @@ export class Store {
     // similar to microTasks, there can be many
     this.flushMicroActions();
 
+    const shouldSkipMacroAction =
+      this.skipNextMacroAction && this.scheduledMacroActions.size === 0;
+    this.skipNextMacroAction = false;
+    if (shouldSkipMacroAction) {
+      return;
+    }
+
     try {
       // execute a single scheduled "macro" function
       // similar to macro tasks, there can be only one within a single commit (loop)
@@ -206,6 +271,8 @@ export class Store {
   public clear(): void {
     this.snapshot = StoreSnapshot.empty();
     this.scheduledMacroActions = new Set();
+    this.scheduledMicroActions = [];
+    this.skipNextMacroAction = false;
   }
 
   /**
@@ -435,6 +502,7 @@ export class StoreChange {
   private constructor(
     public readonly elements: Record<string, OrderedExcalidrawElement>,
     public readonly appState: Partial<ObservedAppState>,
+    public readonly appendOnlyElementId: ExcalidrawElement["id"] | null = null,
   ) {}
 
   public static create(
@@ -445,6 +513,24 @@ export class StoreChange {
     const changedAppState = nextSnapshot.getChangedAppState(prevSnapshot);
 
     return new StoreChange(changedElements, changedAppState);
+  }
+
+  public static createDirect(
+    changedElements: Record<string, OrderedExcalidrawElement>,
+    changedAppState: Partial<ObservedAppState>,
+  ) {
+    return new StoreChange(changedElements, changedAppState);
+  }
+
+  public static createAppend(
+    element: OrderedExcalidrawElement,
+    changedAppState: Partial<ObservedAppState>,
+  ) {
+    return new StoreChange(
+      { [element.id]: element },
+      changedAppState,
+      element.id,
+    );
   }
 }
 
@@ -734,10 +820,27 @@ export class StoreSnapshot {
    * Apply the change and return a new snapshot instance.
    */
   public applyChange(change: StoreChange): StoreSnapshot {
-    const nextElements = new Map(this.elements) as SceneElementsMap;
+    const appendOnlyElement = change.appendOnlyElementId
+      ? change.elements[change.appendOnlyElementId]
+      : null;
+    const canAppendInPlace = Boolean(
+      appendOnlyElement &&
+        !this.elements.has(change.appendOnlyElementId!) &&
+        Object.keys(change.elements).length === 1,
+    );
+    const nextElements = canAppendInPlace
+      ? this.elements
+      : (new Map(this.elements) as SceneElementsMap);
 
-    for (const [id, changedElement] of Object.entries(change.elements)) {
-      nextElements.set(id, changedElement);
+    if (canAppendInPlace && appendOnlyElement) {
+      // The append delta and history entry were fully materialized before this
+      // call. Store snapshots are not retained by history, so sharing the map
+      // avoids an O(scene size) copy while preserving the exact durable delta.
+      nextElements.set(appendOnlyElement.id, appendOnlyElement);
+    } else {
+      for (const [id, changedElement] of Object.entries(change.elements)) {
+        nextElements.set(id, changedElement);
+      }
     }
 
     const nextAppState = getObservedAppState({

@@ -8,7 +8,10 @@ import {
   isTestEnv,
   toArray,
 } from "@excalidraw/common";
-import { isNonDeletedElement } from "@excalidraw/element";
+import {
+  isInitializedImageElement,
+  isNonDeletedElement,
+} from "@excalidraw/element";
 import { isFrameLikeElement } from "@excalidraw/element";
 import { getElementsInGroup } from "@excalidraw/element";
 
@@ -16,6 +19,7 @@ import {
   syncInvalidIndices,
   syncMovedIndices,
   validateFractionalIndices,
+  generateNextFractionalIndex,
 } from "@excalidraw/element";
 
 import { getSelectedElements } from "@excalidraw/element";
@@ -27,6 +31,7 @@ import type {
   NonDeletedExcalidrawElement,
   NonDeleted,
   ExcalidrawFrameLikeElement,
+  InitializedExcalidrawImageElement,
   ElementsMapOrArray,
   SceneElementsMap,
   NonDeletedSceneElementsMap,
@@ -127,6 +132,8 @@ export class Scene {
 
   private nonDeletedElements: readonly Ordered<NonDeletedExcalidrawElement>[] =
     [];
+  private nonDeletedInitializedImageElements: readonly InitializedExcalidrawImageElement[] =
+    [];
   private nonDeletedElementsMap = toBrandedType<NonDeletedSceneElementsMap>(
     new Map(),
   );
@@ -136,6 +143,7 @@ export class Scene {
     [];
   private frames: readonly ExcalidrawFrameLikeElement[] = [];
   private elementsMap = toBrandedType<SceneElementsMap>(new Map());
+  private framesNonce = 0;
   private selectedElementsCache: {
     selectedElementIds: AppState["selectedElementIds"] | null;
     elements: readonly NonDeletedExcalidrawElement[] | null;
@@ -157,6 +165,10 @@ export class Scene {
     return this.sceneNonce;
   }
 
+  getFramesNonce() {
+    return this.framesNonce;
+  }
+
   getNonDeletedElementsMap() {
     return this.nonDeletedElementsMap;
   }
@@ -171,6 +183,10 @@ export class Scene {
 
   getNonDeletedElements() {
     return this.nonDeletedElements;
+  }
+
+  getNonDeletedInitializedImageElements() {
+    return this.nonDeletedInitializedImageElements;
   }
 
   getFramesIncludingDeleted() {
@@ -222,11 +238,13 @@ export class Scene {
       this.selectedElementsCache.cache.clear();
     }
 
-    const selectedElements = getSelectedElements(
-      elements,
-      { selectedElementIds: opts.selectedElementIds },
-      opts,
-    );
+    const selectedElements = Object.keys(opts.selectedElementIds).length
+      ? getSelectedElements(
+          elements,
+          { selectedElementIds: opts.selectedElementIds },
+          opts,
+        )
+      : [];
 
     // cache only if we're not using custom elements
     if (opts?.elements == null) {
@@ -299,6 +317,8 @@ export class Scene {
       );
     }
     const nextFrameLikes: ExcalidrawFrameLikeElement[] = [];
+    const nextInitializedImageElements: InitializedExcalidrawImageElement[] =
+      [];
 
     this.elements = syncInvalidIndices(_nextElements);
 
@@ -310,14 +330,19 @@ export class Scene {
       if (isFrameLikeElement(element)) {
         nextFrameLikes.push(element);
       }
+      if (isNonDeletedElement(element) && isInitializedImageElement(element)) {
+        nextInitializedImageElements.push(element);
+      }
       this.elementsMap.set(element.id, element);
     });
     const nonDeletedElements = getNonDeletedElements(this.elements);
     this.nonDeletedElements = nonDeletedElements.elements;
     this.nonDeletedElementsMap = nonDeletedElements.elementsMap;
+    this.nonDeletedInitializedImageElements = nextInitializedImageElements;
 
     this.frames = nextFrameLikes;
     this.nonDeletedFramesLikes = getNonDeletedElements(this.frames).elements;
+    this.framesNonce += 1;
 
     this.triggerUpdate();
   }
@@ -348,8 +373,10 @@ export class Scene {
   destroy() {
     this.elements = [];
     this.nonDeletedElements = [];
+    this.nonDeletedInitializedImageElements = [];
     this.nonDeletedFramesLikes = [];
     this.frames = [];
+    this.framesNonce += 1;
     this.elementsMap.clear();
     this.selectedElementsCache.selectedElementIds = null;
     this.selectedElementsCache.elements = null;
@@ -426,6 +453,78 @@ export class Scene {
     this.insertElementAtIndex(element, index);
   };
 
+  /**
+   * Appends one element without rebuilding every Scene map. This is reserved
+   * for trusted append-only action results such as a finalized detached
+   * freedraw element. Any guarded or non-append result stays on the standard
+   * replaceAllElements path.
+   */
+  appendElementFromActionResult(
+    element: ExcalidrawElement,
+    nextElements: readonly ExcalidrawElement[],
+  ): boolean {
+    if (
+      this.elementsMap.has(element.id) ||
+      nextElements.length !== this.elements.length + 1 ||
+      nextElements[nextElements.length - 1]?.id !== element.id
+    ) {
+      return false;
+    }
+
+    if (this.mutationGuards?.filterNextElements) {
+      const guardedElements = this.mutationGuards.filterNextElements(
+        this.elements,
+        nextElements,
+      );
+      if (guardedElements !== nextElements) {
+        return false;
+      }
+    }
+
+    mutateElement(
+      element,
+      this.elementsMap,
+      {
+        index: generateNextFractionalIndex(
+          this.elements[this.elements.length - 1]?.index ?? null,
+        ),
+      },
+      { isDragging: false },
+    );
+
+    const orderedElement = element as OrderedExcalidrawElement;
+    this.elements = nextElements as readonly OrderedExcalidrawElement[];
+    this.elementsMap.set(element.id, orderedElement);
+
+    if (isNonDeletedElement(orderedElement)) {
+      this.nonDeletedElements =
+        this.elements.length === this.nonDeletedElements.length + 1
+          ? (this.elements as readonly Ordered<NonDeletedExcalidrawElement>[])
+          : [...this.nonDeletedElements, orderedElement];
+      this.nonDeletedElementsMap.set(element.id, orderedElement);
+      if (isInitializedImageElement(orderedElement)) {
+        this.nonDeletedInitializedImageElements = [
+          ...this.nonDeletedInitializedImageElements,
+          orderedElement,
+        ];
+      }
+    }
+
+    if (isFrameLikeElement(orderedElement)) {
+      this.frames = [...this.frames, orderedElement];
+      if (isNonDeletedElement(orderedElement)) {
+        this.nonDeletedFramesLikes = [
+          ...this.nonDeletedFramesLikes,
+          orderedElement,
+        ];
+      }
+      this.framesNonce += 1;
+    }
+
+    this.triggerUpdate();
+    return true;
+  }
+
   insertElements = (elements: ExcalidrawElement[]) => {
     if (!elements.length) {
       return;
@@ -445,7 +544,10 @@ export class Scene {
   getFrameChildrenEndIndex(frameId: string) {
     let lastIndex = -1;
     for (let i = 0; i < this.elements.length; i++) {
-      if (this.elements[i].id === frameId || this.elements[i].frameId === frameId) {
+      if (
+        this.elements[i].id === frameId ||
+        this.elements[i].frameId === frameId
+      ) {
         lastIndex = i;
       }
     }
@@ -505,6 +607,12 @@ export class Scene {
       return element;
     }
 
+    const couldAffectInitializedImageIndex =
+      "fileId" in updates || "isDeleted" in updates;
+    const wasNonDeletedInitializedImage =
+      couldAffectInitializedImageIndex &&
+      isNonDeletedElement(element) &&
+      isInitializedImageElement(element);
     const { version: prevVersion } = element;
     const { version: nextVersion } = mutateElement(
       element,
@@ -513,6 +621,22 @@ export class Scene {
       options,
     );
 
+    if (couldAffectInitializedImageIndex && prevVersion !== nextVersion) {
+      const isNonDeletedInitializedImage =
+        isNonDeletedElement(element) && isInitializedImageElement(element);
+      if (wasNonDeletedInitializedImage !== isNonDeletedInitializedImage) {
+        this.nonDeletedInitializedImageElements =
+          isNonDeletedInitializedImage
+            ? [
+                ...this.nonDeletedInitializedImageElements,
+                element as InitializedExcalidrawImageElement,
+              ]
+            : this.nonDeletedInitializedImageElements.filter(
+                (imageElement) => imageElement.id !== element.id,
+              );
+      }
+    }
+
     if (
       // skip if the element is not in the scene (i.e. selection)
       this.elementsMap.has(element.id) &&
@@ -520,6 +644,9 @@ export class Scene {
       prevVersion !== nextVersion &&
       options.informMutation
     ) {
+      if (isFrameLikeElement(element)) {
+        this.framesNonce += 1;
+      }
       this.triggerUpdate();
     }
 

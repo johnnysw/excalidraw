@@ -48,7 +48,7 @@ import {
   getApproxMinLineHeight,
 } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
-import { isRichTextV2Enabled, scaleTextStyleRanges } from "./textStyleRanges";
+import { scaleTextStyleRanges } from "./textStyleRanges";
 import { layoutTextElement } from "./textLayout";
 import {
   isArrowElement,
@@ -364,7 +364,7 @@ export const resizeSingleTextElement = (
       element.lineHeight,
     );
     const minWidth =
-      isRichTextV2Enabled() && element.textStyleRanges?.length
+      element.textStyleRanges?.length
         ? Math.max(
             baseMinWidth,
             layoutTextElement(element, { maxWidth: 0 }).contentWidth,
@@ -374,7 +374,7 @@ export const resizeSingleTextElement = (
     const newWidth = Math.max(minWidth, nextWidth);
 
     const styledLayout =
-      isRichTextV2Enabled() && element.textStyleRanges?.length
+      element.textStyleRanges?.length
         ? layoutTextElement(element, {
             maxWidth: Math.abs(newWidth),
             textAlign: element.textAlign,

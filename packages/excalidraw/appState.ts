@@ -14,12 +14,11 @@ import {
   DEFAULT_TEXT_OUTLINE_COLOR,
   DEFAULT_TEXT_OUTLINE_WIDTH,
   isTestEnv,
-  DEFAULT_SIDEBAR,
-  PROPERTIES_SIDEBAR_TAB,
 } from "@excalidraw/common";
 
-import type { AppState, NormalizedZoomValue } from "./types";
 import type { ExcalidrawTextElement } from "@excalidraw/element/types";
+
+import type { AppState, NormalizedZoomValue } from "./types";
 
 const defaultExportScale = EXPORT_SCALES.includes(devicePixelRatio)
   ? devicePixelRatio
@@ -301,6 +300,7 @@ const APP_STATE_STORAGE_CONF = (<
     server: false,
   },
   slideOrder: { browser: true, export: true, server: true },
+  presentationSlideIndex: { browser: false, export: false, server: false },
   questionElementSettings: { browser: true, export: true, server: true },
   slideNotes: { browser: true, export: true, server: true },
   presentationStep: { browser: false, export: false, server: false },

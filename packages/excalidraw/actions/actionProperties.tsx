@@ -46,7 +46,6 @@ import {
   clearTextStyleProperty,
   resolveSelectionTextStyle,
   getTextElementBaseStyle,
-  isRichTextV2Enabled,
 } from "@excalidraw/element";
 
 import {
@@ -425,16 +424,6 @@ export const getEditingSelectionTextStyle = (
     baseStyle,
   );
 
-  if (!isRichTextV2Enabled()) {
-    return {
-      ...baseStyle,
-      color:
-        start === end && appState.textEditorPendingStyle?.color
-          ? appState.textEditorPendingStyle.color
-          : selectionStyle.color,
-    };
-  }
-
   return start === end && appState.textEditorPendingStyle
     ? { ...selectionStyle, ...appState.textEditorPendingStyle }
     : selectionStyle;
@@ -584,7 +573,6 @@ export const actionChangeTextOutlineColor = register<
     const color = value?.currentItemTextOutlineColor;
 
     if (
-      isRichTextV2Enabled() &&
       color != null &&
       appState.editingTextElement &&
       appState.textEditorSelection
@@ -960,7 +948,6 @@ export const actionChangeTextOutlineWidth = register<
     const width = value?.currentItemTextOutlineWidth;
 
     if (
-      isRichTextV2Enabled() &&
       typeof width === "number" &&
       appState.editingTextElement &&
       appState.textEditorSelection
@@ -1235,7 +1222,6 @@ export const actionChangeFontSize = register<ExcalidrawTextElement["fontSize"]>(
       // When editing a text element with a selection, apply font size
       // locally via textStyleRanges instead of changing the whole element.
       if (
-        isRichTextV2Enabled() &&
         value &&
         appState.editingTextElement &&
         appState.textEditorSelection
@@ -1451,7 +1437,6 @@ export const actionChangeFontWeight = register<
     const nextFontWeight = normalizeFontWeight(value);
 
     if (
-      isRichTextV2Enabled() &&
       appState.editingTextElement &&
       appState.textEditorSelection
     ) {
@@ -1643,7 +1628,6 @@ export const actionChangeFontFamily = register<{
     // currentItemFontFamily, apply font family locally via
     // textStyleRanges instead of changing the whole element set.
     if (
-      isRichTextV2Enabled() &&
       appState.editingTextElement &&
       appState.textEditorSelection &&
       value &&

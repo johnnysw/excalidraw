@@ -12,17 +12,11 @@ import {
   isTestEnv,
 } from "@excalidraw/common";
 
-import {
-  getOrderedFrames,
-  getPresentationFrames,
-  mutateElement,
-} from "@excalidraw/element";
+import { mutateElement } from "@excalidraw/element";
 
 import { showSelectedShapeActions } from "@excalidraw/element";
 
 import { ShapeCache } from "@excalidraw/element";
-
-import type { NonDeletedExcalidrawElement } from "@excalidraw/element/types";
 
 import { actionToggleStats } from "../actions";
 import { trackEvent } from "../analytics";
@@ -103,7 +97,7 @@ interface LayerUIProps {
   files: BinaryFiles;
   canvas: HTMLCanvasElement;
   setAppState: React.Component<any, AppState>["setState"];
-  elements: readonly NonDeletedExcalidrawElement[];
+  sceneRevision: number;
   onLockToggle: () => void;
   onHandToolToggle: () => void;
   onPenModeToggle: AppClassProperties["togglePenMode"];
@@ -162,7 +156,6 @@ const LayerUI = ({
   appState,
   files,
   setAppState,
-  elements,
   canvas,
   onLockToggle,
   onHandToolToggle,
@@ -180,6 +173,7 @@ const LayerUI = ({
   generateLinkForSelection,
   shareModePermissions,
 }: LayerUIProps) => {
+  const elements = app.scene.getNonDeletedElements();
   const editorInterface = useEditorInterface();
   const stylesPanelMode = useStylesPanelMode();
   const isCompactStylesPanel = stylesPanelMode === "compact";
@@ -189,14 +183,9 @@ const LayerUI = ({
   const isSidebarVisible = shareModePermissions?.sidebar?.visible ?? true;
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
-  const fullFrameOrder = React.useMemo(
-    () => getOrderedFrames(elements, appState.slideOrder),
-    [appState.slideOrder, elements],
-  );
-  const canPresent = React.useMemo(
-    () => getPresentationFrames(elements, appState.slideOrder).length > 0,
-    [appState.slideOrder, elements],
-  );
+  const fullFrameOrder = app.getOrderedSceneFrames(appState.slideOrder);
+  const canPresent =
+    app.getPresentationSceneFrames(appState.slideOrder).length > 0;
 
   const spacing = isCompactStylesPanel
     ? {
@@ -903,6 +892,11 @@ const areEqual = (prevProps: LayerUIProps, nextProps: LayerUIProps) => {
       {
         selectedElementIds: isShallowEqual,
         selectedGroupIds: isShallowEqual,
+        newElement: (prevElement, nextElement) =>
+          prevElement === nextElement ||
+          (prevProps.sceneRevision === nextProps.sceneRevision &&
+            ((prevElement?.type === "freedraw" && nextElement === null) ||
+              (prevElement === null && nextElement?.type === "freedraw"))),
       },
     ) && isShallowEqual(prev, next)
   );

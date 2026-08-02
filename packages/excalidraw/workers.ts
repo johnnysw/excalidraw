@@ -24,16 +24,19 @@ export class WorkerPool<T, R> {
   private idleWorkers: Set<IdleWorker> = new Set();
   private readonly workerUrl: URL;
   private readonly workerTTL: number;
+  private readonly workerJobTimeout: number;
+  private warmingWorker: Promise<void> | null = null;
 
   private constructor(
     workerUrl: URL,
     options: {
       ttl?: number;
+      jobTimeout?: number;
     },
   ) {
     this.workerUrl = workerUrl;
-    // by default, active & idle workers will be terminated after 1s of inactivity
-    this.workerTTL = options.ttl || 1000;
+    this.workerTTL = options.ttl ?? 1000;
+    this.workerJobTimeout = options.jobTimeout ?? 30_000;
   }
 
   /**
@@ -48,6 +51,7 @@ export class WorkerPool<T, R> {
     workerUrl: URL | undefined,
     options: {
       ttl?: number;
+      jobTimeout?: number;
     } = {},
   ): WorkerPool<T, R> {
     if (!workerUrl) {
@@ -69,27 +73,94 @@ export class WorkerPool<T, R> {
     data: T,
     options: StructuredSerializeOptions,
   ): Promise<R> {
+    if (this.warmingWorker) {
+      await this.warmingWorker;
+    }
+
     let worker: IdleWorker;
 
     const idleWorker = Array.from(this.idleWorkers).shift();
     if (idleWorker) {
       this.idleWorkers.delete(idleWorker);
+      idleWorker.debounceTerminate.cancel();
       worker = idleWorker;
     } else {
       worker = await this.createWorker();
     }
 
     return new Promise((resolve, reject) => {
-      worker.instance.onmessage = this.onMessageHandler(worker, resolve);
-      worker.instance.onerror = this.onErrorHandler(worker, reject);
+      let settled = false;
+      const finish = (callback: () => void) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(jobTimeout);
+        worker.instance.onmessage = null;
+        worker.instance.onerror = null;
+        callback();
+      };
 
-      worker.instance.postMessage(data, options);
-      worker.debounceTerminate(() =>
-        reject(
-          new Error(`Active worker did not respond for ${this.workerTTL}ms!`),
-        ),
-      );
+      const jobTimeout = setTimeout(() => {
+        finish(() => {
+          worker.instance.terminate();
+          this.idleWorkers.delete(worker);
+          reject(
+            new Error(
+              `Active worker did not respond for ${this.workerJobTimeout}ms!`,
+            ),
+          );
+        });
+      }, this.workerJobTimeout);
+
+      worker.instance.onmessage = (event: MessageEvent<R>) => {
+        finish(() => {
+          this.idleWorkers.add(worker);
+          worker.debounceTerminate();
+          resolve(event.data);
+        });
+      };
+      worker.instance.onerror = (event: ErrorEvent) => {
+        finish(() => {
+          worker.instance.terminate();
+          this.idleWorkers.delete(worker);
+          void this.clear();
+          reject(event);
+        });
+      };
+
+      try {
+        worker.instance.postMessage(data, options);
+      } catch (error) {
+        finish(() => {
+          worker.instance.terminate();
+          this.idleWorkers.delete(worker);
+          reject(error);
+        });
+      }
     });
+  }
+
+  /**
+   * Creates an idle worker ahead of the first job so worker construction and
+   * module loading never share the pointer-up task.
+   */
+  public async warmup() {
+    if (this.idleWorkers.size || this.warmingWorker) {
+      await this.warmingWorker;
+      return;
+    }
+
+    this.warmingWorker = this.createWorker().then((worker) => {
+      this.idleWorkers.add(worker);
+      worker.debounceTerminate();
+    });
+
+    try {
+      await this.warmingWorker;
+    } finally {
+      this.warmingWorker = null;
+    }
   }
 
   /**
@@ -128,27 +199,5 @@ export class WorkerPool<T, R> {
     }, this.workerTTL);
 
     return worker;
-  }
-
-  private onMessageHandler(worker: IdleWorker, resolve: (value: R) => void) {
-    return (e: { data: R }) => {
-      worker.debounceTerminate();
-      this.idleWorkers.add(worker);
-      resolve(e.data);
-    };
-  }
-
-  private onErrorHandler(
-    worker: IdleWorker,
-    reject: (reason: ErrorEvent) => void,
-  ) {
-    return (e: ErrorEvent) => {
-      // terminate the worker immediately before rejection
-      worker.debounceTerminate(() => reject(e));
-      worker.debounceTerminate.flush();
-
-      // clear the worker pool in case there are some idle workers left
-      this.clear();
-    };
   }
 }

@@ -291,28 +291,20 @@ describe("layoutText", () => {
   });
 
   it("preserves the requested width for fixed-width mixed text", () => {
-    const globalFlags = globalThis as typeof globalThis & {
-      EXCALIDRAW_RICH_TEXT_V2?: boolean;
-    };
-    globalFlags.EXCALIDRAW_RICH_TEXT_V2 = true;
-    try {
-      const element = newTextElement({
-        x: 0,
-        y: 0,
-        width: 100,
-        autoResize: false,
-        text: "abcdef",
-        fontSize: 10,
-        fontFamily: FONT_FAMILY.Helvetica,
-        textStyleRanges: [{ start: 1, end: 4, fontSize: 20 }],
-      });
+    const element = newTextElement({
+      x: 0,
+      y: 0,
+      width: 100,
+      autoResize: false,
+      text: "abcdef",
+      fontSize: 10,
+      fontFamily: FONT_FAMILY.Helvetica,
+      textStyleRanges: [{ start: 1, end: 4, fontSize: 20 }],
+    });
 
-      expect(element.width).toBe(100);
-      expect(
-        layoutTextElement(element, { maxWidth: element.width }).width,
-      ).toBe(100);
-    } finally {
-      globalFlags.EXCALIDRAW_RICH_TEXT_V2 = undefined;
-    }
+    expect(element.width).toBe(100);
+    expect(
+      layoutTextElement(element, { maxWidth: element.width }).width,
+    ).toBe(100);
   });
 });

@@ -31,6 +31,7 @@ import type {
   ExcalidrawElement,
   ExcalidrawLinearElement,
   NonDeleted,
+  OrderedExcalidrawElement,
   PointsPositionUpdates,
 } from "@excalidraw/element/types";
 
@@ -54,8 +55,31 @@ export const actionFinalize = register<FormData>({
   trackEvent: false,
   perform: (elements, appState, data, app) => {
     let newElements = elements;
+    let detachedFreedrawInsertionIndex: number | null = null;
     const { interactiveCanvas, focusContainer, scene } = app;
     const elementsMap = scene.getNonDeletedElementsMap();
+
+    // Active freedraw elements stay detached from the Scene while drawing.
+    // Merge only the finalized element through this standard action so the
+    // Scene, history, collaboration, and persistence receive one update.
+    if (
+      appState.newElement?.type === "freedraw" &&
+      !elementsMap.has(appState.newElement.id)
+    ) {
+      const insertionIndex = app.getDetachedFreedrawInsertionIndex(newElements);
+      detachedFreedrawInsertionIndex = insertionIndex;
+      newElements =
+        insertionIndex === newElements.length
+          ? [
+              ...newElements,
+              appState.newElement as OrderedExcalidrawElement,
+            ]
+          : [
+              ...newElements.slice(0, insertionIndex),
+              appState.newElement as OrderedExcalidrawElement,
+              ...newElements.slice(insertionIndex),
+            ];
+    }
 
     if (data && appState.selectedLinearElement) {
       const { event, sceneCoords } = data;
@@ -300,12 +324,17 @@ export const actionFinalize = register<FormData>({
     // 如果是 freedraw 元素，将其移动到数组末尾（置顶）
     if (element && isFreeDrawElement(element)) {
       const elementId = element.id;
-      const freedrawElement = newElements.find((el) => el.id === elementId);
-      if (freedrawElement) {
-        newElements = [
-          ...newElements.filter((el) => el.id !== elementId),
-          freedrawElement,
-        ];
+      if (
+        detachedFreedrawInsertionIndex === null &&
+        newElements[newElements.length - 1]?.id !== elementId
+      ) {
+        const freedrawElement = newElements.find((el) => el.id === elementId);
+        if (freedrawElement) {
+          newElements = [
+            ...newElements.filter((el) => el.id !== elementId),
+            freedrawElement,
+          ];
+        }
       }
     }
 

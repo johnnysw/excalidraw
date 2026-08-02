@@ -18,6 +18,10 @@ export class InvalidFractionalIndexError extends Error {
   public code = "ELEMENT_HAS_INVALID_INDEX" as const;
 }
 
+export const generateNextFractionalIndex = (
+  previousIndex: FractionalIndex | null,
+) => generateNKeysBetween(previousIndex, null, 1)[0] as FractionalIndex;
+
 /**
  * Envisioned relation between array order and fractional indices:
  *

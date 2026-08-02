@@ -11,28 +11,23 @@ import {
 } from "@excalidraw/common";
 
 import {
-  originalContainerCache,
-  updateOriginalContainerCache,
-} from "@excalidraw/element";
-
-import { LinearElementEditor } from "@excalidraw/element";
-import { bumpVersion } from "@excalidraw/element";
-import {
+  bumpVersion,
+  computeBoundTextPosition,
+  computeContainerDimensionForBoundText,
   getBoundTextElementId,
-  getContainerElement,
-  getTextElementAngle,
-  redrawTextBoundingBox,
   getBoundTextMaxHeight,
   getBoundTextMaxWidth,
-  computeContainerDimensionForBoundText,
-  computeBoundTextPosition,
-  getBoundTextElement,
+  getContainerElement,
+  getTextElementAngle,
+  isArrowElement,
+  isBoundToContainer,
+  isTextElement,
   layoutTextElement,
-} from "@excalidraw/element";
-import { getTextWidth } from "@excalidraw/element";
-import { normalizeText } from "@excalidraw/element";
-import { wrapText } from "@excalidraw/element";
-import {
+  LinearElementEditor,
+  normalizeText,
+  originalContainerCache,
+  redrawTextBoundingBox,
+  updateOriginalContainerCache,
   applyTextStyleToRange,
   applyTextStyleRanges,
   getTextElementBaseStyle,
@@ -40,12 +35,8 @@ import {
   resolveTextStyleAt,
   transformTextStyleRangesForEdit,
 } from "@excalidraw/element";
+
 import type { TextStyle } from "@excalidraw/element";
-import {
-  isArrowElement,
-  isBoundToContainer,
-  isTextElement,
-} from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
@@ -69,7 +60,6 @@ import {
 
 import type App from "../components/App";
 import type { AppState } from "../types";
-import { isRichTextV2Enabled } from "../reactUtils";
 
 const getTransform = (
   width: number,
@@ -1014,7 +1004,7 @@ export const textWysiwyg = ({
       editable.appendChild(span);
     };
 
-    if (isRichTextV2Enabled() && normalizedRanges.length) {
+    if (normalizedRanges.length) {
       const container = getContainerElement(
         textElement,
         app.scene.getNonDeletedElementsMap(),
@@ -1048,13 +1038,7 @@ export const textWysiwyg = ({
     let sourceIndex = 0;
     for (const range of normalizedRanges) {
       appendSpan(sourceIndex, range.start, baseStyle);
-      appendSpan(
-        range.start,
-        range.end,
-        isRichTextV2Enabled()
-          ? { ...baseStyle, ...range }
-          : { ...baseStyle, color: range.color ?? baseStyle.color },
-      );
+      appendSpan(range.start, range.end, { ...baseStyle, ...range });
       sourceIndex = range.end;
     }
     appendSpan(sourceIndex, text.length, baseStyle);
@@ -1085,11 +1069,6 @@ export const textWysiwyg = ({
           direction: getContentEditableSelectionDirection(selection, range),
         }
       : null;
-  };
-
-  const getSelectionOffsets = () => {
-    const selection = getSelectionState();
-    return selection ? { start: selection.start, end: selection.end } : null;
   };
 
   const getBeforeInputSelection = (
@@ -1237,13 +1216,7 @@ export const textWysiwyg = ({
       baseStyle,
     });
 
-    const effectivePastedRanges = isRichTextV2Enabled()
-      ? pastedRanges
-      : pastedRanges
-      ? pastedRanges.flatMap(({ start, end, color }) =>
-          color === undefined ? [] : [{ start, end, color }],
-        )
-      : undefined;
+    const effectivePastedRanges = pastedRanges;
     if (effectivePastedRanges?.length) {
       ranges = applyTextStyleRanges(
         nextOriginalText.length,
@@ -1256,11 +1229,7 @@ export const textWysiwyg = ({
         baseStyle,
       );
     } else if (edit.insertedText && before.pendingStyle) {
-      const pendingStyle = isRichTextV2Enabled()
-        ? before.pendingStyle
-        : before.pendingStyle.color
-        ? { color: before.pendingStyle.color }
-        : null;
+      const pendingStyle = before.pendingStyle;
       if (!pendingStyle) {
         return ranges;
       }
@@ -1710,7 +1679,8 @@ export const textWysiwyg = ({
       event.preventDefault();
       if (event.isComposing) {
         return;
-      } else if (event.shiftKey || event.code === CODES.BRACKET_LEFT) {
+      }
+      if (event.shiftKey || event.code === CODES.BRACKET_LEFT) {
         outdent();
       } else {
         indent();
@@ -2134,7 +2104,6 @@ export const textWysiwyg = ({
       // which would otherwise close openPopup (including compactTextProperties)
       // even though we're interacting with the properties popover content.
       event.stopPropagation();
-      return;
     } else if (
       event.target instanceof HTMLCanvasElement &&
       // Vitest simply ignores stopPropagation, capture-mode, or rAF

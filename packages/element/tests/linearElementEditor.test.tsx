@@ -35,6 +35,7 @@ import { newArrowElement } from "../src";
 import {
   getTextEditor,
   TEXT_EDITOR_SELECTOR,
+  updateTextEditor,
 } from "../../excalidraw/tests/queries/dom";
 
 import type {
@@ -1100,9 +1101,7 @@ describe("Test Linear Elements", () => {
       mouse.down();
       const editor = await getTextEditor();
 
-      fireEvent.change(editor, {
-        target: { value: DEFAULT_TEXT },
-      });
+      updateTextEditor(editor, DEFAULT_TEXT);
 
       Keyboard.exitTextEditor(editor);
       expect(arrow.boundElements).toStrictEqual([
@@ -1128,9 +1127,7 @@ describe("Test Linear Elements", () => {
       expect(textElement.containerId).toBe(arrow.id);
       const editor = await getTextEditor();
 
-      fireEvent.change(editor, {
-        target: { value: DEFAULT_TEXT },
-      });
+      updateTextEditor(editor, DEFAULT_TEXT);
       Keyboard.exitTextEditor(editor);
       expect(arrow.boundElements).toStrictEqual([
         { id: textElement.id, type: "text" },
@@ -1311,7 +1308,7 @@ describe("Test Linear Elements", () => {
       mouse.select(arrow);
       Keyboard.keyPress(KEYS.ENTER);
       const editor = await getTextEditor();
-      fireEvent.change(editor, { target: { value: DEFAULT_TEXT } });
+      updateTextEditor(editor, DEFAULT_TEXT);
       Keyboard.exitTextEditor(editor);
 
       const textElement = h.elements[2] as ExcalidrawTextElementWithContainer;

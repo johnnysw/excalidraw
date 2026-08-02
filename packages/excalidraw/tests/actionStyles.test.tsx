@@ -1,6 +1,12 @@
 import React from "react";
 
-import { CODES, FONT_FAMILY } from "@excalidraw/common";
+import {
+  CODES,
+  COLOR_PALETTE,
+  DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX,
+  DEFAULT_ELEMENT_STROKE_COLOR_INDEX,
+  FONT_FAMILY,
+} from "@excalidraw/common";
 
 import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
@@ -42,9 +48,17 @@ describe("actionStyles", () => {
 
     // Change some styles of second rectangle
     togglePopover("Stroke");
-    UI.clickOnTestId("color-red");
+    UI.clickOnTestId(
+      `color-top-pick-${
+        COLOR_PALETTE.red[DEFAULT_ELEMENT_STROKE_COLOR_INDEX]
+      }`,
+    );
     togglePopover("Background");
-    UI.clickOnTestId("color-blue");
+    UI.clickOnTestId(
+      `color-top-pick-${
+        COLOR_PALETTE.blue[DEFAULT_ELEMENT_BACKGROUND_COLOR_INDEX]
+      }`,
+    );
     // Fill style
     fireEvent.click(screen.getByTitle("Cross-hatch"));
     // Stroke width

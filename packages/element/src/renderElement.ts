@@ -54,7 +54,6 @@ import {
 } from "./textElement";
 import { getLineHeightInPx } from "./textMeasurements";
 import { layoutTextElement } from "./textLayout";
-import { isRichTextV2Enabled } from "./textStyleRanges";
 import {
   isTextElement,
   isLinearElement,
@@ -66,6 +65,7 @@ import {
   isImageElement,
 } from "./typeChecks";
 import { getContainingFrame } from "./frame";
+import { getSvgPathFromStroke } from "./freedrawGeometry";
 import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
@@ -508,6 +508,19 @@ const drawElementOnCanvas = (
       break;
     }
     case "freedraw": {
+      const pendingPreview =
+        !renderConfig.isExporting && getFreedrawPendingPreview(element);
+      if (pendingPreview) {
+        context.save();
+        context.strokeStyle = element.strokeColor;
+        context.lineWidth = Math.max(0.01, element.strokeWidth * 4.25);
+        context.lineCap = "round";
+        context.lineJoin = "round";
+        context.stroke(pendingPreview);
+        context.restore();
+        break;
+      }
+
       // Draw directly to canvas
       context.save();
       context.fillStyle = element.strokeColor;
@@ -595,7 +608,7 @@ const drawElementOnCanvas = (
         const hasTextStyleRanges =
           element.textStyleRanges && element.textStyleRanges.length > 0;
 
-        if (hasTextStyleRanges && isRichTextV2Enabled()) {
+        if (hasTextStyleRanges) {
           const textContainer = getContainerElement(element, elementsMap);
           const layout = layoutTextElement(element, {
             maxWidth: textContainer
@@ -1025,7 +1038,9 @@ export const renderElement = (
       // TODO investigate if we can do this in situ. Right now we need to call
       // beforehand because math helpers (such as getElementAbsoluteCoords)
       // rely on existing shapes
-      ShapeCache.generateElementShape(element, null);
+      if (renderConfig.isExporting || !getFreedrawPendingPreview(element)) {
+        ShapeCache.generateElementShape(element, null);
+      }
 
       if (renderConfig.isExporting) {
         const [x1, y1, x2, y2] = getElementAbsoluteCoords(element, elementsMap);
@@ -1274,19 +1289,118 @@ export const renderElement = (
 };
 
 export const pathsCache = new WeakMap<ExcalidrawFreeDrawElement, Path2D>([]);
+const pendingFreedrawPreviewCache = new WeakMap<
+  ExcalidrawFreeDrawElement,
+  { path: Path2D; signature: string }
+>();
+const freedrawGeometrySignatures = new WeakMap<
+  ExcalidrawFreeDrawElement,
+  string
+>();
+
+const getFreedrawGeometrySignature = (element: ExcalidrawFreeDrawElement) =>
+  `${element.version}:${element.versionNonce}:${element.points.length}:${element.pressures.length}`;
+
+export const setFreedrawPendingPreview = (
+  element: ExcalidrawFreeDrawElement,
+  points: readonly [number, number][],
+) => {
+  const path = new Path2D();
+  if (points.length === 1) {
+    path.moveTo(points[0][0], points[0][1]);
+    path.lineTo(points[0][0] + 0.01, points[0][1] + 0.01);
+  } else if (points.length > 1) {
+    path.moveTo(points[0][0], points[0][1]);
+    for (let index = 1; index < points.length; index++) {
+      path.lineTo(points[index][0], points[index][1]);
+    }
+  }
+  pendingFreedrawPreviewCache.set(element, {
+    path,
+    signature: getFreedrawGeometrySignature(element),
+  });
+};
+
+export const clearFreedrawPendingPreview = (
+  element: ExcalidrawFreeDrawElement,
+) => {
+  pendingFreedrawPreviewCache.delete(element);
+};
+
+export const getFreedrawPendingPreview = (
+  element: ExcalidrawFreeDrawElement,
+) => {
+  const preview = pendingFreedrawPreviewCache.get(element);
+  return preview?.signature === getFreedrawGeometrySignature(element)
+    ? preview.path
+    : undefined;
+};
+
+const freedrawOutlineCache = new WeakMap<
+  ExcalidrawFreeDrawElement,
+  [number, number][]
+>();
+const freedrawOutlineDataCache = new WeakMap<
+  ExcalidrawFreeDrawElement,
+  Float64Array
+>();
+const freedrawSvgPathCache = new WeakMap<ExcalidrawFreeDrawElement, string>();
+
+export const cacheFreedrawGeometry = (
+  element: ExcalidrawFreeDrawElement,
+  outlineData: Float64Array,
+  svgPathData: string,
+) => {
+  if (outlineData.length % 2 !== 0) {
+    throw new Error("Invalid freedraw outline data");
+  }
+
+  const path = new Path2D(svgPathData);
+  clearFreedrawPendingPreview(element);
+  pathsCache.set(element, path);
+  freedrawOutlineCache.delete(element);
+  freedrawOutlineDataCache.set(element, outlineData);
+  freedrawSvgPathCache.set(element, svgPathData);
+  freedrawGeometrySignatures.set(
+    element,
+    getFreedrawGeometrySignature(element),
+  );
+};
 
 export function generateFreeDrawShape(element: ExcalidrawFreeDrawElement) {
+  const cachedPath = getFreeDrawPath2D(element);
+  if (cachedPath) {
+    return cachedPath;
+  }
+
   const svgPathData = getFreeDrawSvgPath(element);
   const path = new Path2D(svgPathData);
   pathsCache.set(element, path);
+  freedrawGeometrySignatures.set(
+    element,
+    getFreedrawGeometrySignature(element),
+  );
   return path;
 }
 
 export function getFreeDrawPath2D(element: ExcalidrawFreeDrawElement) {
-  return pathsCache.get(element);
+  return freedrawGeometrySignatures.get(element) ===
+    getFreedrawGeometrySignature(element)
+    ? pathsCache.get(element)
+    : undefined;
 }
 
 export function getFreeDrawSvgPath(element: ExcalidrawFreeDrawElement) {
+  if (
+    freedrawGeometrySignatures.get(element) ===
+    getFreedrawGeometrySignature(element)
+  ) {
+    const cachedSvgPath = freedrawSvgPathCache.get(element);
+    if (cachedSvgPath !== undefined) {
+      return cachedSvgPath;
+    }
+  }
+
   return getSvgPathFromStroke(getFreedrawOutlinePoints(element));
 }
 
@@ -1347,6 +1461,31 @@ export function getFreedrawOutlineAsSegments(
 }
 
 export function getFreedrawOutlinePoints(element: ExcalidrawFreeDrawElement) {
+  if (
+    freedrawGeometrySignatures.get(element) ===
+    getFreedrawGeometrySignature(element)
+  ) {
+    const cachedOutline = freedrawOutlineCache.get(element);
+    if (cachedOutline) {
+      return cachedOutline;
+    }
+
+    const cachedOutlineData = freedrawOutlineDataCache.get(element);
+    if (cachedOutlineData) {
+      const outline: [number, number][] = new Array(
+        cachedOutlineData.length / 2,
+      );
+      for (let index = 0; index < cachedOutlineData.length; index += 2) {
+        outline[index / 2] = [
+          cachedOutlineData[index],
+          cachedOutlineData[index + 1],
+        ];
+      }
+      freedrawOutlineCache.set(element, outline);
+      return outline;
+    }
+  }
+
   // If input points are empty (should they ever be?) return a dot
   const inputPoints = element.simulatePressure
     ? element.points
@@ -1366,36 +1505,4 @@ export function getFreedrawOutlinePoints(element: ExcalidrawFreeDrawElement) {
   };
 
   return getStroke(inputPoints as number[][], options) as [number, number][];
-}
-
-function med(A: number[], B: number[]) {
-  return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2];
-}
-
-// Trim SVG path data so number are each two decimal points. This
-// improves SVG exports, and prevents rendering errors on points
-// with long decimals.
-const TO_FIXED_PRECISION = /(\s?[A-Z]?,?-?[0-9]*\.[0-9]{0,2})(([0-9]|e|-)*)/g;
-
-function getSvgPathFromStroke(points: number[][]): string {
-  if (!points.length) {
-    return "";
-  }
-
-  const max = points.length - 1;
-
-  return points
-    .reduce(
-      (acc, point, i, arr) => {
-        if (i === max) {
-          acc.push(point, med(point, arr[0]), "L", arr[0], "Z");
-        } else {
-          acc.push(point, med(point, arr[i + 1]));
-        }
-        return acc;
-      },
-      ["M", points[0], "Q"],
-    )
-    .join(" ")
-    .replace(TO_FIXED_PRECISION, "$1");
 }

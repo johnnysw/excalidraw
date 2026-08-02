@@ -45,27 +45,18 @@ export const isRenderThrottlingEnabled = (() => {
   let hasWarned = false;
 
   return () => {
-    if (window.EXCALIDRAW_THROTTLE_RENDER === true) {
-      if (!IS_REACT_18_AND_UP) {
-        if (!hasWarned) {
-          hasWarned = true;
-          console.warn(
-            "Excalidraw: render throttling is disabled on React versions < 18.",
-          );
-        }
-        return false;
+    if (!IS_REACT_18_AND_UP) {
+      if (!hasWarned) {
+        hasWarned = true;
+        console.warn(
+          "Excalidraw: render throttling is disabled on React versions < 18.",
+        );
       }
-      return true;
+      return false;
     }
-    return false;
+    return true;
   };
 })();
-
-export const isFreedrawPerfV2Enabled = () =>
-  window.EXCALIDRAW_FREEDRAW_PERF_V2 === true;
-
-export const isRichTextV2Enabled = () =>
-  window.EXCALIDRAW_RICH_TEXT_V2 === true;
 
 export const isExcalidrawPerfDebugEnabled = () =>
   isDevEnv() && window.EXCALIDRAW_PERF_DEBUG === true;

@@ -48,7 +48,6 @@ import type {
 
 import type { RenderableElementsMap, SVGRenderConfig } from "../scene/types";
 import type { AppState, BinaryFiles } from "../types";
-import { isRichTextV2Enabled } from "../reactUtils";
 import type { Drawable } from "roughjs/bin/core";
 import type { RoughSVG } from "roughjs/bin/svg";
 
@@ -655,7 +654,7 @@ const renderElementToSvg = (
             offsetY || 0
           }) rotate(${degree} ${cx} ${cy})`,
         );
-        if (element.textStyleRanges?.length && isRichTextV2Enabled()) {
+        if (element.textStyleRanges?.length) {
           const textContainer = getContainerElement(element, elementsMap);
           const layout = layoutTextElement(element, {
             maxWidth: textContainer

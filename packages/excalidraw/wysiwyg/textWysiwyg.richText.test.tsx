@@ -48,16 +48,11 @@ describe("rich text WYSIWYG transactions", () => {
   });
 
   beforeEach(async () => {
-    window.EXCALIDRAW_RICH_TEXT_V2 = true;
     await render(<Excalidraw handleKeyboardGlobally={true} />);
     const text = API.createElement({ type: "text", text: "ab" });
     API.setElements([text]);
     API.setSelectedElements([text]);
     Keyboard.keyPress(KEYS.ENTER);
-  });
-
-  afterEach(() => {
-    window.EXCALIDRAW_RICH_TEXT_V2 = undefined;
   });
 
   afterAll(() => {

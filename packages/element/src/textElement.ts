@@ -25,7 +25,6 @@ import { LinearElementEditor } from "./linearElementEditor";
 import { measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 import { layoutTextElement } from "./textLayout";
-import { isRichTextV2Enabled } from "./textStyleRanges";
 import {
   isBoundToContainer,
   isArrowElement,
@@ -76,8 +75,7 @@ export const redrawTextBoundingBox = (
 
   boundTextUpdates.text = textElement.text;
 
-  const hasTextStyles =
-    isRichTextV2Enabled() && !!textElement.textStyleRanges?.length;
+  const hasTextStyles = !!textElement.textStyleRanges?.length;
   if (container || !textElement.autoResize) {
     maxWidth = container
       ? getBoundTextMaxWidth(container, textElement)
@@ -181,7 +179,7 @@ export const handleBindTextResize = (
       shouldMaintainAspectRatio ||
       (transformHandleType !== "n" && transformHandleType !== "s")
     ) {
-      if (isRichTextV2Enabled() && textElement.textStyleRanges?.length) {
+      if (textElement.textStyleRanges?.length) {
         const layout = layoutTextElement(textElement, { maxWidth });
         text = layout.wrappedText;
         nextHeight = layout.height;

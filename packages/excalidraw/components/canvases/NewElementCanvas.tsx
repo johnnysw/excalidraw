@@ -19,10 +19,15 @@ interface NewElementCanvasProps {
   scale: number;
   rc: RoughCanvas;
   renderConfig: StaticCanvasRenderConfig;
+  registerImmediateRender?: (render: (() => void) | null) => void;
+  registerCanvas?: (canvas: HTMLCanvasElement | null) => void;
 }
 
 const NewElementCanvas = (props: NewElementCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const latestPropsRef = useRef(props);
+  latestPropsRef.current = props;
+
   useEffect(() => {
     if (!canvasRef.current) {
       return;
@@ -41,6 +46,42 @@ const NewElementCanvas = (props: NewElementCanvasProps) => {
       isRenderThrottlingEnabled(),
     );
   });
+
+  useEffect(() => {
+    props.registerCanvas?.(canvasRef.current);
+    return () => props.registerCanvas?.(null);
+  }, [props.registerCanvas]);
+
+  useEffect(() => {
+    if (!props.registerImmediateRender) {
+      return;
+    }
+
+    const renderImmediately = () => {
+      const canvas = canvasRef.current;
+      const latestProps = latestPropsRef.current;
+      if (!canvas) {
+        return;
+      }
+
+      renderNewElementScene(
+        {
+          canvas,
+          scale: latestProps.scale,
+          newElement: latestProps.appState.newElement,
+          elementsMap: latestProps.elementsMap,
+          allElementsMap: latestProps.allElementsMap,
+          rc: latestProps.rc,
+          renderConfig: latestProps.renderConfig,
+          appState: latestProps.appState,
+        },
+        false,
+      );
+    };
+
+    props.registerImmediateRender(renderImmediately);
+    return () => props.registerImmediateRender?.(null);
+  }, [props.registerImmediateRender]);
 
   return (
     <canvas

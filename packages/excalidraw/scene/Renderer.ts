@@ -15,7 +15,7 @@ import type {
 import type { Scene } from "@excalidraw/element";
 
 import { renderStaticSceneThrottled } from "../renderer/staticScene";
-import { isFreedrawPerfV2Enabled, markExcalidrawPerf } from "../reactUtils";
+import { markExcalidrawPerf } from "../reactUtils";
 
 import type { RenderableElementsMap } from "./types";
 
@@ -40,6 +40,53 @@ const getCellRange = (min: number, max: number) =>
     Math.floor(max / SPATIAL_GRID_CELL_SIZE),
   ] as const;
 
+const getSpatialIndexCacheKey = (
+  sceneNonce: ReturnType<InstanceType<typeof Scene>["getSceneNonce"]>,
+  elementCount: number,
+) => `${sceneNonce ?? "no-scene-nonce"}:${elementCount}`;
+
+const addElementToSpatialIndex = (
+  spatialIndex: SpatialIndexCache,
+  element: NonDeletedExcalidrawElement,
+  elementsMap: RenderableElementsMap,
+  orderIndex: number,
+) => {
+  spatialIndex.order.set(element.id, orderIndex);
+
+  const [x1, y1, x2, y2] = getElementBounds(element, elementsMap);
+  if (![x1, y1, x2, y2].every(Number.isFinite)) {
+    spatialIndex.overflow.push(element);
+    return;
+  }
+
+  const [minCellX, maxCellX] = getCellRange(
+    Math.min(x1, x2),
+    Math.max(x1, x2),
+  );
+  const [minCellY, maxCellY] = getCellRange(
+    Math.min(y1, y2),
+    Math.max(y1, y2),
+  );
+  const cellCount = (maxCellX - minCellX + 1) * (maxCellY - minCellY + 1);
+
+  if (cellCount > SPATIAL_GRID_MAX_ELEMENT_CELLS) {
+    spatialIndex.overflow.push(element);
+    return;
+  }
+
+  for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+    for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+      const cellKey = getCellKey(cellX, cellY);
+      const bucket = spatialIndex.grid.get(cellKey);
+      if (bucket) {
+        bucket.push(element);
+      } else {
+        spatialIndex.grid.set(cellKey, [element]);
+      }
+    }
+  }
+};
+
 export const buildRenderableSpatialIndex = (
   key: string,
   elementsMap: RenderableElementsMap,
@@ -47,46 +94,19 @@ export const buildRenderableSpatialIndex = (
   const grid = new Map<string, NonDeletedExcalidrawElement[]>();
   const overflow: NonDeletedExcalidrawElement[] = [];
   const order = new Map<ExcalidrawElement["id"], number>();
+  const spatialIndex = { key, grid, overflow, order };
+
   let orderIndex = 0;
-
   for (const element of elementsMap.values()) {
-    order.set(element.id, orderIndex++);
-
-    const [x1, y1, x2, y2] = getElementBounds(element, elementsMap);
-    if (![x1, y1, x2, y2].every(Number.isFinite)) {
-      overflow.push(element);
-      continue;
-    }
-
-    const [minCellX, maxCellX] = getCellRange(
-      Math.min(x1, x2),
-      Math.max(x1, x2),
+    addElementToSpatialIndex(
+      spatialIndex,
+      element,
+      elementsMap,
+      orderIndex++,
     );
-    const [minCellY, maxCellY] = getCellRange(
-      Math.min(y1, y2),
-      Math.max(y1, y2),
-    );
-    const cellCount = (maxCellX - minCellX + 1) * (maxCellY - minCellY + 1);
-
-    if (cellCount > SPATIAL_GRID_MAX_ELEMENT_CELLS) {
-      overflow.push(element);
-      continue;
-    }
-
-    for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
-      for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
-        const cellKey = getCellKey(cellX, cellY);
-        const bucket = grid.get(cellKey);
-        if (bucket) {
-          bucket.push(element);
-        } else {
-          grid.set(cellKey, [element]);
-        }
-      }
-    }
   }
 
-  return { key, grid, overflow, order };
+  return spatialIndex;
 };
 
 type ViewportCullConfig = {
@@ -182,14 +202,16 @@ export const getVisibleCanvasElementsFromSpatialIndex = ({
   spatialIndex.overflow.forEach((element) => candidates.add(element));
 
   return [...candidates]
-    .filter((element) =>
-      isElementInViewport(
-        element,
-        width,
-        height,
-        { zoom, offsetLeft, offsetTop, scrollX, scrollY },
-        elementsMap,
-      ),
+    .filter(
+      (element) =>
+        elementsMap.has(element.id) &&
+        isElementInViewport(
+          element,
+          width,
+          height,
+          { zoom, offsetLeft, offsetTop, scrollX, scrollY },
+          elementsMap,
+        ),
     )
     .sort(
       (a, b) =>
@@ -230,6 +252,46 @@ export class Renderer {
     return this.spatialIndexCache;
   }
 
+  public onSceneElementAppended(
+    element: NonDeletedExcalidrawElement,
+    previousSceneNonce: ReturnType<
+      InstanceType<typeof Scene>["getSceneNonce"]
+    >,
+    previousElementCount: number,
+  ) {
+    const spatialIndex = this.spatialIndexCache;
+    const previousKey = getSpatialIndexCacheKey(
+      previousSceneNonce,
+      previousElementCount,
+    );
+
+    this.getRenderableElements.clear();
+
+    if (!spatialIndex || spatialIndex.key !== previousKey) {
+      this.spatialIndexCache = null;
+      return;
+    }
+
+    try {
+      const elementsMap = toBrandedType<RenderableElementsMap>(
+        this.scene.getNonDeletedElementsMap(),
+      );
+      addElementToSpatialIndex(
+        spatialIndex,
+        element,
+        elementsMap,
+        previousElementCount,
+      );
+      spatialIndex.key = getSpatialIndexCacheKey(
+        this.scene.getSceneNonce(),
+        elementsMap.size,
+      );
+    } catch (error) {
+      this.spatialIndexCache = null;
+      this.warnSpatialIndexFallback(error);
+    }
+  }
+
   private warnSpatialIndexFallback(error: unknown) {
     if (isDevEnv() && !this.hasWarnedSpatialIndexFallback) {
       this.hasWarnedSpatialIndexFallback = true;
@@ -242,6 +304,7 @@ export class Renderer {
 
   private getVisibleCanvasElementsFromSpatialIndex({
     elementsMap,
+    spatialElementsMap,
     cacheKey,
     zoom,
     offsetLeft,
@@ -252,6 +315,7 @@ export class Renderer {
     width,
   }: {
     elementsMap: RenderableElementsMap;
+    spatialElementsMap: RenderableElementsMap;
     cacheKey: string;
     zoom: AppState["zoom"];
     offsetLeft: AppState["offsetLeft"];
@@ -262,7 +326,7 @@ export class Renderer {
     width: AppState["width"];
   }) {
     return getVisibleCanvasElementsFromSpatialIndex({
-      spatialIndex: this.getSpatialIndex(cacheKey, elementsMap),
+      spatialIndex: this.getSpatialIndex(cacheKey, spatialElementsMap),
       elementsMap,
       zoom,
       offsetLeft,
@@ -277,6 +341,7 @@ export class Renderer {
   public getRenderableElements = (() => {
     const getVisibleCanvasElements = ({
       elementsMap,
+      spatialElementsMap,
       cacheKey,
       zoom,
       offsetLeft,
@@ -287,6 +352,7 @@ export class Renderer {
       width,
     }: {
       elementsMap: RenderableElementsMap;
+      spatialElementsMap: RenderableElementsMap;
       cacheKey: string;
       zoom: AppState["zoom"];
       offsetLeft: AppState["offsetLeft"];
@@ -296,22 +362,21 @@ export class Renderer {
       height: AppState["height"];
       width: AppState["width"];
     }): readonly NonDeletedExcalidrawElement[] => {
-      if (isFreedrawPerfV2Enabled()) {
-        try {
-          return this.getVisibleCanvasElementsFromSpatialIndex({
-            elementsMap,
-            cacheKey,
-            zoom,
-            offsetLeft,
-            offsetTop,
-            scrollX,
-            scrollY,
-            height,
-            width,
-          });
-        } catch (error) {
-          this.warnSpatialIndexFallback(error);
-        }
+      try {
+        return this.getVisibleCanvasElementsFromSpatialIndex({
+          elementsMap,
+          spatialElementsMap,
+          cacheKey,
+          zoom,
+          offsetLeft,
+          offsetTop,
+          scrollX,
+          scrollY,
+          height,
+          width,
+        });
+      } catch (error) {
+        this.warnSpatialIndexFallback(error);
       }
 
       return getVisibleCanvasElementsByFullScan({
@@ -326,34 +391,45 @@ export class Renderer {
       });
     };
 
-    const getRenderableElements = ({
-      elements,
-      editingTextElement,
-      newElementId,
-    }: {
-      elements: readonly NonDeletedExcalidrawElement[];
-      editingTextElement: AppState["editingTextElement"];
-      newElementId: ExcalidrawElement["id"] | undefined;
-    }) => {
-      const elementsMap = toBrandedType<RenderableElementsMap>(new Map());
+    const getRenderableElementsMap = memoize(
+      ({
+        sceneNonce: _sceneNonce,
+        editingTextElement,
+        newElementId,
+      }: {
+        sceneNonce: ReturnType<InstanceType<typeof Scene>["getSceneNonce"]>;
+        editingTextElement: AppState["editingTextElement"];
+        newElementId: ExcalidrawElement["id"] | undefined;
+      }) => {
+        const sceneElementsMap = toBrandedType<RenderableElementsMap>(
+          this.scene.getNonDeletedElementsMap(),
+        );
+        const editingTextElementId =
+          editingTextElement?.type === "text"
+            ? editingTextElement.id
+            : undefined;
+        const shouldFilter = Boolean(
+          (newElementId && sceneElementsMap.has(newElementId)) ||
+            (editingTextElementId &&
+              sceneElementsMap.has(editingTextElementId)),
+        );
 
-      for (const element of elements) {
-        if (newElementId === element.id) {
-          continue;
+        if (!shouldFilter) {
+          return sceneElementsMap;
         }
 
-        // we don't want to render text element that's being currently edited
-        // (it's rendered on remote only)
-        if (
-          !editingTextElement ||
-          editingTextElement.type !== "text" ||
-          element.id !== editingTextElement.id
-        ) {
-          elementsMap.set(element.id, element);
+        const elementsMap = toBrandedType<RenderableElementsMap>(new Map());
+        for (const element of sceneElementsMap.values()) {
+          if (
+            element.id !== newElementId &&
+            element.id !== editingTextElementId
+          ) {
+            elementsMap.set(element.id, element);
+          }
         }
-      }
-      return elementsMap;
-    };
+        return elementsMap;
+      },
+    );
 
     return memoize(
       ({
@@ -382,20 +458,23 @@ export class Renderer {
         newElementId: ExcalidrawElement["id"] | undefined;
         sceneNonce: ReturnType<InstanceType<typeof Scene>["getSceneNonce"]>;
       }) => {
-        const elements = this.scene.getNonDeletedElements();
-
-        const elementsMap = getRenderableElements({
-          elements,
+        const spatialElementsMap = toBrandedType<RenderableElementsMap>(
+          this.scene.getNonDeletedElementsMap(),
+        );
+        const elementsMap = getRenderableElementsMap({
+          sceneNonce,
           editingTextElement,
           newElementId,
         });
 
-        const spatialIndexCacheKey = `${sceneNonce ?? "no-scene-nonce"}:${
-          editingTextElement?.id ?? "no-editing-text"
-        }:${newElementId ?? "no-new-element"}:${elements.length}`;
+        const spatialIndexCacheKey = getSpatialIndexCacheKey(
+          sceneNonce,
+          spatialElementsMap.size,
+        );
 
         const visibleElements = getVisibleCanvasElements({
           elementsMap,
+          spatialElementsMap,
           cacheKey: spatialIndexCacheKey,
           zoom,
           offsetLeft,

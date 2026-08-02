@@ -4,12 +4,15 @@ import type { LocalPoint } from "@excalidraw/math";
 import type { ExcalidrawFreeDrawElement } from "@excalidraw/element/types";
 
 import {
-  applyActiveFreedrawStroke,
   appendFreedrawPoint,
-  clearActiveFreedrawBounds,
+  clearActiveFreedrawStroke,
   createActiveFreedrawStroke,
   FREEDRAW_MIN_SCREEN_DISTANCE,
   getActiveFreedrawBounds,
+  getActiveFreedrawStroke,
+  getFreedrawPointerEventSamples,
+  setActiveFreedrawStroke,
+  updateActiveFreedrawBounds,
 } from "./freedrawPerf";
 
 const createFreedrawElement = (
@@ -50,28 +53,29 @@ const createFreedrawElement = (
   } as ExcalidrawFreeDrawElement);
 
 describe("freedraw perf buffer", () => {
-  it("discards exact duplicate points", () => {
+  it("does not accumulate exact duplicate raw points", () => {
     const stroke = createActiveFreedrawStroke(createFreedrawElement());
 
     expect(
       appendFreedrawPoint(stroke, pointFrom<LocalPoint>(0, 0), 0.7, 1),
-    ).toBe(false);
+    ).toEqual({ rawAdded: false, previewChanged: false });
     expect(stroke.points).toHaveLength(1);
     expect(stroke.pressures).toEqual([0.5]);
   });
 
-  it("discards tiny screen-space noise", () => {
+  it("keeps non-identical raw samples without redrawing tiny movement", () => {
     const stroke = createActiveFreedrawStroke(createFreedrawElement());
+    const tinyPoint = pointFrom<LocalPoint>(
+      FREEDRAW_MIN_SCREEN_DISTANCE / 2,
+      0,
+    );
 
-    expect(
-      appendFreedrawPoint(
-        stroke,
-        pointFrom<LocalPoint>(FREEDRAW_MIN_SCREEN_DISTANCE / 2, 0),
-        0.7,
-        1,
-      ),
-    ).toBe(false);
-    expect(stroke.points).toHaveLength(1);
+    expect(appendFreedrawPoint(stroke, tinyPoint, 0.7, 1)).toEqual({
+      rawAdded: true,
+      previewChanged: false,
+    });
+    expect(stroke.points).toEqual([pointFrom<LocalPoint>(0, 0), tinyPoint]);
+    expect(stroke.previewPoints).toEqual([pointFrom<LocalPoint>(0, 0)]);
   });
 
   it("keeps real movement and matching pressure samples", () => {
@@ -79,12 +83,13 @@ describe("freedraw perf buffer", () => {
 
     expect(
       appendFreedrawPoint(stroke, pointFrom<LocalPoint>(2, 3), 0.8, 1),
-    ).toBe(true);
+    ).toEqual({ rawAdded: true, previewChanged: true });
     expect(stroke.points).toEqual([
       pointFrom<LocalPoint>(0, 0),
       pointFrom<LocalPoint>(2, 3),
     ]);
     expect(stroke.pressures).toEqual([0.5, 0.8]);
+    expect(stroke.previewPointIndices).toEqual([0, 1]);
     expect(stroke.minX).toBe(0);
     expect(stroke.maxX).toBe(2);
     expect(stroke.minY).toBe(0);
@@ -101,37 +106,48 @@ describe("freedraw perf buffer", () => {
     expect(stroke.pressures).toEqual([]);
   });
 
-  it("applies active points and bounds without bumping element version", () => {
-    const element = createFreedrawElement({
-      version: 11,
-      points: [pointFrom<LocalPoint>(3, 4)],
-      pressures: [0.4],
-      width: 0,
-      height: 0,
-    });
+  it("keeps the dispatched trailing event after coalesced samples", () => {
+    const coalesced = [{ clientX: 1 }, { clientX: 2 }] as PointerEvent[];
+    const trailing = {
+      clientX: 3,
+      getCoalescedEvents: () => coalesced,
+    } as unknown as PointerEvent;
+
+    expect(getFreedrawPointerEventSamples(trailing)).toEqual([
+      ...coalesced,
+      trailing,
+    ]);
+  });
+
+  it("registers and clears the active stroke without copying its buffers", () => {
+    const element = createFreedrawElement();
     const stroke = createActiveFreedrawStroke(element);
 
-    appendFreedrawPoint(stroke, pointFrom<LocalPoint>(8, -2), 0.9, 1);
-    applyActiveFreedrawStroke(element, stroke);
+    setActiveFreedrawStroke(element, stroke);
+    expect(getActiveFreedrawStroke(element)).toBe(stroke);
 
-    expect(element.version).toBe(11);
-    expect(element.points).toEqual([
-      pointFrom<LocalPoint>(3, 4),
-      pointFrom<LocalPoint>(8, -2),
-    ]);
-    expect(element.pressures).toEqual([0.4, 0.9]);
-    expect(element.width).toBe(5);
-    expect(element.height).toBe(6);
+    clearActiveFreedrawStroke(element);
+    expect(getActiveFreedrawStroke(element)).toBe(undefined);
+  });
+
+  it("updates transient bounds without replacing element point arrays", () => {
+    const element = createFreedrawElement();
+    const originalPoints = element.points;
+    const originalPressures = element.pressures;
+    const stroke = createActiveFreedrawStroke(element);
+
+    appendFreedrawPoint(stroke, pointFrom<LocalPoint>(5, -3), 0.8, 1);
+    updateActiveFreedrawBounds(element, stroke);
+
+    expect(element.points).toBe(originalPoints);
+    expect(element.pressures).toBe(originalPressures);
     expect(getActiveFreedrawBounds(element)).toEqual({
-      minX: 3,
-      minY: -2,
-      maxX: 8,
-      maxY: 4,
+      minX: 0,
+      minY: -3,
+      maxX: 5,
+      maxY: 0,
       width: 5,
-      height: 6,
+      height: 3,
     });
-
-    clearActiveFreedrawBounds(element);
-    expect(getActiveFreedrawBounds(element)).toBe(undefined);
   });
 });

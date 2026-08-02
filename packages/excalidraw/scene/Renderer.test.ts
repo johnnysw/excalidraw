@@ -110,4 +110,50 @@ describe("renderer spatial index", () => {
 
     expect(indexed.map((element) => element.id)).toEqual(["a1", "a2"]);
   });
+
+  it.each([4000, 10000, 20000])(
+    "matches full scan for %i elements across pan and zoom",
+    (elementCount) => {
+      const columns = 200;
+      const elements = Array.from({ length: elementCount }, (_, index) =>
+        rectangle(
+          `element-${String(index).padStart(5, "0")}`,
+          (index % columns) * 180 - 18000,
+          Math.floor(index / columns) * 180 - 9000,
+          120,
+          120,
+        ),
+      );
+      const elementsMap = toRenderableElementsMap(elements);
+      const spatialIndex = buildRenderableSpatialIndex(
+        `large-${elementCount}`,
+        elementsMap,
+      );
+      const viewports = [
+        { scrollX: 0, scrollY: 0, zoom },
+        { scrollX: -4200, scrollY: -2300, zoom: { value: 0.5 } as Zoom },
+        { scrollX: 3100, scrollY: 1700, zoom: { value: 2 } as Zoom },
+      ];
+
+      for (const viewport of viewports) {
+        const config = {
+          elementsMap,
+          offsetLeft: 0,
+          offsetTop: 0,
+          width: 1440,
+          height: 900,
+          ...viewport,
+        };
+        const fullScan = getVisibleCanvasElementsByFullScan(config);
+        const indexed = getVisibleCanvasElementsFromSpatialIndex({
+          ...config,
+          spatialIndex,
+        });
+
+        expect(indexed.map((element) => element.id)).toEqual(
+          fullScan.map((element) => element.id),
+        );
+      }
+    },
+  );
 });

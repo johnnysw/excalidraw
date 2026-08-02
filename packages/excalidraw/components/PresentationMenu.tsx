@@ -1,8 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useApp, useExcalidrawElements, useExcalidrawSetAppState } from "./App";
 import {
-    getOrderedFrames,
-    getPresentationFrames,
     isFrameElement,
     mergePresentationFrameOrder,
 } from "@excalidraw/element";
@@ -96,7 +94,7 @@ const PresentationMenuContent: React.FC = () => {
     const [slides, setSlides] = useState<SlideItem[]>([]);
     const [slideOrder, setSlideOrder] = useState<string[]>(() => {
         const order = (app.state as any).slideOrder as string[] | undefined;
-        return getOrderedFrames(elements, order).map((frame) => frame.id);
+        return app.getOrderedSceneFrames(order).map((frame) => frame.id);
     });
     const [draggedId, setDraggedId] = useState<string | null>(null);
     const [dragOverId, setDragOverId] = useState<string | null>(null);
@@ -121,8 +119,8 @@ const PresentationMenuContent: React.FC = () => {
 
     // Get playable ordinary frames in their current presentation order.
     const frameElements = useMemo(() => {
-        return getPresentationFrames(elements, slideOrder);
-    }, [elements, slideOrder]);
+        return app.getPresentationSceneFrames(slideOrder);
+    }, [app, elements, slideOrder]);
 
     const elementsByFrameId = useMemo(() => {
         const map = new Map<string, ExcalidrawElement[]>();
@@ -198,10 +196,9 @@ const PresentationMenuContent: React.FC = () => {
             return;
         }
 
-        const normalizedExternalOrder = getOrderedFrames(
-            elements,
-            externalOrder,
-        ).map((frame) => frame.id);
+        const normalizedExternalOrder = app
+            .getOrderedSceneFrames(externalOrder)
+            .map((frame) => frame.id);
 
         setSlideOrder((prevOrder) => {
             const isSame = normalizedExternalOrder.length === prevOrder.length &&
@@ -214,14 +211,14 @@ const PresentationMenuContent: React.FC = () => {
             initialSlideOrderRef.current = normalizedExternalOrder;
             return normalizedExternalOrder;
         });
-    }, [(app.state as any).slideOrder, elements]);
+    }, [app, (app.state as any).slideOrder, elements]);
 
     // Initialize slide order when frames change
     useEffect(() => {
         setSlideOrder(prevOrder => {
-            const normalizedOrder = getOrderedFrames(elements, prevOrder).map(
-                (frame) => frame.id,
-            );
+            const normalizedOrder = app
+                .getOrderedSceneFrames(prevOrder)
+                .map((frame) => frame.id);
             const isSame = normalizedOrder.length === prevOrder.length &&
                 normalizedOrder.every((id, index) => id === prevOrder[index]);
             if (isSame) {
@@ -229,7 +226,7 @@ const PresentationMenuContent: React.FC = () => {
             }
             return normalizedOrder;
         });
-    }, [elements]);
+    }, [app, elements]);
 
     // Persist slide order into appState so host apps can store it
     useEffect(() => {
@@ -487,13 +484,12 @@ const PresentationMenuContent: React.FC = () => {
 
         if (draggedSlideId && draggedSlideId !== targetId) {
             setSlideOrder(prevOrder => {
-                const fullOrder = getOrderedFrames(elements, prevOrder).map(
-                    (frame) => frame.id,
-                );
-                const presentationOrder = getPresentationFrames(
-                    elements,
-                    prevOrder,
-                ).map((frame) => frame.id);
+                const fullOrder = app
+                    .getOrderedSceneFrames(prevOrder)
+                    .map((frame) => frame.id);
+                const presentationOrder = app
+                    .getPresentationSceneFrames(prevOrder)
+                    .map((frame) => frame.id);
                 const draggedIndex = presentationOrder.indexOf(draggedSlideId);
                 const targetIndex = presentationOrder.indexOf(targetId);
 
@@ -511,7 +507,7 @@ const PresentationMenuContent: React.FC = () => {
 
         setDraggedId(null);
         setDragOverId(null);
-    }, [elements]);
+    }, [app]);
 
     const handleDragEnd = useCallback(() => {
         setDraggedId(null);
@@ -539,7 +535,7 @@ const PresentationMenuContent: React.FC = () => {
 
     // Start presentation
     const startPresentation = useCallback(() => {
-        const currentFrames = getPresentationFrames(elements, slideOrder);
+        const currentFrames = app.getPresentationSceneFrames(slideOrder);
         if (currentFrames.length === 0) return;
 
         // Store the custom order in appState or trigger presentation with the order
@@ -560,10 +556,10 @@ const PresentationMenuContent: React.FC = () => {
             slideOrder: slideOrder,
             presentationSlideIndex: 0, // 始终从第1张幻灯片开始
         } as any));
-    }, [elements, slideOrder, setAppState, app.excalidrawContainerRef]);
+    }, [app, slideOrder, setAppState]);
 
     const openPresenterViewFromSlide = useCallback((slideId: string) => {
-        const currentFrames = getPresentationFrames(elements, slideOrder);
+        const currentFrames = app.getPresentationSceneFrames(slideOrder);
         const slideIndex = currentFrames.findIndex((frame) => frame.id === slideId);
         if (slideIndex === -1) return;
 
@@ -620,11 +616,11 @@ const PresentationMenuContent: React.FC = () => {
             bubbles: true,
         });
         document.dispatchEvent(event);
-    }, [elements, slideOrder, app.excalidrawContainerRef, setAppState]);
+    }, [app, slideOrder, setAppState]);
 
     // Start presentation from a specific slide
     const startFromSlide = useCallback((slideId: string) => {
-        const currentFrames = getPresentationFrames(elements, slideOrder);
+        const currentFrames = app.getPresentationSceneFrames(slideOrder);
         const slideIndex = currentFrames.findIndex((frame) => frame.id === slideId);
         if (slideIndex === -1) return;
 
@@ -645,7 +641,7 @@ const PresentationMenuContent: React.FC = () => {
             slideOrder: slideOrder,
             presentationSlideIndex: slideIndex,
         } as any));
-    }, [elements, slideOrder, setAppState, app.excalidrawContainerRef]);
+    }, [app, slideOrder, setAppState]);
 
     // Click on slide to scroll to it and select the frame
     const handleSlideClick = useCallback((slide: SlideItem) => {

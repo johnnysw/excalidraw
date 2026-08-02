@@ -2,11 +2,14 @@ import React from "react";
 
 import { DEFAULT_SIDEBAR, PRESENTATION_SIDEBAR_TAB } from "@excalidraw/common";
 import { CaptureUpdateAction } from "@excalidraw/element";
+
 import type { ExcalidrawFrameElement } from "@excalidraw/element/types";
 
 import { Excalidraw } from "../index";
 import { API } from "../tests/helpers/api";
 import { act, fireEvent, render, screen, waitFor } from "../tests/test-utils";
+
+import type { MockInstance } from "@vitest/spy";
 
 const { h } = window;
 
@@ -20,14 +23,12 @@ const createFrame = (
     x: options.x ?? 0,
     y: 0,
   }),
-  customData: options.excluded
-    ? { excludeFromPresentation: true }
-    : undefined,
+  customData: options.excluded ? { excludeFromPresentation: true } : undefined,
 });
 
 describe("presentation frame exclusion", () => {
   let requestFullscreen: ReturnType<typeof vi.fn>;
-  let openWindow: ReturnType<typeof vi.spyOn>;
+  let openWindow: MockInstance<Window["open"]>;
 
   beforeEach(async () => {
     requestFullscreen = vi.fn().mockResolvedValue(undefined);
@@ -103,7 +104,9 @@ describe("presentation frame exclusion", () => {
     API.setElements([excluded]);
 
     expect(screen.getByText("[-]", { exact: true })).toBeInTheDocument();
-    expect(screen.queryByText("[非 PPT]", { exact: true })).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("[非 PPT]", { exact: true }),
+    ).not.toBeInTheDocument();
   });
 
   it("uses playable numbering and preserves the excluded slot when reordered", () => {
@@ -190,9 +193,9 @@ describe("presentation frame exclusion", () => {
     });
 
     await waitFor(() => {
-      expect(document.querySelectorAll(".PresentationMenu__slide")).toHaveLength(
-        2,
-      );
+      expect(
+        document.querySelectorAll(".PresentationMenu__slide"),
+      ).toHaveLength(2);
     });
 
     expect(screen.getByTitle("Last")).toBeInTheDocument();
@@ -215,9 +218,7 @@ describe("presentation frame exclusion", () => {
 
     await waitFor(() => {
       expect(
-        document.querySelectorAll(
-          ".PresentationMenu__slide-actions > button",
-        ),
+        document.querySelectorAll(".PresentationMenu__slide-actions > button"),
       ).toHaveLength(4);
     });
 
@@ -247,9 +248,9 @@ describe("presentation frame exclusion", () => {
       slideOrder: [first.id, excluded.id, last.id],
     });
     await waitFor(() => {
-      expect(document.querySelectorAll(".PresentationMenu__slide")).toHaveLength(
-        2,
-      );
+      expect(
+        document.querySelectorAll(".PresentationMenu__slide"),
+      ).toHaveLength(2);
     });
 
     const dataTransfer = new DataTransfer();
@@ -276,12 +277,10 @@ describe("presentation frame exclusion", () => {
       },
     });
 
-    expect(
-      await screen.findByText("没有可播放的幻灯片"),
-    ).toBeInTheDocument();
-    expect(
-      document.querySelectorAll(".PresentationMenu__slide"),
-    ).toHaveLength(0);
+    expect(await screen.findByText("没有可播放的幻灯片")).toBeInTheDocument();
+    expect(document.querySelectorAll(".PresentationMenu__slide")).toHaveLength(
+      0,
+    );
   });
 
   it("starts formal presentation with only playable frames", async () => {
@@ -290,9 +289,7 @@ describe("presentation frame exclusion", () => {
     const last = createFrame("frame-c", { x: 400 });
     const presentationStarts: Array<{ total: number }> = [];
     const handleStart = (event: Event) => {
-      presentationStarts.push(
-        (event as CustomEvent<{ total: number }>).detail,
-      );
+      presentationStarts.push((event as CustomEvent<{ total: number }>).detail);
     };
     document.addEventListener("excalidraw:presentationStart", handleStart);
 
@@ -315,9 +312,7 @@ describe("presentation frame exclusion", () => {
     const excluded = createFrame("frame-only", { excluded: true });
     const presentationStarts: Array<{ total: number }> = [];
     const handleStart = (event: Event) => {
-      presentationStarts.push(
-        (event as CustomEvent<{ total: number }>).detail,
-      );
+      presentationStarts.push((event as CustomEvent<{ total: number }>).detail);
     };
     const setActiveTool = vi.spyOn(h.app, "setActiveTool");
     document.addEventListener("excalidraw:presentationStart", handleStart);
@@ -340,7 +335,17 @@ describe("presentation frame exclusion", () => {
     document.removeEventListener("excalidraw:presentationStart", handleStart);
   });
 
-  it.each([
+  it.each<{
+    name: string;
+    currentIndex: number;
+    excludedIndices: number[];
+    deletedIndices: number[];
+    removedIndices: number[];
+    expectedFrameId: string;
+    expectedCounter: string;
+    expectedIndex: number;
+    expectedTotal: number;
+  }>([
     {
       name: "keeps the current frame and follows its new index",
       currentIndex: 1,
@@ -407,99 +412,103 @@ describe("presentation frame exclusion", () => {
       expectedIndex: 1,
       expectedTotal: 3,
     },
-  ])("$name", async ({
-    currentIndex,
-    excludedIndices,
-    deletedIndices,
-    removedIndices,
-    expectedFrameId,
-    expectedCounter,
-    expectedIndex,
-    expectedTotal,
-  }) => {
-    const frames = [
-      createFrame("frame-a", { x: 0 }),
-      createFrame("frame-b", { x: 200 }),
-      createFrame("frame-c", { x: 400 }),
-      createFrame("frame-d", { x: 600 }),
-    ];
-    const slideChanges: Array<{
-      frameId: string | null;
-      index: number;
-      total: number;
-    }> = [];
-    const handleSlideChange = (event: Event) => {
-      slideChanges.push(
-        (
-          event as CustomEvent<{
-            frameId: string | null;
-            index: number;
-            total: number;
-          }>
-        ).detail,
+  ])(
+    "$name",
+    async ({
+      currentIndex,
+      excludedIndices,
+      deletedIndices,
+      removedIndices,
+      expectedFrameId,
+      expectedCounter,
+      expectedIndex,
+      expectedTotal,
+    }) => {
+      const frames = [
+        createFrame("frame-a", { x: 0 }),
+        createFrame("frame-b", { x: 200 }),
+        createFrame("frame-c", { x: 400 }),
+        createFrame("frame-d", { x: 600 }),
+      ];
+      const slideChanges: Array<{
+        frameId: string | null;
+        index: number;
+        total: number;
+      }> = [];
+      const handleSlideChange = (event: Event) => {
+        slideChanges.push(
+          (
+            event as CustomEvent<{
+              frameId: string | null;
+              index: number;
+              total: number;
+            }>
+          ).detail,
+        );
+      };
+      document.addEventListener(
+        "excalidraw:presentationSlideChange",
+        handleSlideChange,
       );
-    };
-    document.addEventListener(
-      "excalidraw:presentationSlideChange",
-      handleSlideChange,
-    );
 
-    API.setElements(frames);
-    API.setAppState({
-      slideOrder: frames.map((frame) => frame.id),
-      presentationMode: true,
-      presentationSlideIndex: currentIndex,
-    });
-    await waitFor(() => {
-      expect(
-        screen.getByText(`${currentIndex + 1} / ${frames.length}`),
-      ).toBeInTheDocument();
-    });
+      API.setElements(frames);
+      API.setAppState({
+        slideOrder: frames.map((frame) => frame.id),
+        presentationMode: true,
+        presentationSlideIndex: currentIndex,
+      });
+      await waitFor(() => {
+        expect(
+          screen.getByText(`${currentIndex + 1} / ${frames.length}`),
+        ).toBeInTheDocument();
+      });
 
-    const scrollToContent = vi.spyOn(h.app, "scrollToContent");
-    slideChanges.length = 0;
-    scrollToContent.mockClear();
-    API.updateScene({
-      elements: frames
-        .filter((_frame, index) => !removedIndices.includes(index))
-        .map((frame) => {
-          const index = frames.indexOf(frame);
-          if (excludedIndices.includes(index)) {
-            return {
-              ...frame,
-              customData: { excludeFromPresentation: true },
-            };
-          }
-          if (deletedIndices.includes(index)) {
-            return { ...frame, isDeleted: true };
-          }
-          return frame;
-        }),
-      captureUpdate: CaptureUpdateAction.NEVER,
-    });
+      const scrollToContent = vi.spyOn(h.app, "scrollToContent");
+      slideChanges.length = 0;
+      scrollToContent.mockClear();
+      API.updateScene({
+        elements: frames
+          .filter((_frame, index) => !removedIndices.includes(index))
+          .map((frame) => {
+            const index = frames.indexOf(frame);
+            if (excludedIndices.includes(index)) {
+              return {
+                ...frame,
+                customData: { excludeFromPresentation: true },
+              };
+            }
+            if (deletedIndices.includes(index)) {
+              return { ...frame, isDeleted: true };
+            }
+            return frame;
+          }),
+        captureUpdate: CaptureUpdateAction.NEVER,
+      });
 
-    await waitFor(() => {
-      expect(screen.getByText(expectedCounter)).toBeInTheDocument();
-      expect(slideChanges.length).toBeGreaterThan(0);
-    });
-    for (const detail of slideChanges) {
-      expect(detail.frameId).toBe(expectedFrameId);
-      expect(detail.index).toBe(expectedIndex);
-      expect(detail.total).toBe(expectedTotal);
-      expect(detail.index).toBeGreaterThanOrEqual(0);
-      expect(detail.index).toBeLessThan(detail.total);
-    }
-    expect(scrollToContent).toHaveBeenCalled();
-    for (const [frame] of scrollToContent.mock.calls) {
-      expect(frame.id).toBe(expectedFrameId);
-    }
+      await waitFor(() => {
+        expect(screen.getByText(expectedCounter)).toBeInTheDocument();
+        expect(slideChanges.length).toBeGreaterThan(0);
+      });
+      for (const detail of slideChanges) {
+        expect(detail.frameId).toBe(expectedFrameId);
+        expect(detail.index).toBe(expectedIndex);
+        expect(detail.total).toBe(expectedTotal);
+        expect(detail.index).toBeGreaterThanOrEqual(0);
+        expect(detail.index).toBeLessThan(detail.total);
+      }
+      expect(scrollToContent).toHaveBeenCalled();
+      for (const [target] of scrollToContent.mock.calls) {
+        const frame = target as ExcalidrawFrameElement;
+        expect(frame.id).toBe(expectedFrameId);
+      }
 
-    scrollToContent.mockRestore();
-    document.removeEventListener(
-      "excalidraw:presentationSlideChange",
-      handleSlideChange,
-    );
-  });
+      scrollToContent.mockRestore();
+      document.removeEventListener(
+        "excalidraw:presentationSlideChange",
+        handleSlideChange,
+      );
+    },
+  );
 
   it("exits formal presentation when no playable frame remains", async () => {
     const onlyFrame = createFrame("frame-only");

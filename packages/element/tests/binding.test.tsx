@@ -20,6 +20,7 @@ import { getTransformHandles } from "../src/transformHandles";
 import {
   getTextEditor,
   TEXT_EDITOR_SELECTOR,
+  updateTextEditor,
 } from "../../excalidraw/tests/queries/dom";
 
 import type {
@@ -463,7 +464,7 @@ describe("binding for simple arrows", () => {
       const rotationHandleY = rotation[1] + rotation[3] / 2;
       mouse.reset();
       mouse.down(rotationHandleX, rotationHandleY);
-      mouse.move(300, 400);
+      mouse.move(0, -100);
       mouse.up();
       expect(arrow.angle).toBeGreaterThan(0.7 * Math.PI);
       expect(arrow.angle).toBeLessThan(1.3 * Math.PI);
@@ -650,7 +651,7 @@ describe("binding for simple arrows", () => {
 
       expect(editor).not.toBe(null);
 
-      fireEvent.change(editor, { target: { value: "asdasdasdasdas" } });
+      updateTextEditor(editor, "asdasdasdasdas");
       fireEvent.keyDown(editor, { key: KEYS.ESCAPE });
 
       expect(document.querySelector(TEXT_EDITOR_SELECTOR)).toBe(null);
@@ -686,7 +687,7 @@ describe("binding for simple arrows", () => {
 
       const editor = await getTextEditor();
 
-      fireEvent.change(editor, { target: { value: "" } });
+      updateTextEditor(editor, "");
       fireEvent.keyDown(editor, { key: KEYS.ESCAPE });
 
       expect(document.querySelector(TEXT_EDITOR_SELECTOR)).toBe(null);

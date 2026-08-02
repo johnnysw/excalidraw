@@ -78,7 +78,7 @@ describe("element locking", () => {
       });
 
       const centerTextAlign = queryByTestId(document.body, `align-right`);
-      expect(centerTextAlign).toBeChecked();
+      expect(centerTextAlign).toHaveClass("active");
     });
   });
 
@@ -125,7 +125,7 @@ describe("element locking", () => {
         document.body,
         `strokeWidth-thin`,
       );
-      expect(thinStrokeWidthButton).toBeChecked();
+      expect(thinStrokeWidthButton).toHaveClass("active");
     });
 
     it("should not highlight any stroke width button if no common style", () => {
@@ -143,13 +143,13 @@ describe("element locking", () => {
       expect(queryByTestId(document.body, `strokeWidth-thin`)).not.toBe(null);
       expect(
         queryByTestId(document.body, `strokeWidth-thin`),
-      ).not.toBeChecked();
+      ).not.toHaveClass("active");
       expect(
         queryByTestId(document.body, `strokeWidth-bold`),
-      ).not.toBeChecked();
+      ).not.toHaveClass("active");
       expect(
         queryByTestId(document.body, `strokeWidth-extraBold`),
-      ).not.toBeChecked();
+      ).not.toHaveClass("active");
     });
 
     it("should show properties of different element types when selected", () => {
@@ -164,7 +164,9 @@ describe("element locking", () => {
       API.setElements([rect, text]);
       API.setSelectedElements([rect, text]);
 
-      expect(queryByTestId(document.body, `strokeWidth-bold`)).toBeChecked();
+      expect(queryByTestId(document.body, `strokeWidth-bold`)).toHaveClass(
+        "active",
+      );
       expect(queryByTestId(document.body, `font-family-code`)).toHaveClass(
         "active",
       );

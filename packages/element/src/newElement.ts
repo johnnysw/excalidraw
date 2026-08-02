@@ -26,10 +26,7 @@ import { newElementWith } from "./mutateElement";
 import { getBoundTextMaxWidth } from "./textElement";
 import { normalizeText, measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
-import {
-  isRichTextV2Enabled,
-  normalizeTextStyleRanges,
-} from "./textStyleRanges";
+import { normalizeTextStyleRanges } from "./textStyleRanges";
 import { layoutText, layoutTextElement } from "./textLayout";
 
 import { isLineElement } from "./typeChecks";
@@ -288,7 +285,7 @@ export const newTextElement = (
     },
   );
   const styledLayout =
-    textStyleRanges.length && isRichTextV2Enabled()
+    textStyleRanges.length
       ? layoutText({
           originalText,
           baseStyle: {
@@ -496,7 +493,7 @@ export const refreshTextDimensions = (
     });
   let nextMetrics: { width: number; height: number };
   let previousMetrics: { width: number; height: number };
-  if (textElement.textStyleRanges?.length && isRichTextV2Enabled()) {
+  if (textElement.textStyleRanges?.length) {
     const nextLayout = layoutStyledText(text);
     const previousLayout = layoutStyledText(textElement.originalText);
     text = nextLayout.wrappedText;

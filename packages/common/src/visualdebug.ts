@@ -6,12 +6,17 @@ import {
   type LocalPoint,
 } from "@excalidraw/math";
 
-import { isBounds } from "@excalidraw/element";
-
 import type { Curve } from "@excalidraw/math";
 import type { LineSegment } from "@excalidraw/utils";
 
 import type { Bounds } from "@excalidraw/element";
+
+// Keep common independent from element at runtime. Importing the element barrel
+// here creates a common -> element -> common initialization cycle in bundlers.
+const isBounds = (box: unknown): box is Bounds =>
+  Array.isArray(box) &&
+  box.length === 4 &&
+  box.every((coordinate) => typeof coordinate === "number");
 
 // The global data holder to collect the debug operations
 declare global {

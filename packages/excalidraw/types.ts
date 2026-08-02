@@ -425,6 +425,8 @@ export interface AppState {
   animationProgress: number;
   /** custom slide order (frame ids) used by presentation mode */
   slideOrder?: string[];
+  /** active slide index while a presentation is running */
+  presentationSlideIndex?: number;
   /** host-specific question element rendering settings */
   questionElementSettings?: {
     showQuestionCardBorder?: boolean;
@@ -850,6 +852,9 @@ export type AppClassProperties = {
   dismissLinearEditor: App["dismissLinearEditor"];
   flowChartCreator: App["flowChartCreator"];
   getEffectiveGridSize: App["getEffectiveGridSize"];
+  getOrderedSceneFrames: App["getOrderedSceneFrames"];
+  getPresentationSceneFrames: App["getPresentationSceneFrames"];
+  getDetachedFreedrawInsertionIndex: App["getDetachedFreedrawInsertionIndex"];
   setPlugins: App["setPlugins"];
   plugins: App["plugins"];
   getEditorUIOffsets: App["getEditorUIOffsets"];
