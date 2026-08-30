@@ -265,6 +265,7 @@ export const AnswerStatusMenu: React.FC<AnswerStatusMenuProps> = ({
   const teachingTaskId = selectedTaskId ?? teachingContext?.taskId ?? null;
   const teachingModuleId = teachingContext?.moduleId ?? null;
   const teachingCoursewareId = teachingContext?.coursewareId ?? null;
+  const teachingCoursewareCode = teachingContext?.coursewareCode ?? null;
   const {
     historyState,
     historyList,
@@ -305,6 +306,7 @@ export const AnswerStatusMenu: React.FC<AnswerStatusMenuProps> = ({
           paperId: undefined,
         },
         coursewareId: teachingCoursewareId ?? undefined,
+        coursewareCode: teachingCoursewareCode ?? undefined,
       },
       bubbles: true,
     });

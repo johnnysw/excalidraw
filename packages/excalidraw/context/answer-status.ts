@@ -27,6 +27,7 @@ export interface TeachingClassInfo {
 
 export interface TeachingContext {
   coursewareId?: number;
+  coursewareCode?: string;
   moduleId?: number;
   paperId?: number;
   taskId?: number;
