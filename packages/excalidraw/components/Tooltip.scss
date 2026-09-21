@@ -1,4 +1,4 @@
-@import "../css/variables.module.scss";
+@use "../css/variables.module.scss" as *;
 
 // container in body where the actual tooltip is appended to
 .excalidraw-tooltip {

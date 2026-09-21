@@ -1,5 +1,6 @@
-@import "open-color/open-color.scss";
-@import "./variables.module.scss";
+@use "sass:color";
+@forward "./variables.module.scss";
+@use "./variables.module.scss" as *;
 
 .excalidraw {
   --theme-filter: none;
@@ -24,7 +25,7 @@
   --island-bg-color: #ffffff;
   --keybinding-color: var(--color-gray-40);
   --link-color: #{$oc-blue-7};
-  --overlay-bg-color: #{transparentize($oc-white, 0.12)};
+  --overlay-bg-color: #{color.adjust($oc-white, $alpha: -0.12)};
   --popup-bg-color: var(--island-bg-color);
   --popup-secondary-bg-color: #{$oc-gray-1};
   --popup-text-color: #{$oc-black};
@@ -199,7 +200,7 @@
     --island-bg-color: #232329;
     --keybinding-color: var(--color-gray-60);
     --link-color: #{$oc-blue-4};
-    --overlay-bg-color: #{transparentize($oc-gray-8, 0.88)};
+    --overlay-bg-color: #{color.adjust($oc-gray-8, $alpha: -0.88)};
     --popup-secondary-bg-color: #222;
     --popup-text-color: #{$oc-gray-4};
     --popup-text-inverted-color: #2c2c2c;

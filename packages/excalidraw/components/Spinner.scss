@@ -1,4 +1,4 @@
-@import "open-color/open-color.scss";
+@use "../css/open-color" as *;
 
 $duration: 1.6s;
 

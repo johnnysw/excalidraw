@@ -1,4 +1,5 @@
-@import "../css/variables.module.scss";
+@use "sass:color";
+@use "../css/variables.module.scss" as *;
 
 .excalidraw {
   .context-menu-popover {
@@ -8,7 +9,7 @@
   .context-menu {
     position: relative;
     border-radius: 4px;
-    box-shadow: 0 3px 10px transparentize($oc-black, 0.8);
+    box-shadow: 0 3px 10px color.adjust($oc-black, $alpha: -0.8);
     padding: 0;
     list-style: none;
     user-select: none;

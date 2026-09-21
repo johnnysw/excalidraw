@@ -1,10 +1,11 @@
-@import "../css/variables.module.scss";
+@use "sass:color";
+@use "../css/variables.module.scss" as *;
 
 .excalidraw {
   .picker {
     padding: 0.5rem;
     background: var(--popup-bg-color);
-    border: 0 solid transparentize($oc-white, 0.75);
+    border: 0 solid color.adjust($oc-white, $alpha: -0.75);
     box-shadow: var(--shadow-island);
     border-radius: 4px;
     position: absolute;

@@ -1,4 +1,5 @@
-@import "../../css/variables.module.scss";
+@use "sass:color";
+@use "../../css/variables.module.scss" as *;
 
 .advanced-color-picker-popover {
   z-index: 100;
@@ -205,8 +206,8 @@
 
   .color-picker {
     background: var(--popup-bg-color);
-    border: 0 solid transparentize($oc-white, 0.75);
-    box-shadow: transparentize($oc-black, 0.75) 0 1px 4px;
+    border: 0 solid color.adjust($oc-white, $alpha: -0.75);
+    box-shadow: color.adjust($oc-black, $alpha: -0.75) 0 1px 4px;
     border-radius: 4px;
     position: absolute;
 
@@ -263,7 +264,7 @@
   }
 
   .color-picker-triangle-shadow {
-    border-color: transparent transparent transparentize($oc-black, 0.9);
+    border-color: transparent transparent color.adjust($oc-black, $alpha: -0.9);
 
     :root[dir="ltr"] & {
       left: -14px;
@@ -339,7 +340,7 @@
 
   .color-picker-transparent {
     border-radius: 4px;
-    box-shadow: transparentize($oc-black, 0.9) 0 0 0 1px inset;
+    box-shadow: color.adjust($oc-black, $alpha: -0.9) 0 0 0 1px inset;
     position: absolute;
     top: 0;
     right: 0;

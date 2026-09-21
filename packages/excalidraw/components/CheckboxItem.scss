@@ -1,4 +1,5 @@
-@import "../css/variables.module.scss";
+@use "sass:color";
+@use "../css/variables.module.scss" as *;
 
 .excalidraw {
   .Checkbox {
@@ -30,7 +31,7 @@
 
     &:hover {
       .Checkbox-box {
-        background-color: fade-out($oc-blue-1, 0.8);
+        background-color: color.adjust($oc-blue-1, $alpha: -0.8);
       }
     }
 
