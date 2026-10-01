@@ -100,6 +100,7 @@ import {
   getFeatureFlag,
   createUserAgentDescriptor,
   getFormFactor,
+  isMobileBreakpoint,
   deriveStylesPanelMode,
   isIOS,
   isBrave,
@@ -2925,7 +2926,12 @@ class App extends React.Component<AppProps, AppState> {
 
   public render() {
     const selectedElements = this.scene.getSelectedElements(this.state);
-    const { renderTopRightUI, renderTopLeftUI, renderCustomStats } = this.props;
+    const {
+      renderTopRightUI,
+      renderTopLeftUI,
+      renderToolbarStart,
+      renderCustomStats,
+    } = this.props;
 
     const sceneNonce = this.scene.getSceneNonce();
     const sceneNewElementId = this.state.newElement
@@ -3128,12 +3134,21 @@ class App extends React.Component<AppProps, AppState> {
             this.state.viewModeEnabled ||
             this.state.openDialog?.name === "elementLinkSelector",
           "excalidraw--mobile": this.editorInterface.formFactor === "phone",
+          "excalidraw--toolbar-left":
+            this.props.UIOptions.toolbarLayout === "left" &&
+            this.editorInterface.formFactor !== "phone" &&
+            !this.state.viewModeEnabled &&
+            !this.state.presentationMode &&
+            this.state.openDialog?.name !== "elementLinkSelector",
+          "excalidraw--toolbar-touch": this.editorInterface.isTouchScreen,
         })}
         style={{
           ["--ui-pointerEvents" as any]: shouldBlockPointerEvents
             ? POINTER_EVENTS.disabled
             : POINTER_EVENTS.enabled,
           ["--right-sidebar-width" as any]: "302px",
+          ["--courseware-toolbar-viewport-width" as keyof React.CSSProperties]:
+            `${this.state.width}px`,
         }}
         ref={this.excalidrawContainerRef}
         onDrop={this.handleAppOnDrop}
@@ -3173,6 +3188,7 @@ class App extends React.Component<AppProps, AppState> {
                           langCode={getLanguage().code}
                           renderTopLeftUI={renderTopLeftUI}
                           renderTopRightUI={renderTopRightUI}
+                          renderToolbarStart={renderToolbarStart}
                           renderCustomStats={renderCustomStats}
                           showExitZenModeBtn={
                             typeof this.props?.zenModeEnabled === "undefined" &&
@@ -4177,10 +4193,16 @@ class App extends React.Component<AppProps, AppState> {
   };
 
   private getFormFactor = (editorWidth: number, editorHeight: number) => {
-    return (
-      this.props.UIOptions.formFactor ??
-      getFormFactor(editorWidth, editorHeight)
-    );
+    if (this.props.UIOptions.formFactor) {
+      return this.props.UIOptions.formFactor;
+    }
+    if (
+      this.props.UIOptions.toolbarLayout === "left" &&
+      isMobileBreakpoint(editorWidth, editorHeight)
+    ) {
+      return "phone";
+    }
+    return getFormFactor(editorWidth, editorHeight);
   };
 
   public refreshEditorInterface = () => {

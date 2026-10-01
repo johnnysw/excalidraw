@@ -21,7 +21,7 @@ const DropdownMenu = ({
 }: {
   children?: React.ReactNode;
   open: boolean;
-  placement?: "top" | "bottom";
+  placement?: "top" | "bottom" | "right";
 }) => {
   const MenuTriggerComp = getMenuTriggerComponent(children);
   const MenuContentComp = getMenuContentComponent(children);
@@ -29,9 +29,10 @@ const DropdownMenu = ({
   // clone the MenuContentComp to pass the placement prop
   const MenuContentCompWithPlacement =
     MenuContentComp && React.isValidElement(MenuContentComp)
-      ? React.cloneElement(MenuContentComp as React.ReactElement<any>, {
-          placement,
-        })
+      ? React.cloneElement(
+          MenuContentComp as React.ReactElement<any>,
+          placement === undefined ? {} : { placement },
+        )
       : MenuContentComp;
 
   return (

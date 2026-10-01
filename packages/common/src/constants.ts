@@ -313,6 +313,7 @@ export const URL_HASH_KEYS = {
 } as const;
 
 export const DEFAULT_UI_OPTIONS: AppProps["UIOptions"] = {
+  toolbarLayout: "top",
   canvasActions: {
     changeViewBackgroundColor: true,
     clearCanvas: true,

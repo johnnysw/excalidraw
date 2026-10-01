@@ -1190,7 +1190,6 @@ export const ShapesSwitcher = ({
   app: AppClassProperties;
   UIOptions: AppProps["UIOptions"];
 }) => {
-  const [isExtraToolsMenuOpen, setIsExtraToolsMenuOpen] = useState(false);
   const stylesPanelMode = useStylesPanelMode();
   const isFullStylesPanel = stylesPanelMode === "full";
   const isCompactStylesPanel = stylesPanelMode === "compact";
@@ -1207,10 +1206,6 @@ export const ShapesSwitcher = ({
       title: capitalizeString(t("toolBar.lasso")),
     },
   ] as const;
-
-  const embeddableToolSelected = activeTool.type === "embeddable";
-
-  const { TTDDialogTriggerTunnel } = useTunnels();
 
   return (
     <>
@@ -1413,68 +1408,117 @@ export const ShapesSwitcher = ({
       )}
       <div className="App-toolbar__divider" />
 
-      <DropdownMenu open={isExtraToolsMenuOpen}>
-        <DropdownMenu.Trigger
-          className={clsx("App-toolbar__extra-tools-trigger", {
-            "App-toolbar__extra-tools-trigger--selected":
-              embeddableToolSelected,
-          })}
-          onToggle={() => {
-            setIsExtraToolsMenuOpen(!isExtraToolsMenuOpen);
-            setAppState({ openMenu: null, openPopup: null });
-          }}
-          title={t("toolBar.extraTools")}
-        >
-          {embeddableToolSelected ? EmbedIcon : extraToolsIcon}
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content
-          onClickOutside={() => setIsExtraToolsMenuOpen(false)}
-          onSelect={() => setIsExtraToolsMenuOpen(false)}
-          className="App-toolbar__extra-tools-dropdown"
-        >
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "embeddable" })}
-            icon={EmbedIcon}
-            data-testid="toolbar-embeddable"
-            selected={embeddableToolSelected}
-          >
-            {t("toolBar.embeddable")}
-          </DropdownMenu.Item>
-          <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
-            Generate
-          </div>
-          {app.props.aiEnabled !== false && <TTDDialogTriggerTunnel.Out />}
-          <DropdownMenu.Item
-            onSelect={() => app.setOpenDialog({ name: "ttd", tab: "mermaid" })}
-            icon={mermaidLogoIcon}
-            data-testid="toolbar-embeddable"
-          >
-            {t("toolBar.mermaidToExcalidraw")}
-          </DropdownMenu.Item>
-          {app.props.extraToolsMenuItems?.map((item) => (
-            <DropdownMenu.Item
-              key={item.id}
-              onSelect={item.onSelect}
-              icon={item.icon as any}
-              disabled={item.disabled}
-              data-testid={`toolbar-extra-${item.id}`}
-            >
-              {item.label}
-            </DropdownMenu.Item>
-          ))}
-          {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
-            <DropdownMenu.Item
-              onSelect={() => app.onMagicframeToolSelect()}
-              icon={MagicIcon}
-              data-testid="toolbar-magicframe"
-            >
-              {t("toolBar.magicframe")}
-              <DropdownMenu.Item.Badge>AI</DropdownMenu.Item.Badge>
-            </DropdownMenu.Item>
-          )}
-        </DropdownMenu.Content>
-      </DropdownMenu>
+      <MoreToolsMenu
+        app={app}
+        activeTool={activeTool}
+        setAppState={setAppState}
+        UIOptions={UIOptions}
+      />
     </>
+  );
+};
+
+/** The same extra-tool actions are shared by the top and courseware toolbars. */
+export const MoreToolsMenu = ({
+  activeTool,
+  setAppState,
+  app,
+  UIOptions,
+  open,
+  onOpenChange,
+  onCloseAutoFocus,
+}: {
+  activeTool: UIAppState["activeTool"];
+  setAppState: React.Component<any, AppState>["setState"];
+  app: AppClassProperties;
+  UIOptions: AppProps["UIOptions"];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onCloseAutoFocus?: (event: Event) => void;
+}) => {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isExtraToolsMenuOpen = open ?? internalOpen;
+  const setOpen = (nextOpen: boolean) => {
+    setInternalOpen(nextOpen);
+    onOpenChange?.(nextOpen);
+  };
+  const editorInterface = useEditorInterface();
+  const isLeftToolbar =
+    UIOptions.toolbarLayout === "left" &&
+    editorInterface.formFactor !== "phone";
+  const embeddableToolSelected = activeTool.type === "embeddable";
+  const { TTDDialogTriggerTunnel } = useTunnels();
+  return (
+    <DropdownMenu
+      open={isExtraToolsMenuOpen}
+      placement={isLeftToolbar ? "right" : "bottom"}
+    >
+      <DropdownMenu.Trigger
+        className={clsx("App-toolbar__extra-tools-trigger", {
+          "App-toolbar__extra-tools-trigger--selected": embeddableToolSelected,
+        })}
+        onToggle={() => {
+          setOpen(!isExtraToolsMenuOpen);
+          setAppState({ openMenu: null, openPopup: null });
+        }}
+        title={t("toolBar.extraTools")}
+        aria-label={t("toolBar.extraTools")}
+        aria-haspopup="menu"
+        aria-expanded={isExtraToolsMenuOpen}
+        tooltipPosition={isLeftToolbar ? "right" : undefined}
+        data-testid={isLeftToolbar ? "toolbar-extra-tools-trigger" : "dropdown-menu-button"}
+      >
+        {embeddableToolSelected ? EmbedIcon : extraToolsIcon}
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Content
+        onClickOutside={() => setOpen(false)}
+        onSelect={() => setOpen(false)}
+        className="App-toolbar__extra-tools-dropdown"
+        portal={isLeftToolbar}
+        onCloseAutoFocus={onCloseAutoFocus}
+      >
+        <DropdownMenu.Item
+          onSelect={() => app.setActiveTool({ type: "embeddable" })}
+          icon={EmbedIcon}
+          data-testid="toolbar-embeddable"
+          selected={embeddableToolSelected}
+        >
+          {t("toolBar.embeddable")}
+        </DropdownMenu.Item>
+        <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
+          Generate
+        </div>
+        {app.props.aiEnabled !== false && <TTDDialogTriggerTunnel.Out />}
+        <DropdownMenu.Item
+          onSelect={() => app.setOpenDialog({ name: "ttd", tab: "mermaid" })}
+          icon={mermaidLogoIcon}
+          data-testid="toolbar-embeddable"
+        >
+          {t("toolBar.mermaidToExcalidraw")}
+        </DropdownMenu.Item>
+        {app.props.extraToolsMenuItems?.map((item) => (
+          <DropdownMenu.Item
+            key={item.id}
+            onSelect={item.onSelect}
+            icon={item.icon as any}
+            disabled={item.disabled}
+            data-testid={`toolbar-extra-${item.id}`}
+          >
+            {item.label}
+          </DropdownMenu.Item>
+        ))}
+        {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
+          <DropdownMenu.Item
+            onSelect={() => app.onMagicframeToolSelect()}
+            icon={MagicIcon}
+            data-testid="toolbar-magicframe"
+          >
+            {t("toolBar.magicframe")}
+            <DropdownMenu.Item.Badge>AI</DropdownMenu.Item.Badge>
+          </DropdownMenu.Item>
+        )}
+      </DropdownMenu.Content>
+    </DropdownMenu>
   );
 };
 

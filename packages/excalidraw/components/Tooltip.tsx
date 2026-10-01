@@ -23,7 +23,7 @@ export const updateTooltipPosition = (
     width: number;
     height: number;
   },
-  position: "bottom" | "top" = "bottom",
+  position: "bottom" | "top" | "right" = "bottom",
 ) => {
   const tooltipRect = tooltip.getBoundingClientRect();
 
@@ -41,7 +41,18 @@ export const updateTooltipPosition = (
 
   let top: number;
 
-  if (position === "bottom") {
+  if (position === "right") {
+    left = item.left + item.width + margin;
+    if (left + tooltipRect.width >= viewportWidth) {
+      left = item.left - tooltipRect.width - margin;
+    }
+    top = item.top + item.height / 2 - tooltipRect.height / 2;
+    if (top < margin) {
+      top = margin;
+    } else if (top + tooltipRect.height >= viewportHeight) {
+      top = viewportHeight - tooltipRect.height - margin;
+    }
+  } else if (position === "bottom") {
     top = item.top + item.height + margin;
     if (top + tooltipRect.height >= viewportHeight) {
       top = item.top - tooltipRect.height - margin;
@@ -60,10 +71,11 @@ export const updateTooltipPosition = (
 };
 
 const updateTooltip = (
-  item: HTMLDivElement,
+  item: HTMLElement,
   tooltip: HTMLDivElement,
   label: string,
   long: boolean,
+  position: "bottom" | "top" | "right" = "bottom",
 ) => {
   tooltip.classList.add("excalidraw-tooltip--visible");
   tooltip.style.minWidth = long ? "50ch" : "10ch";
@@ -72,7 +84,20 @@ const updateTooltip = (
   tooltip.textContent = label;
 
   const itemRect = item.getBoundingClientRect();
-  updateTooltipPosition(tooltip, itemRect);
+  updateTooltipPosition(tooltip, itemRect, position);
+};
+
+export const showTooltip = (
+  item: HTMLElement,
+  label: string,
+  long = false,
+  position: "bottom" | "top" | "right" = "bottom",
+) => {
+  updateTooltip(item, getTooltipDiv(), label, long, position);
+};
+
+export const hideTooltip = () => {
+  getTooltipDiv().classList.remove("excalidraw-tooltip--visible");
 };
 
 type TooltipProps = {
@@ -81,6 +106,7 @@ type TooltipProps = {
   long?: boolean;
   style?: React.CSSProperties;
   disabled?: boolean;
+  position?: "bottom" | "top" | "right";
 };
 
 export const Tooltip = ({
@@ -89,6 +115,7 @@ export const Tooltip = ({
   long = false,
   style,
   disabled,
+  position = "bottom",
 }: TooltipProps) => {
   useEffect(() => {
     return () =>
@@ -106,6 +133,7 @@ export const Tooltip = ({
           getTooltipDiv(),
           label,
           long,
+          position,
         )
       }
       onPointerLeave={() =>

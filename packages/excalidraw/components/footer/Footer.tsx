@@ -1,10 +1,7 @@
 import clsx from "clsx";
-import { useEffect, useRef, useState } from "react";
 
 import { actionShortcuts } from "../../actions";
 import { useTunnels } from "../../context/tunnels";
-import { useShareMode } from "../../context/share-mode";
-import { useRole } from "../../context/role";
 import { ExitZenModeButton, UndoRedoActions, ZoomActions } from "../Actions";
 import { HelpButton } from "../HelpButton";
 import { Section } from "../Section";
@@ -13,189 +10,110 @@ import Stack from "../Stack";
 import type { ActionManager } from "../../actions/manager";
 import type { UIAppState } from "../../types";
 
-import { PlaySquareIcon, Presentation05Icon, PresenterModeIcon } from "../icons";
+import PresentationMenuButton from "../PresentationMenuButton";
+import CoursewareSelectionTools from "../CoursewareSelectionTools";
+
+import type { AppClassProperties, AppProps, AppState } from "../../types";
 
 const Footer = ({
   appState,
   actionManager,
   showExitZenModeBtn,
   renderWelcomeScreen,
+  isLeftToolbar,
   canPresent,
   onPresent,
+  app,
+  setAppState,
+  UIOptions,
+  onHandToolToggle,
 }: {
   appState: UIAppState;
   actionManager: ActionManager;
   showExitZenModeBtn: boolean;
   renderWelcomeScreen: boolean;
+  isLeftToolbar: boolean;
   canPresent: boolean;
   onPresent: (mode: "viewer" | "presenter") => void;
+  app: AppClassProperties;
+  setAppState: React.Component<any, AppState>["setState"];
+  UIOptions: AppProps["UIOptions"];
+  onHandToolToggle: () => void;
 }) => {
   const { FooterCenterTunnel, WelcomeScreenHelpHintTunnel } = useTunnels();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const shareModePermissions = useShareMode();
-  const role = useRole();
-
-  // 分享模式下的演示按钮配置
-  const presentationConfig = shareModePermissions?.footer?.presentation;
-  const showPresentationInViewMode = presentationConfig?.visible ?? false;
-  const allowedViews = presentationConfig?.allowedViews;
-  const shouldShowPresentationButton =
-    presentationConfig?.visible === false
-      ? false
-      : !appState.viewModeEnabled || showPresentationInViewMode;
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!canPresent) {
-      setMenuOpen(false);
-    }
-  }, [canPresent]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        menuRef.current &&
-        triggerRef.current &&
-        !menuRef.current.contains(target) &&
-        !triggerRef.current.contains(target)
-      ) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [menuOpen]);
 
   return (
     <footer
       role="contentinfo"
-      className="layer-ui__wrapper__footer App-menu App-menu_bottom"
+      className={clsx(
+        "layer-ui__wrapper__footer App-menu App-menu_bottom",
+        { "App-menu_bottom--courseware": isLeftToolbar },
+      )}
     >
-      <div
-        className={clsx("layer-ui__wrapper__footer-left zen-mode-transition", {
-          "layer-ui__wrapper__footer-left--transition-left":
-            appState.zenModeEnabled,
-        })}
-      >
-        <Stack.Col gap={2}>
-          <Section heading="canvasActions">
-            <ZoomActions
-              renderAction={actionManager.renderAction}
-              zoom={appState.zoom}
-            />
-
-            {!appState.viewModeEnabled && (
-              <UndoRedoActions
+      {!isLeftToolbar && (
+        <div
+          className={clsx("layer-ui__wrapper__footer-left zen-mode-transition", {
+            "layer-ui__wrapper__footer-left--transition-left":
+              appState.zenModeEnabled,
+          })}
+        >
+          <Stack.Col gap={2}>
+            <Section heading="canvasActions">
+              <ZoomActions
                 renderAction={actionManager.renderAction}
-                className={clsx("zen-mode-transition", {
-                  "layer-ui__wrapper__footer-left--transition-bottom":
-                    appState.zenModeEnabled,
-                })}
+                zoom={appState.zoom}
               />
-            )}
-          </Section>
-        </Stack.Col>
-      </div>
+
+              {!appState.viewModeEnabled && (
+                <UndoRedoActions
+                  renderAction={actionManager.renderAction}
+                  className={clsx("zen-mode-transition", {
+                    "layer-ui__wrapper__footer-left--transition-bottom":
+                      appState.zenModeEnabled,
+                  })}
+                />
+              )}
+            </Section>
+          </Stack.Col>
+        </div>
+      )}
       <FooterCenterTunnel.Out />
       <div
         className={clsx("layer-ui__wrapper__footer-right zen-mode-transition", {
           "transition-right": appState.zenModeEnabled,
         })}
       >
-        <div style={{ position: "relative", display: "flex", gap: "8px" }}>
-          {/* 分享模式下：即使 viewModeEnabled 也可以显示演示按钮 */}
-          {shouldShowPresentationButton && (
-            <div style={{ position: "relative" }}>
-              <button
-                ref={triggerRef}
-                className={clsx("App-menu__left-btn", "help-icon")}
-                disabled={!canPresent}
-                onClick={() => {
-                  if (canPresent) {
-                    setMenuOpen((open) => !open);
-                  }
-                }}
-                title={canPresent ? "演示模式" : "没有可播放的幻灯片"}
-                aria-label={
-                  canPresent ? "演示模式" : "没有可播放的幻灯片"
-                }
-              >
-                {PlaySquareIcon}
-              </button>
-
-              {menuOpen && (
-                <div
-                  ref={menuRef}
-                  style={{
-                    position: "absolute",
-                    right: 0,
-                    bottom: "44px",
-                    background: "var(--color-surface-low)",
-                    border: "1px solid var(--button-gray-1)",
-                    borderRadius: "12px",
-                    boxShadow: "0 8px 24px rgba(15, 23, 42, 0.12)",
-                    overflow: "hidden",
-                    minWidth: "140px",
-                    zIndex: 10,
-                  }}
-                >
-                  {[
-                    { key: "viewer" as const, viewType: "normal" as const, label: "普通视图", icon: Presentation05Icon },
-                    { key: "presenter" as const, viewType: "presenter" as const, label: "演讲者视图", icon: PresenterModeIcon },
-                  ]
-                    // 学生端隐藏演讲者视图
-                    .filter((item) => role !== "member" || item.viewType !== "presenter")
-                    // 分享/受控场景：根据 allowedViews 控制可见项
-                    .filter((item) => !allowedViews || allowedViews.includes(item.viewType))
-                    .map((item, index, arr) => (
-                    <button
-                      key={item.key}
-                      onClick={() => {
-                        if (!canPresent) {
-                          return;
-                        }
-                        onPresent(item.key);
-                        setMenuOpen(false);
-                      }}
-                      style={{
-                        width: "100%",
-                        textAlign: "left",
-                        padding: "10px 14px",
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                        color: "var(--button-text-color)",
-                        borderBottom:
-                          index < arr.length - 1
-                            ? "1px solid var(--button-gray-1)"
-                            : "none",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "10px",
-                        transition: "background 0.15s ease",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = "var(--color-surface-mid)";
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = "transparent";
-                      }}
-                    >
-                      <span style={{ width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", opacity: 0.7 }}>
-                        {item.icon}
-                      </span>
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
+        {isLeftToolbar && (
+          <Section heading="canvasActions" className="Courseware-canvas-actions">
+            <UndoRedoActions renderAction={actionManager.renderAction} />
+            <div className="Courseware-navigation-controls">
+              <CoursewareSelectionTools
+                app={app}
+                appState={appState}
+                setAppState={setAppState}
+                UIOptions={UIOptions}
+                onHandToolToggle={onHandToolToggle}
+              />
+              {(UIOptions.tools?.selection !== false || UIOptions.tools?.lasso !== false || UIOptions.tools?.hand !== false) && (
+                <div className="Courseware-navigation-controls__separator" aria-hidden="true" />
               )}
+              <ZoomActions
+                renderAction={actionManager.renderAction}
+                zoom={appState.zoom}
+              />
             </div>
+          </Section>
+        )}
+        <div
+          className={isLeftToolbar ? "Courseware-footer__auxiliary" : undefined}
+          style={{ position: "relative", display: "flex", gap: "8px" }}
+        >
+          {!isLeftToolbar && (
+            <PresentationMenuButton
+              canPresent={canPresent}
+              viewModeEnabled={appState.viewModeEnabled}
+              onPresent={onPresent}
+            />
           )}
           {renderWelcomeScreen && <WelcomeScreenHelpHintTunnel.Out />}
           <HelpButton

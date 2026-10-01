@@ -74,6 +74,7 @@ import { ImageExportDialog } from "./ImageExportDialog";
 import { Island } from "./Island";
 import { JSONExportDialog } from "./JSONExportDialog";
 import { LaserPointerButton } from "./LaserPointerButton";
+import CoursewareToolbar from "./CoursewareToolbar";
 
 import "./LayerUI.scss";
 import "./Toolbar.scss";
@@ -105,6 +106,7 @@ interface LayerUIProps {
   langCode: Language["code"];
   renderTopLeftUI?: ExcalidrawProps["renderTopLeftUI"];
   renderTopRightUI?: ExcalidrawProps["renderTopRightUI"];
+  renderToolbarStart?: ExcalidrawProps["renderToolbarStart"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
   onExportImage: AppClassProperties["onExportImage"];
@@ -163,6 +165,7 @@ const LayerUI = ({
   showExitZenModeBtn,
   renderTopLeftUI,
   renderTopRightUI,
+  renderToolbarStart,
   renderCustomStats,
   UIOptions,
   onExportImage,
@@ -177,6 +180,9 @@ const LayerUI = ({
   const editorInterface = useEditorInterface();
   const stylesPanelMode = useStylesPanelMode();
   const isCompactStylesPanel = stylesPanelMode === "compact";
+  const isLeftToolbar =
+    UIOptions.toolbarLayout === "left" &&
+    editorInterface.formFactor !== "phone";
   const tunnels = useInitializeTunnels();
 
   const isMainMenuVisible = shareModePermissions?.mainMenu?.visible ?? true;
@@ -186,6 +192,49 @@ const LayerUI = ({
   const fullFrameOrder = app.getOrderedSceneFrames(appState.slideOrder);
   const presentationFrames = app.getPresentationSceneFrames(appState.slideOrder);
   const canPresent = presentationFrames.length > 0;
+
+  const onPresent = (mode: "viewer" | "presenter") => {
+    if (!canPresent) {
+      return;
+    }
+    if (mode === "presenter") {
+      app.excalidrawContainerRef.current?.dispatchEvent(
+        new CustomEvent("excalidraw:openPresenter", {
+          detail: { frameId: presentationFrames[0]?.id ?? null },
+          bubbles: true,
+        }),
+      );
+    }
+
+    if (app.excalidrawContainerRef.current) {
+      try {
+        const maybePromise =
+          app.excalidrawContainerRef.current.requestFullscreen();
+        // 某些浏览器会返回 Promise
+        if (
+          maybePromise &&
+          typeof (maybePromise as any).catch === "function"
+        ) {
+          (maybePromise as Promise<void>).catch(() => {
+            // 忽略全屏权限错误，保持演示流程
+          });
+        }
+      } catch (err) {
+        // 忽略权限失败，继续后续逻辑
+      }
+    }
+    setAppState({
+      presentationMode: true,
+      presentationSlideIndex: 0,
+      presentationStep: 0,
+      slideOrder: fullFrameOrder.map((frame) => frame.id),
+    } as any);
+    const event = new CustomEvent("excalidraw:startPresentation", {
+      detail: { mode, frameId: presentationFrames[0]?.id ?? null },
+      bubbles: true,
+    });
+    app.excalidrawContainerRef.current?.dispatchEvent(event);
+  };
 
   const spacing = isCompactStylesPanel
     ? {
@@ -349,11 +398,13 @@ const LayerUI = ({
             >
               {/* 左侧属性面板已隐藏，使用右侧 PropertiesMenu 替代 */}
               {isTestEnv() &&
+                !isLeftToolbar &&
                 shouldRenderSelectedShapeActions &&
                 renderSelectedShapeActions()}
             </div>
           </Stack.Col>
-          {!appState.viewModeEnabled &&
+          {!isLeftToolbar &&
+            !appState.viewModeEnabled &&
             appState.openDialog?.name !== "elementLinkSelector" && (
               <Section heading="shapes" className="shapes-section">
                 {(heading: React.ReactNode) => (
@@ -774,54 +825,49 @@ const LayerUI = ({
           >
             {renderWelcomeScreen && <tunnels.WelcomeScreenCenterTunnel.Out />}
             {renderFixedSideContainer()}
+            {isLeftToolbar &&
+              !appState.viewModeEnabled &&
+              appState.openDialog?.name !== "elementLinkSelector" && (
+                <>
+                  <CoursewareToolbar
+                    app={app}
+                    appState={appState}
+                    setAppState={setAppState}
+                    UIOptions={UIOptions}
+                    onLockToggle={onLockToggle}
+                    onPenModeToggle={onPenModeToggle}
+                    renderToolbarStart={renderToolbarStart}
+                    canPresent={canPresent}
+                    onPresent={onPresent}
+                  />
+                  {!appState.zenModeEnabled && (
+                    <div className="Courseware-toolbar-hint">
+                      <HintViewer
+                        appState={appState}
+                        isMobile={false}
+                        editorInterface={editorInterface}
+                        app={app}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
             <Footer
+              app={app}
               appState={appState}
+              setAppState={setAppState}
+              UIOptions={UIOptions}
+              onHandToolToggle={onHandToolToggle}
               actionManager={actionManager}
               showExitZenModeBtn={showExitZenModeBtn}
               renderWelcomeScreen={renderWelcomeScreen}
+              isLeftToolbar={
+                isLeftToolbar &&
+                !appState.viewModeEnabled &&
+                appState.openDialog?.name !== "elementLinkSelector"
+              }
               canPresent={canPresent}
-              onPresent={(mode) => {
-                if (!canPresent) {
-                  return;
-                }
-                if (mode === "presenter") {
-                  app.excalidrawContainerRef.current?.dispatchEvent(
-                    new CustomEvent("excalidraw:openPresenter", {
-                      detail: { frameId: presentationFrames[0]?.id ?? null },
-                      bubbles: true,
-                    }),
-                  );
-                }
-
-                if (app.excalidrawContainerRef.current) {
-                  try {
-                    const maybePromise =
-                      app.excalidrawContainerRef.current.requestFullscreen();
-                    // 某些浏览器会返回 Promise
-                    if (
-                      maybePromise &&
-                      typeof (maybePromise as any).catch === "function"
-                    ) {
-                      (maybePromise as Promise<void>).catch(() => {
-                        // 忽略全屏权限错误，保持演示流程
-                      });
-                    }
-                  } catch (err) {
-                    // 忽略权限失败，继续后续逻辑
-                  }
-                }
-                setAppState({
-                  presentationMode: true,
-                  presentationSlideIndex: 0,
-                  presentationStep: 0,
-                  slideOrder: fullFrameOrder.map((frame) => frame.id),
-                } as any);
-                const event = new CustomEvent("excalidraw:startPresentation", {
-                  detail: { mode, frameId: presentationFrames[0]?.id ?? null },
-                  bubbles: true,
-                });
-                app.excalidrawContainerRef.current?.dispatchEvent(event);
-              }}
+              onPresent={onPresent}
             />
             {appState.scrolledOutside && (
               <button

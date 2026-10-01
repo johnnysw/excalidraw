@@ -1,6 +1,7 @@
 import clsx from "clsx";
 
 import { useEditorInterface } from "../App";
+import { hideTooltip, showTooltip } from "../Tooltip";
 
 const MenuTrigger = ({
   className = "",
@@ -13,7 +14,9 @@ const MenuTrigger = ({
   children: React.ReactNode;
   onToggle: () => void;
   title?: string;
+  tooltipPosition?: "bottom" | "top" | "right";
 } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onSelect">) => {
+  const { tooltipPosition, ...buttonProps } = rest;
   const editorInterface = useEditorInterface();
   const classNames = clsx(
     `dropdown-menu-button ${className}`,
@@ -29,7 +32,19 @@ const MenuTrigger = ({
       type="button"
       data-testid="dropdown-menu-button"
       title={title}
-      {...rest}
+      {...buttonProps}
+      onPointerEnter={(event) => {
+        buttonProps.onPointerEnter?.(event);
+        if (tooltipPosition && title) {
+          showTooltip(event.currentTarget, title, false, tooltipPosition);
+        }
+      }}
+      onPointerLeave={(event) => {
+        buttonProps.onPointerLeave?.(event);
+        if (tooltipPosition) {
+          hideTooltip();
+        }
+      }}
     >
       {children}
     </button>

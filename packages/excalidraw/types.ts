@@ -381,6 +381,7 @@ export interface AppState {
   zoom: Zoom;
   openMenu: "canvas" | null;
   openPopup:
+    | "coursewareSelection"
     | "canvasBackground"
     | "elementBackground"
     | "elementStroke"
@@ -684,6 +685,8 @@ export interface ExcalidrawProps {
     isMobile: boolean,
     appState: UIAppState,
   ) => JSX.Element | null;
+  /** Optional host action rendered before the left toolbar's tool controls. */
+  renderToolbarStart?: () => React.ReactNode;
   renderEmptyPropertiesPanel?: () => React.ReactNode;
   langCode?: Language["code"];
   viewModeEnabled?: boolean;
@@ -781,15 +784,15 @@ export type CanvasActions = Partial<{
 export type UIOptions = Partial<{
   dockedSidebarBreakpoint: number;
   canvasActions: CanvasActions;
-  tools: {
-    image: boolean;
-  };
+  tools: Partial<Record<ToolType, boolean>>;
   /**
    * Optionally control the editor form factor and desktop UI mode from the host app.
    * If not provided, we will take care of it internally.
    */
   formFactor?: EditorInterface["formFactor"];
   desktopUIMode?: EditorInterface["desktopUIMode"];
+  /** Position the desktop and tablet drawing toolbar within the canvas. */
+  toolbarLayout?: "top" | "left";
   /** @deprecated does nothing. Will be removed in 0.15 */
   welcomeScreen?: boolean;
 }>;

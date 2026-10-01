@@ -1,6 +1,166 @@
 @use "../css/variables.module.scss" as *;
 
 .excalidraw {
+  --courseware-toolbar-button-size: 40px;
+  --courseware-toolbar-width: calc(
+    var(--courseware-toolbar-button-size) + 12px
+  );
+  --courseware-toolbar-panel-left: calc(
+    16px + var(--courseware-toolbar-width) + 10px
+  );
+
+  &.excalidraw--toolbar-touch {
+    --courseware-toolbar-button-size: 44px;
+  }
+
+  @media (any-pointer: coarse) {
+    --courseware-toolbar-button-size: 44px;
+  }
+
+  .Courseware-toolbar {
+    position: absolute;
+    left: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    width: var(--courseware-toolbar-width);
+    max-height: max(0px, calc(100% - 144px));
+    box-sizing: border-box;
+    padding: 8px 5px;
+    border: 1px solid var(--default-border-color);
+    border-radius: var(--border-radius-lg);
+    background-color: var(--island-bg-color);
+    box-shadow: var(--shadow-island);
+    pointer-events: var(--ui-pointerEvents);
+
+    &__tools {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 100%;
+      min-height: 0;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    }
+
+    &__separator {
+      flex: 0 0 1px;
+      width: 100%;
+      height: 1px;
+      margin: 4px 0;
+      background-color: var(--default-border-color);
+    }
+
+    .ToolIcon,
+    .dropdown-menu-button {
+      flex-shrink: 0;
+      width: var(--courseware-toolbar-button-size);
+      height: var(--courseware-toolbar-button-size);
+      box-sizing: border-box;
+    }
+
+    .ToolIcon__keybinding {
+      display: none;
+    }
+
+    .Courseware-toolbar__group-chevron {
+      position: absolute;
+      right: 2px;
+      bottom: 2px;
+      display: flex;
+      width: 8px;
+      height: 8px;
+      pointer-events: none;
+
+      svg {
+        width: 8px;
+        height: 8px;
+      }
+    }
+
+    .App-toolbar__extra-tools-trigger:hover {
+      background-color: var(--button-hover-bg);
+    }
+
+    .App-toolbar__extra-tools-trigger--selected,
+    .App-toolbar__extra-tools-trigger--selected:hover {
+      background-color: var(--color-primary-light);
+      color: var(--color-primary);
+    }
+  }
+
+  .Courseware-toolbar,
+  .Courseware-toolbar__popover {
+    .ToolIcon {
+      flex: 0 0 var(--courseware-toolbar-button-size);
+      width: var(--courseware-toolbar-button-size);
+      height: var(--courseware-toolbar-button-size);
+      box-sizing: border-box;
+      cursor: pointer;
+    }
+
+    .ToolIcon__icon {
+      width: var(--courseware-toolbar-button-size);
+      height: var(--courseware-toolbar-button-size);
+    }
+
+    .ToolIcon__icon > svg,
+    .dropdown-menu-button > svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    .ToolIcon:focus-visible,
+    .ToolIcon:has(input:focus-visible) {
+      outline: 2px solid var(--focus-highlight-color);
+      outline-offset: -2px;
+    }
+
+    button.ToolIcon {
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--icon-fill-color);
+
+      &:hover {
+        background-color: var(--button-hover-bg);
+      }
+
+      &[aria-pressed="true"] {
+        background-color: var(--color-primary-light);
+        --icon-fill-color: var(--color-primary);
+      }
+    }
+  }
+
+  .Courseware-toolbar__popover {
+    width: max-content;
+    max-width: var(--radix-popover-content-available-width);
+    max-height: var(--radix-popover-content-available-height);
+    box-sizing: border-box;
+    flex-wrap: wrap;
+    overflow: auto;
+    overscroll-behavior: contain;
+
+    .ToolIcon,
+    .ToolIcon__icon {
+      width: 32px;
+      height: 32px;
+      flex-basis: 32px;
+    }
+
+    .ToolIcon__icon > svg {
+      width: 22px;
+      height: 22px;
+    }
+  }
+
   .App-toolbar {
     &.zen-mode {
       .ToolIcon__keybinding,
@@ -59,5 +219,13 @@
     right: 0;
     min-width: 11.875rem;
     z-index: 1;
+  }
+
+  .dropdown-menu--portal.App-toolbar__extra-tools-dropdown {
+    z-index: var(--zIndex-layerUI);
+    min-width: min(
+      11.875rem,
+      var(--radix-popover-content-available-width)
+    );
   }
 }

@@ -35,6 +35,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     onEraserPreviewUpdate,
     renderTopLeftUI,
     renderTopRightUI,
+    renderToolbarStart,
     renderEmptyPropertiesPanel,
     langCode = defaultLang.code,
     viewModeEnabled,
@@ -72,11 +73,14 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
   // compares the same values
   const UIOptions: AppProps["UIOptions"] = {
     ...props.UIOptions,
+    toolbarLayout:
+      props.UIOptions?.toolbarLayout ?? DEFAULT_UI_OPTIONS.toolbarLayout,
     canvasActions: {
       ...DEFAULT_UI_OPTIONS.canvasActions,
       ...canvasActions,
     },
     tools: {
+      ...props.UIOptions?.tools,
       image: props.UIOptions?.tools?.image ?? true,
     },
   };
@@ -134,6 +138,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           onEraserPreviewUpdate={onEraserPreviewUpdate}
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
+          renderToolbarStart={renderToolbarStart}
           renderEmptyPropertiesPanel={renderEmptyPropertiesPanel}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}

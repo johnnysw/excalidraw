@@ -53,11 +53,7 @@ const MainMenu = Object.assign(
                 setAppState({ openMenu: null });
               })}
               placement="bottom"
-              className={
-                editorInterface.formFactor === "phone"
-                  ? "main-menu-dropdown"
-                  : ""
-              }
+              className="main-menu-dropdown"
             >
               {children}
               {editorInterface.formFactor === "phone" &&

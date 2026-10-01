@@ -10,25 +10,30 @@ import { Island } from "../Island";
 import Stack from "../Stack";
 
 import { DropdownMenuContentPropsContext } from "./common";
+import DropdownMenuPortal from "./DropdownMenuPortal";
 
-const MenuContent = ({
+export type MenuContentProps = {
+  children?: React.ReactNode;
+  onClickOutside?: () => void;
+  className?: string;
+  /** Called when any menu item is selected (clicked on). */
+  onSelect?: (event: Event) => void;
+  /** Override focus restoration when closing a portalled menu. */
+  onCloseAutoFocus?: (event: Event) => void;
+  style?: React.CSSProperties;
+  placement?: "top" | "bottom" | "right";
+  /** Mount the menu in the editor's floating layer instead of the trigger. */
+  portal?: boolean;
+};
+
+const InlineMenuContent = ({
   children,
   onClickOutside,
   className = "",
   onSelect,
   style,
   placement = "bottom",
-}: {
-  children?: React.ReactNode;
-  onClickOutside?: () => void;
-  className?: string;
-  /**
-   * Called when any menu item is selected (clicked on).
-   */
-  onSelect?: (event: Event) => void;
-  style?: React.CSSProperties;
-  placement?: "top" | "bottom";
-}) => {
+}: MenuContentProps) => {
   const editorInterface = useEditorInterface();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -68,6 +73,7 @@ const MenuContent = ({
   const classNames = clsx(`dropdown-menu ${className}`, {
     "dropdown-menu--mobile": editorInterface.formFactor === "phone",
     "dropdown-menu--placement-top": placement === "top",
+    "dropdown-menu--placement-right": placement === "right",
   }).trim();
 
   return (
@@ -95,6 +101,13 @@ const MenuContent = ({
     </DropdownMenuContentPropsContext.Provider>
   );
 };
+
+const MenuContent = (props: MenuContentProps) =>
+  props.portal ? (
+    <DropdownMenuPortal {...props} />
+  ) : (
+    <InlineMenuContent {...props} />
+  );
 MenuContent.displayName = "DropdownMenuContent";
 
 export default MenuContent;
