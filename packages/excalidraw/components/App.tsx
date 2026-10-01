@@ -3030,18 +3030,12 @@ class App extends React.Component<AppProps, AppState> {
       const nextFrameId = presentationFrames[slideIndex + 1]?.id ?? null;
       const total = presentationFrames.length;
 
-      let presenterWindow: Window | null = null;
-      presenterWindow = window.open(
-        "",
-        "presenter-view",
-        "width=520,height=740",
+      this.excalidrawContainerRef.current?.dispatchEvent(
+        new CustomEvent("excalidraw:openPresenter", {
+          detail: { frameId },
+          bubbles: true,
+        }),
       );
-      if (presenterWindow) {
-        try {
-          presenterWindow.blur();
-          window.focus();
-        } catch {}
-      }
 
       // 让画布全屏（与 Footer 中的行为一致）
       if (this.excalidrawContainerRef.current) {
@@ -3075,7 +3069,6 @@ class App extends React.Component<AppProps, AppState> {
       const event = new CustomEvent("excalidraw:startPresentation", {
         detail: {
           mode: "presenter",
-          presenterWindow,
           frameId,
           nextFrameId,
           index: slideIndex,
@@ -3083,7 +3076,7 @@ class App extends React.Component<AppProps, AppState> {
         },
         bubbles: true,
       });
-      document.dispatchEvent(event);
+      this.excalidrawContainerRef.current?.dispatchEvent(event);
     };
 
     // 获取当前 frame 在 slideOrder 中的顺序 (1-indexed)

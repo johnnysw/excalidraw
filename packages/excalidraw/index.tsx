@@ -10,6 +10,7 @@ import MainMenu from "./components/main-menu/MainMenu";
 import WelcomeScreen from "./components/welcome-screen/WelcomeScreen";
 import { defaultLang } from "./i18n";
 import { EditorJotaiProvider, editorJotaiStore } from "./editor-jotai";
+import { Fonts } from "./fonts/Fonts";
 import polyfill from "./polyfill";
 
 import "./css/app.scss";
@@ -17,6 +18,7 @@ import "./css/styles.scss";
 import "./fonts/fonts.css";
 
 import type { AppProps, ExcalidrawProps } from "./types";
+import type { ExcalidrawElement } from "@excalidraw/element/types";
 
 polyfill();
 
@@ -227,6 +229,10 @@ const areEqual = (prevProps: ExcalidrawProps, nextProps: ExcalidrawProps) => {
 };
 
 export const Excalidraw = React.memo(ExcalidrawBase, areEqual);
+
+export const loadElementsFonts = (
+  elements: readonly ExcalidrawElement[],
+): Promise<FontFace[]> => Fonts.loadElementsFonts(elements);
 Excalidraw.displayName = "Excalidraw";
 
 export {

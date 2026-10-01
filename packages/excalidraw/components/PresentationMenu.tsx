@@ -254,14 +254,14 @@ const PresentationMenuContent: React.FC = () => {
             detail: { slideOrder },
             bubbles: true,
         });
-        document.dispatchEvent(event);
+        app.excalidrawContainerRef.current?.dispatchEvent(event);
         // Reset state after a short delay (host app should handle actual saving)
         setTimeout(() => {
             setSaving(false);
             initialSlideOrderRef.current = slideOrder;
             setHasUnsavedChanges(false);
         }, 500);
-    }, [slideOrder]);
+    }, [app, slideOrder]);
 
     const getThumbnailKey = useCallback(
         (frame: ExcalidrawFrameElement) => {
@@ -522,8 +522,8 @@ const PresentationMenuContent: React.FC = () => {
             },
             bubbles: true,
         });
-        document.dispatchEvent(event);
-    }, [getFrameSlideNoteHtml]);
+        app.excalidrawContainerRef.current?.dispatchEvent(event);
+    }, [app, getFrameSlideNoteHtml]);
 
     const handleEditBackground = useCallback((slideId: string) => {
         const event = new CustomEvent("excalidraw:editSlideBackground", {
@@ -566,20 +566,12 @@ const PresentationMenuContent: React.FC = () => {
         const nextFrameId = currentFrames[slideIndex + 1]?.id ?? null;
         const total = currentFrames.length;
 
-        let presenterWindow: Window | null = null;
-        presenterWindow = window.open(
-            "",
-            "presenter-view",
-            "width=520,height=740",
+        app.excalidrawContainerRef.current?.dispatchEvent(
+            new CustomEvent("excalidraw:openPresenter", {
+                detail: { frameId: slideId },
+                bubbles: true,
+            }),
         );
-
-        if (presenterWindow) {
-            try {
-                presenterWindow.blur();
-                window.focus();
-            } catch {
-            }
-        }
 
         // 让画布全屏（与 Footer 中的行为一致）
         if (app.excalidrawContainerRef.current) {
@@ -607,7 +599,6 @@ const PresentationMenuContent: React.FC = () => {
         const event = new CustomEvent("excalidraw:startPresentation", {
             detail: {
                 mode: "presenter",
-                presenterWindow,
                 frameId: slideId,
                 nextFrameId,
                 index: slideIndex,
@@ -615,7 +606,7 @@ const PresentationMenuContent: React.FC = () => {
             },
             bubbles: true,
         });
-        document.dispatchEvent(event);
+        app.excalidrawContainerRef.current?.dispatchEvent(event);
     }, [app, slideOrder, setAppState]);
 
     // Start presentation from a specific slide

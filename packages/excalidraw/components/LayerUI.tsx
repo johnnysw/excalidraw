@@ -184,8 +184,8 @@ const LayerUI = ({
 
   const isSidebarDocked = useAtomValue(isSidebarDockedAtom);
   const fullFrameOrder = app.getOrderedSceneFrames(appState.slideOrder);
-  const canPresent =
-    app.getPresentationSceneFrames(appState.slideOrder).length > 0;
+  const presentationFrames = app.getPresentationSceneFrames(appState.slideOrder);
+  const canPresent = presentationFrames.length > 0;
 
   const spacing = isCompactStylesPanel
     ? {
@@ -784,23 +784,13 @@ const LayerUI = ({
                 if (!canPresent) {
                   return;
                 }
-                let presenterWindow: Window | null = null;
                 if (mode === "presenter") {
-                  // 在用户点击手势中打开窗口，避免被浏览器拦截
-                  presenterWindow = window.open(
-                    "",
-                    "presenter-view",
-                    "width=520,height=740",
+                  app.excalidrawContainerRef.current?.dispatchEvent(
+                    new CustomEvent("excalidraw:openPresenter", {
+                      detail: { frameId: presentationFrames[0]?.id ?? null },
+                      bubbles: true,
+                    }),
                   );
-                  // 尽量保持焦点在当前窗口
-                  if (presenterWindow) {
-                    try {
-                      presenterWindow.blur();
-                      window.focus();
-                    } catch {
-                      // 某些浏览器可能不允许，忽略
-                    }
-                  }
                 }
 
                 if (app.excalidrawContainerRef.current) {
@@ -827,10 +817,10 @@ const LayerUI = ({
                   slideOrder: fullFrameOrder.map((frame) => frame.id),
                 } as any);
                 const event = new CustomEvent("excalidraw:startPresentation", {
-                  detail: { mode, presenterWindow },
+                  detail: { mode, frameId: presentationFrames[0]?.id ?? null },
                   bubbles: true,
                 });
-                document.dispatchEvent(event);
+                app.excalidrawContainerRef.current?.dispatchEvent(event);
               }}
             />
             {appState.scrolledOutside && (
