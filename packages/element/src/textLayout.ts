@@ -21,6 +21,7 @@ import type {
 export type TextLayoutBaseStyle = Omit<TextStyle, "fontSize" | "fontFamily"> & {
   fontSize: number;
   fontFamily: FontFamilyValues;
+  customData?: ExcalidrawTextElement["customData"];
 };
 
 export type TextLayoutStyle = Omit<
@@ -30,6 +31,7 @@ export type TextLayoutStyle = Omit<
   fontSize: number;
   fontFamily: FontFamilyValues;
   fontWeight: "normal" | "bold";
+  customData?: ExcalidrawTextElement["customData"];
 };
 
 export type TextLayoutBreak = "hard" | "soft" | null;
@@ -173,6 +175,7 @@ const getRunWidth = (text: string, style: Readonly<TextLayoutStyle>) =>
       fontSize: style.fontSize,
       fontFamily: style.fontFamily,
       fontWeight: style.fontWeight,
+      customData: style.customData,
     }),
   );
 

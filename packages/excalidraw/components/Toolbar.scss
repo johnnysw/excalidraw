@@ -84,15 +84,38 @@
       }
     }
 
-    .App-toolbar__extra-tools-trigger:hover {
+    .Courseware-toolbar__menu-trigger {
+      background-color: transparent;
+
+      &,
+      &:hover,
+      &:focus,
+      &:focus-visible,
+      &:active,
+      &[aria-expanded="true"] {
+        border: 0;
+        border-color: transparent;
+        box-shadow: none;
+        outline: none;
+      }
+    }
+
+    .Courseware-toolbar__menu-trigger:hover,
+    .Courseware-toolbar__menu-trigger:focus-visible,
+    .Courseware-toolbar__menu-trigger:active {
       background-color: var(--button-hover-bg);
     }
 
-    .App-toolbar__extra-tools-trigger--selected,
-    .App-toolbar__extra-tools-trigger--selected:hover {
+    .Courseware-toolbar__menu-trigger[aria-expanded="true"],
+    .Courseware-toolbar__menu-trigger[aria-expanded="true"]:hover {
       background-color: var(--color-primary-light);
       color: var(--color-primary);
     }
+  }
+
+  .dropdown-menu--portal.Courseware-toolbar__menu {
+    min-width: min(16rem, var(--radix-popover-content-available-width));
+    max-width: min(16rem, var(--radix-popover-content-available-width));
   }
 
   .Courseware-toolbar,
@@ -137,9 +160,19 @@
         --icon-fill-color: var(--color-primary);
       }
     }
+
+    .Courseware-toolbar__group-trigger[data-active-tool="selection"][aria-pressed="true"],
+    .Courseware-toolbar__option[data-tool="selection"][aria-pressed="true"] {
+      --icon-fill-color: var(--color-on-primary-container);
+
+      .ToolIcon__icon > svg {
+        fill: var(--icon-fill-color);
+      }
+    }
   }
 
   .Courseware-toolbar__popover {
+    padding: 4px 8px;
     width: max-content;
     max-width: var(--radix-popover-content-available-width);
     max-height: var(--radix-popover-content-available-height);
@@ -147,6 +180,10 @@
     flex-wrap: wrap;
     overflow: auto;
     overscroll-behavior: contain;
+
+    .excalidraw-tooltip-wrapper {
+      flex: 0 0 32px;
+    }
 
     .ToolIcon,
     .ToolIcon__icon {
@@ -158,6 +195,78 @@
     .ToolIcon__icon > svg {
       width: 22px;
       height: 22px;
+    }
+
+    &--shapes {
+      width: min(192px, var(--radix-popover-content-available-width));
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(32px, 1fr));
+      gap: 4px;
+      padding: 4px 8px;
+    }
+  }
+
+  .Courseware-toolbar__insert-popover {
+    display: grid;
+    grid-template-columns: repeat(3, 36px);
+    gap: 6px;
+    padding: 8px;
+    border-radius: var(--border-radius-lg);
+  }
+
+  .Courseware-toolbar__emoji-picker .ToolIcon {
+    // The injected picker uses its own Button primitive. Match the rail, while
+    // retaining the exact whiteboard SmilePlus glyph and popup styles.
+    width: var(--courseware-toolbar-button-size);
+    height: var(--courseware-toolbar-button-size);
+    min-width: var(--courseware-toolbar-button-size);
+    padding: 0;
+    background: transparent;
+    color: var(--color-on-surface);
+
+    svg {
+      width: 22px;
+      height: 22px;
+    }
+
+    &:hover {
+      background: var(--button-hover-bg);
+    }
+
+    &.active {
+      background: var(--button-selected-bg);
+      color: var(--color-primary);
+    }
+  }
+
+  .Courseware-toolbar__insert-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-on-surface);
+    font-size: 21px;
+    line-height: 1;
+    cursor: pointer;
+
+    &:hover,
+    &:focus-visible {
+      background: var(--button-hover-bg);
+      outline: none;
+    }
+
+    &:focus-visible {
+      box-shadow: 0 0 0 2px var(--focus-highlight-color) inset;
+    }
+
+    &.is-selected {
+      border-color: var(--color-primary);
+      background: var(--color-primary-light);
     }
   }
 

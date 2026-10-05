@@ -21,18 +21,18 @@ interface PresentationMenuButtonProps {
   canPresent: boolean;
   viewModeEnabled: boolean;
   onPresent: (mode: PresentationViewMode) => void;
-  inToolbar?: boolean;
+  portal?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   onCloseAutoFocus?: (event: Event) => void;
 }
 
-/** One presentation command menu shared by the footer and courseware rail. */
+/** Shared footer command menu with a floating panel for the courseware editor. */
 const PresentationMenuButton = ({
   canPresent,
   viewModeEnabled,
   onPresent,
-  inToolbar = false,
+  portal = false,
   open,
   onOpenChange,
   onCloseAutoFocus,
@@ -59,7 +59,7 @@ const PresentationMenuButton = ({
   }, [canPresent, visible, isOpen]);
 
   useEffect(() => {
-    if (!isOpen || inToolbar) {
+    if (!isOpen || portal) {
       return;
     }
     const close = () => {
@@ -84,7 +84,7 @@ const PresentationMenuButton = ({
       document.removeEventListener("mousedown", onOutsideClick);
       document.removeEventListener("keydown", onEscape, true);
     };
-  }, [inToolbar, isOpen]);
+  }, [portal, isOpen]);
 
   if (!visible) {
     return null;
@@ -104,24 +104,25 @@ const PresentationMenuButton = ({
     }
   };
 
-  if (inToolbar) {
+  if (portal) {
     return (
-      <DropdownMenu open={isOpen} placement="right">
+      <DropdownMenu open={isOpen} placement="top">
         <DropdownMenu.Trigger
-          className="ToolIcon Courseware-toolbar__presentation"
+          className="App-menu__left-btn help-icon"
           onToggle={() => changeOpen(!isOpen)}
           disabled={!canPresent}
           title={title}
           aria-label={title}
           aria-expanded={isOpen}
           aria-haspopup="dialog"
-          tooltipPosition="right"
-          data-testid="toolbar-presentation"
+          tooltipPosition="top"
+          data-testid="footer-presentation"
         >
-          <span className="ToolIcon__icon">{PlaySquareIcon}</span>
+          {PlaySquareIcon}
         </DropdownMenu.Trigger>
         <DropdownMenu.Content
-          className="Presentation-mode-menu--toolbar"
+          className="Presentation-mode-menu--footer"
+          align="end"
           portal
           onClickOutside={() => changeOpen(false)}
           onCloseAutoFocus={onCloseAutoFocus}

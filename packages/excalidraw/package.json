@@ -109,11 +109,13 @@
     "png-chunks-encode": "1.0.0",
     "png-chunks-extract": "1.0.0",
     "points-on-curve": "1.0.1",
+    "points-on-path": "^0.2.1",
     "pwacompat": "2.0.17",
     "react-colorful": "5.6.1",
     "roughjs": "4.6.4",
     "sass": "1.51.0",
-    "tunnel-rat": "0.1.2"
+    "tunnel-rat": "0.1.2",
+    "@excalidraw/mindmap": "0.18.0"
   },
   "devDependencies": {
     "@size-limit/preset-big-lib": "9.0.0",

@@ -915,12 +915,31 @@ const _renderStaticScene = ({
   });
 };
 
-/** throttled to animation framerate */
-export const renderStaticSceneThrottled = throttleRAF(
-  (config: StaticSceneRenderConfig) => {
+const createStaticSceneRenderer = () =>
+  throttleRAF((config: StaticSceneRenderConfig) => {
     _renderStaticScene(config);
-  },
-);
+  });
+
+// Coalesce updates within one editor without replacing another canvas's frame.
+const staticSceneRenderers = new WeakMap<
+  HTMLCanvasElement,
+  ReturnType<typeof createStaticSceneRenderer>
+>();
+
+export const cancelStaticSceneRender = (canvas: HTMLCanvasElement) => {
+  staticSceneRenderers.get(canvas)?.cancel();
+  staticSceneRenderers.delete(canvas);
+};
+
+/** throttled to animation framerate for each canvas */
+export const renderStaticSceneThrottled = (config: StaticSceneRenderConfig) => {
+  let renderer = staticSceneRenderers.get(config.canvas);
+  if (!renderer) {
+    renderer = createStaticSceneRenderer();
+    staticSceneRenderers.set(config.canvas, renderer);
+  }
+  renderer(config);
+};
 
 /**
  * Static scene is the non-ui canvas where we render elements.
@@ -934,5 +953,7 @@ export const renderStaticScene = (
     return;
   }
 
+  // A pending older frame must not repaint over this synchronous update.
+  cancelStaticSceneRender(renderConfig.canvas);
   _renderStaticScene(renderConfig);
 };

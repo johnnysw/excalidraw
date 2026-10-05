@@ -61,9 +61,13 @@ export const Dialog = (props: DialogProps) => {
     const focusableElements = queryFocusableElements(islandNode);
 
     setTimeout(() => {
-      if (focusableElements.length > 0 && props.autofocus !== false) {
+      if (props.autofocus !== false) {
         // If there's an element other than close, focus it.
-        (focusableElements[1] || focusableElements[0]).focus();
+        const focusTarget =
+          focusableElements[1] ||
+          focusableElements[0] ||
+          islandNode.closest<HTMLElement>(".Modal__content");
+        focusTarget?.focus();
       }
     });
 

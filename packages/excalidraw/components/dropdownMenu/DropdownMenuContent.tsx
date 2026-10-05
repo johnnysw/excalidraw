@@ -8,6 +8,7 @@ import { useStable } from "../../hooks/useStable";
 import { useEditorInterface } from "../App";
 import { Island } from "../Island";
 import Stack from "../Stack";
+import { hideTooltip } from "../Tooltip";
 
 import { DropdownMenuContentPropsContext } from "./common";
 import DropdownMenuPortal from "./DropdownMenuPortal";
@@ -22,6 +23,7 @@ export type MenuContentProps = {
   onCloseAutoFocus?: (event: Event) => void;
   style?: React.CSSProperties;
   placement?: "top" | "bottom" | "right";
+  align?: "start" | "end";
   /** Mount the menu in the editor's floating layer instead of the trigger. */
   portal?: boolean;
 };
@@ -53,6 +55,7 @@ const InlineMenuContent = ({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === KEYS.ESCAPE) {
+        hideTooltip({ immediate: true });
         event.stopImmediatePropagation();
         callbacksRef.onClickOutside?.();
       }
@@ -83,6 +86,7 @@ const InlineMenuContent = ({
         className={classNames}
         style={style}
         data-testid="dropdown-menu"
+        data-tooltip-obstacle
       >
         {/* the zIndex ensures this menu has higher stacking order,
     see https://github.com/excalidraw/excalidraw/pull/1445 */}

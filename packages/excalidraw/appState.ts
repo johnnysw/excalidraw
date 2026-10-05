@@ -18,6 +18,10 @@ import {
 
 import type { ExcalidrawTextElement } from "@excalidraw/element/types";
 
+import { DEFAULT_MINDMAP_PREFERENCE } from "./coursewareMindmap/config";
+import { createDefaultCoursewareBrush } from "./coursewareBrush";
+import { COURSEWARE_DEFAULT_EMOJI, COURSEWARE_STICKY_COLORS } from "./coursewareInsertTools";
+
 import type { AppState, NormalizedZoomValue } from "./types";
 
 const defaultExportScale = EXPORT_SCALES.includes(devicePixelRatio)
@@ -33,6 +37,10 @@ export const getDefaultAppState = (): Omit<
     theme: THEME.LIGHT,
     collaborators: new Map(),
     currentChartType: "bar",
+    coursewareBrush: createDefaultCoursewareBrush(),
+    coursewareEmoji: COURSEWARE_DEFAULT_EMOJI,
+    coursewareStickyColor: COURSEWARE_STICKY_COLORS[0],
+    coursewareMindmap: { ...DEFAULT_MINDMAP_PREFERENCE },
     currentItemBackgroundColor: DEFAULT_ELEMENT_PROPS.backgroundColor,
     currentItemEndArrowhead: "arrow",
     currentItemFillStyle: DEFAULT_ELEMENT_PROPS.fillStyle,
@@ -175,6 +183,10 @@ const APP_STATE_STORAGE_CONF = (<
   theme: { browser: true, export: false, server: false },
   collaborators: { browser: false, export: false, server: false },
   currentChartType: { browser: true, export: false, server: false },
+  coursewareBrush: { browser: false, export: false, server: false },
+  coursewareEmoji: { browser: false, export: false, server: false },
+  coursewareStickyColor: { browser: false, export: false, server: false },
+  coursewareMindmap: { browser: false, export: false, server: false },
   currentItemBackgroundColor: { browser: true, export: false, server: false },
   currentItemEndArrowhead: { browser: true, export: false, server: false },
   currentItemFillStyle: { browser: true, export: false, server: false },

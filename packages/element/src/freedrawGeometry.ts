@@ -1,3 +1,38 @@
+import type { StrokeOptions } from "perfect-freehand";
+
+/** Shared by canvas, SVG export and the geometry worker. */
+export const getFreedrawStrokeOptions = ({
+  strokeWidth,
+  simulatePressure,
+  brushMode,
+}: {
+  strokeWidth: number;
+  simulatePressure: boolean;
+  brushMode?: unknown;
+}): StrokeOptions => {
+  if (brushMode === "highlighter") {
+    return {
+      size: strokeWidth * 4.25,
+      thinning: 0,
+      smoothing: 0.35,
+      streamline: 0.25,
+      simulatePressure: false,
+      start: { cap: false, taper: 0 },
+      end: { cap: false, taper: 0 },
+      last: true,
+    };
+  }
+  return {
+    simulatePressure,
+    size: strokeWidth * 4.25,
+    thinning: 0.6,
+    smoothing: 0.5,
+    streamline: 0.5,
+    easing: (t) => Math.sin((t * Math.PI) / 2),
+    last: true,
+  };
+};
+
 const midpoint = (a: readonly number[], b: readonly number[]) => [
   (a[0] + b[0]) / 2,
   (a[1] + b[1]) / 2,

@@ -58,6 +58,8 @@
   },
   "dependencies": {
     "@excalidraw/common": "0.18.0",
-    "@excalidraw/math": "0.18.0"
+    "@excalidraw/math": "0.18.0",
+    "@excalidraw/mindmap": "0.18.0",
+    "points-on-path": "0.2.1"
   }
 }

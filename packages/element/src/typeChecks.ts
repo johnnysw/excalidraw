@@ -1,6 +1,7 @@
 import { ROUNDNESS, assertNever } from "@excalidraw/common";
 
 import { pointsEqual } from "@excalidraw/math";
+import { isCoursewareMindmapElement } from "./coursewareMindmapType";
 
 import type { ElementOrToolType } from "@excalidraw/excalidraw/types";
 
@@ -28,6 +29,7 @@ import type {
   ExcalidrawArrowElement,
   ExcalidrawElbowArrowElement,
   ExcalidrawLineElement,
+  ExcalidrawPolygonElement,
   ExcalidrawFlowchartNodeElement,
   ExcalidrawLinearElementSubType,
 } from "./types";
@@ -175,6 +177,12 @@ export const isBindingElementType = (
   return elementType === "arrow";
 };
 
+export const isPolygonElement = (
+  element: ExcalidrawElement | null | undefined,
+): element is ExcalidrawPolygonElement => {
+  return !!element && isLineElement(element) && element.polygon;
+};
+
 export const isBindableElement = (
   element: ExcalidrawElement | null | undefined,
   includeLocked = true,
@@ -182,7 +190,8 @@ export const isBindableElement = (
   return (
     element != null &&
     (!element.locked || includeLocked === true) &&
-    (element.type === "rectangle" ||
+    (isPolygonElement(element) ||
+      element.type === "rectangle" ||
       element.type === "diamond" ||
       element.type === "ellipse" ||
       element.type === "image" ||
@@ -234,6 +243,7 @@ export const isTextBindableContainer = (
 ): element is ExcalidrawTextContainer => {
   return (
     element != null &&
+    !isCoursewareMindmapElement(element) &&
     (!element.locked || includeLocked === true) &&
     (element.type === "rectangle" ||
       element.type === "diamond" ||
@@ -276,9 +286,10 @@ export const isFlowchartNodeElement = (
   element: ExcalidrawElement,
 ): element is ExcalidrawFlowchartNodeElement => {
   return (
+    !isCoursewareMindmapElement(element) && (
     element.type === "rectangle" ||
     element.type === "ellipse" ||
-    element.type === "diamond"
+    element.type === "diamond")
   );
 };
 

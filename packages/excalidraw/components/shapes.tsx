@@ -14,7 +14,7 @@ import {
   EraserIcon,
 } from "./icons";
 
-import type { AppClassProperties } from "../types";
+import type { AppClassProperties, ToolType, UIOptions } from "../types";
 
 export const SHAPES = [
   {
@@ -96,8 +96,34 @@ export const SHAPES = [
   },
 ] as const;
 
+export const getToolNumericKey = (
+  tool: ToolType,
+  toolbarLayout?: UIOptions["toolbarLayout"],
+): string | null => {
+  if (toolbarLayout === "left") {
+    if (tool === "selection" || tool === "lasso") {
+      return KEYS["1"];
+    }
+    if (tool === "freedraw") {
+      return KEYS["2"];
+    }
+    if (tool === "eraser") {
+      return KEYS["3"];
+    }
+    return null;
+  }
+
+  if (tool === "hand") {
+    return KEYS["2"];
+  }
+  if (tool === "lasso") {
+    return KEYS["1"];
+  }
+  return SHAPES.find((shape) => shape.value === tool)?.numericKey ?? null;
+};
+
 export const getToolbarTools = (app: AppClassProperties) => {
-  return app.state.preferredSelectionTool.type === "lasso"
+  const tools = app.state.preferredSelectionTool.type === "lasso"
     ? ([
         {
           value: "lasso",
@@ -109,10 +135,15 @@ export const getToolbarTools = (app: AppClassProperties) => {
         ...SHAPES.slice(1),
       ] as const)
     : SHAPES;
+
+  return tools.map((tool) => ({
+    ...tool,
+    numericKey: getToolNumericKey(tool.value, app.props.UIOptions.toolbarLayout),
+  }));
 };
 
 export const findShapeByKey = (key: string, app: AppClassProperties) => {
-  const shape = getToolbarTools(app).find((shape, index) => {
+  const shape = getToolbarTools(app).find((shape) => {
     return (
       (shape.numericKey != null && key === shape.numericKey.toString()) ||
       (shape.key &&

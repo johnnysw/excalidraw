@@ -1,0 +1,47 @@
+{
+  "name": "@excalidraw/mindmap",
+  "version": "0.18.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/prod/index.js",
+  "module": "./dist/prod/index.js",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "source": "./src/index.ts",
+      "development": "./src/index.ts",
+      "production": "./dist/prod/index.js",
+      "default": "./dist/prod/index.js"
+    },
+    "./types": "./src/types.ts",
+    "./model": "./src/model.ts",
+    "./mindmap": "./src/mindmap.ts",
+    "./geometry": "./src/geometry.ts",
+    "./shapeGeometry": "./src/shapeGeometry.ts",
+    "./tree": "./src/tree.ts",
+    "./text": "./src/text.ts",
+    "./commands": "./src/commands.ts",
+    "./themes": "./src/themes.ts",
+    "./professional": "./src/professional.ts",
+    "./interaction": "./src/interaction.ts",
+    "./session": "./src/session.ts",
+    "./codec": "./src/codec.ts",
+    "./render": "./src/render.ts",
+    "./search": "./src/search.ts"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build:esm": "node scripts/build.mjs && tsc -p tsconfig.json",
+    "check-types": "tsc --noEmit -p tsconfig.check.json",
+    "test": "vitest run --config vitest.config.ts"
+  },
+  "devDependencies": {
+    "esbuild": "0.19.10",
+    "typescript": "4.9.4",
+    "vitest": "3.0.6"
+  }
+}

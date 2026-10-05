@@ -8,6 +8,7 @@ import type { ToolButtonSize } from "./ToolButton";
 
 type LockIconProps = {
   title?: string;
+  showNativeTooltip?: boolean;
   name?: string;
   checked: boolean;
   onChange?(): void;
@@ -31,7 +32,7 @@ export const LockButton = (props: LockIconProps) => {
           "is-mobile": props.isMobile,
         },
       )}
-      title={`${props.title} — Q`}
+      title={props.showNativeTooltip === false ? undefined : `${props.title} — Q`}
     >
       <input
         className="ToolIcon_type_checkbox"

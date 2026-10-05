@@ -29,7 +29,11 @@ import type { Curve, LineSegment, LocalPoint } from "@excalidraw/math";
 
 import type { NormalizedZoomValue, Zoom } from "@excalidraw/excalidraw/types";
 
-import { elementCenterPoint, getDiamondPoints } from "./bounds";
+import {
+  elementCenterPoint,
+  getDiamondPoints,
+  getElementAbsoluteCoords,
+} from "./bounds";
 
 import { generateLinearCollisionShape } from "./shape";
 
@@ -502,35 +506,32 @@ const getDiagonalsForBindableElement = (
     );
   };
 
+  const [x, y, right, bottom] = getElementAbsoluteCoords(element, elementsMap);
+  const width = right - x;
+  const height = bottom - y;
   const center = elementCenterPoint(element, elementsMap);
   const diagonalOne = shrinkSegment(
     isRectangularElement(element)
       ? lineSegment<GlobalPoint>(
           pointRotateRads(
-            pointFrom<GlobalPoint>(element.x, element.y),
+            pointFrom<GlobalPoint>(x, y),
             center,
             element.angle,
           ),
           pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width,
-              element.y + element.height,
-            ),
+            pointFrom<GlobalPoint>(x + width, y + height),
             center,
             element.angle,
           ),
         )
       : lineSegment<GlobalPoint>(
           pointRotateRads(
-            pointFrom<GlobalPoint>(element.x + element.width / 2, element.y),
+            pointFrom<GlobalPoint>(x + width / 2, y),
             center,
             element.angle,
           ),
           pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width / 2,
-              element.y + element.height,
-            ),
+            pointFrom<GlobalPoint>(x + width / 2, y + height),
             center,
             element.angle,
           ),
@@ -540,27 +541,24 @@ const getDiagonalsForBindableElement = (
     isRectangularElement(element)
       ? lineSegment<GlobalPoint>(
           pointRotateRads(
-            pointFrom<GlobalPoint>(element.x + element.width, element.y),
+            pointFrom<GlobalPoint>(x + width, y),
             center,
             element.angle,
           ),
           pointRotateRads(
-            pointFrom<GlobalPoint>(element.x, element.y + element.height),
+            pointFrom<GlobalPoint>(x, y + height),
             center,
             element.angle,
           ),
         )
       : lineSegment<GlobalPoint>(
           pointRotateRads(
-            pointFrom<GlobalPoint>(element.x, element.y + element.height / 2),
+            pointFrom<GlobalPoint>(x, y + height / 2),
             center,
             element.angle,
           ),
           pointRotateRads(
-            pointFrom<GlobalPoint>(
-              element.x + element.width,
-              element.y + element.height / 2,
-            ),
+            pointFrom<GlobalPoint>(x + width, y + height / 2),
             center,
             element.angle,
           ),

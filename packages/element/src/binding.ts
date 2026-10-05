@@ -1,3 +1,5 @@
+import { getDuplicatedMindmapNodeId } from "./coursewareMindmapType";
+import { createMindmapNodeBinding, resolveMindmapNodeBinding } from "./coursewareMindmapBinding";
 import {
   KEYS,
   arrayToMap,
@@ -30,6 +32,7 @@ import type { MapEntry, Mutable } from "@excalidraw/common/utility-types";
 import {
   doBoundsIntersect,
   getCenterForBounds,
+  getElementAbsoluteCoords,
   getElementBounds,
 } from "./bounds";
 import {
@@ -682,6 +685,7 @@ const getBindingStrategyForDraggingBindingElementEndpoints_simple = (
       otherBinding.fixedPoint,
       otherBindableElement,
       elementsMap,
+      otherBinding,
     );
   const otherFocusPointIsInElement =
     otherBindableElement &&
@@ -965,6 +969,14 @@ export const bindBindingElement = (
         focusPoint,
       ),
     };
+  }
+
+  const anchorPoint = focusPoint ?? LinearElementEditor.getPointAtIndexGlobalCoordinates(
+    arrow, startOrEnd === "start" ? 0 : arrow.points.length - 1, elementsMap,
+  );
+  const nodeBinding = createMindmapNodeBinding(hoveredElement, anchorPoint);
+  if (nodeBinding.mindmapNodeId) {
+    binding = { ...binding, ...nodeBinding, mode: "inside" };
   }
 
   scene.mutateElement(arrow, {
@@ -1431,7 +1443,10 @@ const snapToMid = (
   p: GlobalPoint,
   tolerance: number = 0.05,
 ): GlobalPoint => {
-  const { x, y, width, height, angle } = bindTarget;
+  const [x, y, right, bottom] = getElementAbsoluteCoords(bindTarget, elementsMap);
+  const width = right - x;
+  const height = bottom - y;
+  const { angle } = bindTarget;
   const center = elementCenterPoint(bindTarget, elementsMap, -0.1, -0.1);
   const nonRotated = pointRotateRads(p, center, -angle as Radians);
 
@@ -1554,6 +1569,11 @@ export const updateBoundPoint = (
     (binding.elementId !== bindableElement.id && arrow.points.length > 2)
   ) {
     return null;
+  }
+
+  if (binding.mindmapNodeId) {
+    const point = resolveMindmapNodeBinding(bindableElement, binding);
+    return point ? LinearElementEditor.createPointAt(arrow, elementsMap, point[0], point[1], null) : null;
   }
 
   const global = getGlobalFixedPointForBindableElement(
@@ -1712,12 +1732,10 @@ export const calculateFixedPointForElbowArrowBinding = (
   startOrEnd: "start" | "end",
   elementsMap: ElementsMap,
 ): { fixedPoint: FixedPoint } => {
-  const bounds = [
-    hoveredElement.x,
-    hoveredElement.y,
-    hoveredElement.x + hoveredElement.width,
-    hoveredElement.y + hoveredElement.height,
-  ] as Bounds;
+  const [left, top, right, bottom] = getElementAbsoluteCoords(
+    hoveredElement,
+    elementsMap,
+  );
   const snappedPoint = bindPointToSnapToElementOutline(
     linearElement,
     hoveredElement,
@@ -1725,8 +1743,8 @@ export const calculateFixedPointForElbowArrowBinding = (
     elementsMap,
   );
   const globalMidPoint = pointFrom(
-    bounds[0] + (bounds[2] - bounds[0]) / 2,
-    bounds[1] + (bounds[3] - bounds[1]) / 2,
+    (left + right) / 2,
+    (top + bottom) / 2,
   );
   const nonRotatedSnappedGlobalPoint = pointRotateRads(
     snappedPoint,
@@ -1736,10 +1754,8 @@ export const calculateFixedPointForElbowArrowBinding = (
 
   return {
     fixedPoint: normalizeFixedPoint([
-      (nonRotatedSnappedGlobalPoint[0] - hoveredElement.x) /
-        hoveredElement.width,
-      (nonRotatedSnappedGlobalPoint[1] - hoveredElement.y) /
-        hoveredElement.height,
+      (nonRotatedSnappedGlobalPoint[0] - left) / (right - left),
+      (nonRotatedSnappedGlobalPoint[1] - top) / (bottom - top),
     ]),
   };
 };
@@ -1759,11 +1775,13 @@ export const calculateFixedPointForNonElbowArrowBinding = (
         elementsMap,
       );
 
-  // Convert the global point to element-local coordinates
-  const elementCenter = pointFrom(
-    hoveredElement.x + hoveredElement.width / 2,
-    hoveredElement.y + hoveredElement.height / 2,
+  // A polygon's x/y is its first path point, not its bounding-box origin.
+  // Use the same bounds and rotation center when storing and resolving anchors.
+  const [left, top, right, bottom] = getElementAbsoluteCoords(
+    hoveredElement,
+    elementsMap,
   );
+  const elementCenter = pointFrom((left + right) / 2, (top + bottom) / 2);
 
   // Rotate the point to account for element rotation
   const nonRotatedPoint = pointRotateRads(
@@ -1773,10 +1791,8 @@ export const calculateFixedPointForNonElbowArrowBinding = (
   );
 
   // Calculate the ratio relative to the element's bounds
-  const fixedPointX =
-    (nonRotatedPoint[0] - hoveredElement.x) / hoveredElement.width;
-  const fixedPointY =
-    (nonRotatedPoint[1] - hoveredElement.y) / hoveredElement.height;
+  const fixedPointX = (nonRotatedPoint[0] - left) / (right - left);
+  const fixedPointY = (nonRotatedPoint[1] - top) / (bottom - top);
 
   return {
     fixedPoint: normalizeFixedPoint([fixedPointX, fixedPointY]),
@@ -1823,6 +1839,12 @@ export const fixDuplicatedBindingsAfterDuplication = (
           ? {
               ...duplicateElement.endBinding,
               elementId: newEndBindingId,
+              ...(duplicateElement.endBinding.mindmapNodeId ? {
+                mindmapNodeId: getDuplicatedMindmapNodeId(
+                  duplicatedElements.find((element) => element.id === newEndBindingId)!,
+                  duplicateElement.endBinding.mindmapNodeId,
+                ) ?? duplicateElement.endBinding.mindmapNodeId,
+              } : {}),
             }
           : null,
       });
@@ -1836,6 +1858,12 @@ export const fixDuplicatedBindingsAfterDuplication = (
           ? {
               ...duplicateElement.startBinding,
               elementId: newEndBindingId,
+              ...(duplicateElement.startBinding.mindmapNodeId ? {
+                mindmapNodeId: getDuplicatedMindmapNodeId(
+                  duplicatedElements.find((element) => element.id === newEndBindingId)!,
+                  duplicateElement.startBinding.mindmapNodeId,
+                ) ?? duplicateElement.startBinding.mindmapNodeId,
+              } : {}),
             }
           : null,
       });
@@ -2208,13 +2236,17 @@ export const getGlobalFixedPointForBindableElement = (
   fixedPointRatio: FixedPoint,
   element: ExcalidrawBindableElement,
   elementsMap: ElementsMap,
+  binding?: FixedPointBinding | null,
 ): GlobalPoint => {
+  const nodePoint = resolveMindmapNodeBinding(element, binding);
+  if (nodePoint) return nodePoint;
   const [fixedX, fixedY] = normalizeFixedPoint(fixedPointRatio);
+  const [left, top, right, bottom] = getElementAbsoluteCoords(element, elementsMap);
 
   return pointRotateRads(
     pointFrom(
-      element.x + element.width * fixedX,
-      element.y + element.height * fixedY,
+      left + (right - left) * fixedX,
+      top + (bottom - top) * fixedY,
     ),
     elementCenterPoint(element, elementsMap),
     element.angle,
@@ -2237,7 +2269,9 @@ export const getGlobalFixedPoints = (
       | undefined);
   const startPoint =
     startElement && arrow.startBinding
-      ? getGlobalFixedPointForBindableElement(
+      ? arrow.startBinding.mindmapNodeId
+        ? resolveMindmapNodeBinding(startElement, arrow.startBinding) ?? LinearElementEditor.getPointAtIndexGlobalCoordinates(arrow, 0, elementsMap)
+        : getGlobalFixedPointForBindableElement(
           arrow.startBinding.fixedPoint,
           startElement as ExcalidrawBindableElement,
           elementsMap,
@@ -2248,7 +2282,9 @@ export const getGlobalFixedPoints = (
         );
   const endPoint =
     endElement && arrow.endBinding
-      ? getGlobalFixedPointForBindableElement(
+      ? arrow.endBinding.mindmapNodeId
+        ? resolveMindmapNodeBinding(endElement, arrow.endBinding) ?? LinearElementEditor.getPointAtIndexGlobalCoordinates(arrow, arrow.points.length - 1, elementsMap)
+        : getGlobalFixedPointForBindableElement(
           arrow.endBinding.fixedPoint,
           endElement as ExcalidrawBindableElement,
           elementsMap,

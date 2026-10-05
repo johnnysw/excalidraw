@@ -13,7 +13,7 @@ const getConfig = (outdir) => ({
   alias: {
     "@excalidraw/utils": path.resolve(__dirname, "../packages/utils/src"),
   },
-  external: ["@excalidraw/common", "@excalidraw/element", "@excalidraw/math"],
+  external: ["@excalidraw/common", "@excalidraw/element", "@excalidraw/math", "@excalidraw/mindmap"],
 });
 
 function buildDev(config) {

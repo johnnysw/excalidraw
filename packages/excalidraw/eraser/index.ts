@@ -1,3 +1,4 @@
+import { isCoursewareMindmapElement } from "@excalidraw/element/coursewareMindmapType";
 import { arrayToMap, easeOut, THEME } from "@excalidraw/common";
 import {
   elementPartiallyOverlapsWithOrContainsBBox,
@@ -67,7 +68,7 @@ export const getErasableElements = <T extends NonDeletedExcalidrawElement>(
   >,
 ) => {
   return elements.filter((element) => {
-    if (element.locked) {
+    if (element.locked || isCoursewareMindmapElement(element)) {
       return false;
     }
 

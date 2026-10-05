@@ -18,16 +18,20 @@ import { getElementAbsoluteCoords } from "./bounds";
 import {
   getTransformHandlesFromCoords,
   getTransformHandles,
+  getCoursewareBraceWidthHandles,
   getOmitSidesForEditorInterface,
   canResizeFromSides,
+  isPointInRotationHandle,
 } from "./transformHandles";
 import { isImageElement, isLinearElement } from "./typeChecks";
+import { isCoursewareMindmapElement } from "./coursewareMindmapType";
 
 import type { Bounds } from "./bounds";
 import type {
   TransformHandleType,
   TransformHandle,
   MaybeTransformHandleType,
+  RotationHandlePosition,
 } from "./transformHandles";
 import type {
   ExcalidrawElement,
@@ -55,6 +59,7 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
   zoom: Zoom,
   pointerType: PointerType,
   editorInterface: EditorInterface,
+  rotationHandlePosition: RotationHandlePosition = "bottom",
 ): MaybeTransformHandleType => {
   if (!appState.selectedElementIds[element.id]) {
     return false;
@@ -67,11 +72,18 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
       elementsMap,
       pointerType,
       getOmitSidesForEditorInterface(editorInterface),
+      rotationHandlePosition,
     );
 
   if (
     rotationTransformHandle &&
-    isInsideTransformHandle(rotationTransformHandle, x, y)
+    isPointInRotationHandle(
+      rotationTransformHandle,
+      x,
+      y,
+      element.angle,
+      rotationHandlePosition,
+    )
   ) {
     return "rotation" as TransformHandleType;
   }
@@ -89,7 +101,7 @@ export const resizeTest = <Point extends GlobalPoint | LocalPoint>(
     return filter[0] as TransformHandleType;
   }
 
-  if (canResizeFromSides(editorInterface)) {
+  if (canResizeFromSides(editorInterface) && !isCoursewareMindmapElement(element)) {
     const [x1, y1, x2, y2, cx, cy] = getElementAbsoluteCoords(
       element,
       elementsMap,
@@ -136,6 +148,7 @@ export const getElementWithTransformHandleType = (
   pointerType: PointerType,
   elementsMap: ElementsMap,
   editorInterface: EditorInterface,
+  rotationHandlePosition: RotationHandlePosition = "bottom",
 ) => {
   return elements.reduce((result, element) => {
     if (result) {
@@ -150,9 +163,28 @@ export const getElementWithTransformHandleType = (
       zoom,
       pointerType,
       editorInterface,
+      rotationHandlePosition,
     );
     return transformHandleType ? { element, transformHandleType } : null;
   }, null as { element: NonDeletedExcalidrawElement; transformHandleType: MaybeTransformHandleType } | null);
+};
+
+export const getCoursewareBraceWidthHandleType = (
+  elements: readonly NonDeletedExcalidrawElement[],
+  elementsMap: ElementsMap,
+  x: number,
+  y: number,
+  zoom: Zoom,
+  pointerType: PointerType,
+): "e" | "w" | false => {
+  const handles = getCoursewareBraceWidthHandles(elements, zoom, elementsMap, pointerType);
+  for (const direction of ["e", "w"] as const) {
+    const handle = handles[direction];
+    if (handle && isInsideTransformHandle(handle, x, y)) {
+      return direction;
+    }
+  }
+  return false;
 };
 
 export const getTransformHandleTypeFromCoords = <
@@ -164,6 +196,7 @@ export const getTransformHandleTypeFromCoords = <
   zoom: Zoom,
   pointerType: PointerType,
   editorInterface: EditorInterface,
+  rotationHandlePosition: RotationHandlePosition = "bottom",
 ): MaybeTransformHandleType => {
   const transformHandles = getTransformHandlesFromCoords(
     [x1, y1, x2, y2, (x1 + x2) / 2, (y1 + y2) / 2],
@@ -171,6 +204,9 @@ export const getTransformHandleTypeFromCoords = <
     zoom,
     pointerType,
     getOmitSidesForEditorInterface(editorInterface),
+    undefined,
+    undefined,
+    rotationHandlePosition,
   );
 
   const found = Object.keys(transformHandles).find((key) => {
@@ -178,7 +214,15 @@ export const getTransformHandleTypeFromCoords = <
       transformHandles[key as Exclude<TransformHandleType, "rotation">]!;
     return (
       transformHandle &&
-      isInsideTransformHandle(transformHandle, scenePointerX, scenePointerY)
+      (key === "rotation"
+        ? isPointInRotationHandle(
+            transformHandle,
+            scenePointerX,
+            scenePointerY,
+            0 as Radians,
+            rotationHandlePosition,
+          )
+        : isInsideTransformHandle(transformHandle, scenePointerX, scenePointerY))
     );
   });
 

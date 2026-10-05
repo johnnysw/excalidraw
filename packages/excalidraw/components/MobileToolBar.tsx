@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
 import clsx from "clsx";
+import * as Popover from "@radix-ui/react-popover";
+import { COURSEWARE_MINDMAP_TOOL } from "../coursewareMindmap/config";
+import { MindmapToolContent } from "./coursewareMindmap/MindmapTool";
+import { MindmapIcon } from "./coursewareMindmap/MindmapLayoutPicker";
 
 import { KEYS, capitalizeString } from "@excalidraw/common";
 
@@ -95,6 +99,17 @@ export const MobileToolBar = ({
 }: MobileToolBarProps) => {
   const activeTool = app.state.activeTool;
   const [isOtherShapesMenuOpen, setIsOtherShapesMenuOpen] = useState(false);
+  const [isMindmapMenuOpen, setIsMindmapMenuOpen] = useState(false);
+  const mindmapSelected = activeTool.customType === COURSEWARE_MINDMAP_TOOL;
+  useEffect(
+    () => app.onPointerDownEmitter.on(() => setIsMindmapMenuOpen(false)),
+    [app]
+  );
+  useEffect(() => {
+    if (!mindmapSelected) {
+      setIsMindmapMenuOpen(false);
+    }
+  }, [mindmapSelected]);
   const [lastActiveGenericShape, setLastActiveGenericShape] = useState<
     "rectangle" | "diamond" | "ellipse"
   >("rectangle");
@@ -174,22 +189,29 @@ export const MobileToolBar = ({
     }
     return true;
   });
-  const extraToolSelected = extraTools.includes(activeTool.type);
-  const extraIcon = extraToolSelected
-    ? activeTool.type === "text"
-      ? TextIcon
-      : activeTool.type === "image"
-      ? ImageIcon
-      : activeTool.type === "frame"
-      ? frameToolIcon
-      : activeTool.type === "embeddable"
-      ? EmbedIcon
-      : activeTool.type === "laser"
-      ? laserPointerToolIcon
-      : activeTool.type === "magicframe"
-      ? MagicIcon
-      : extraToolsIcon
-    : extraToolsIcon;
+  const extraToolSelected =
+    mindmapSelected || extraTools.includes(activeTool.type);
+  const extraIcon = mindmapSelected ? (
+    <MindmapIcon />
+  ) : extraToolSelected ? (
+    activeTool.type === "text" ? (
+      TextIcon
+    ) : activeTool.type === "image" ? (
+      ImageIcon
+    ) : activeTool.type === "frame" ? (
+      frameToolIcon
+    ) : activeTool.type === "embeddable" ? (
+      EmbedIcon
+    ) : activeTool.type === "laser" ? (
+      laserPointerToolIcon
+    ) : activeTool.type === "magicframe" ? (
+      MagicIcon
+    ) : (
+      extraToolsIcon
+    )
+  ) : (
+    extraToolsIcon
+  );
 
   return (
     <div
@@ -227,7 +249,7 @@ export const MobileToolBar = ({
         }}
         displayedOption={
           SELECTION_TOOLS.find(
-            (tool) => tool.type === app.state.preferredSelectionTool.type,
+            (tool) => tool.type === app.state.preferredSelectionTool.type
           ) || SELECTION_TOOLS[0]
         }
       />
@@ -274,8 +296,8 @@ export const MobileToolBar = ({
               ? "toolBar.diamond"
               : lastActiveGenericShape === "ellipse"
               ? "toolBar.ellipse"
-              : "toolBar.rectangle",
-          ),
+              : "toolBar.rectangle"
+          )
         )}
         data-testid="toolbar-rectangle"
         onToolChange={(type: string) => {
@@ -305,8 +327,8 @@ export const MobileToolBar = ({
           t(
             lastActiveLinearElement === "arrow"
               ? "toolBar.arrow"
-              : "toolBar.line",
-          ),
+              : "toolBar.line"
+          )
         )}
         data-testid="toolbar-arrow"
         fillable={true}
@@ -318,7 +340,7 @@ export const MobileToolBar = ({
         }}
         displayedOption={
           LINEAR_ELEMENT_TOOLS.find(
-            (tool) => tool.type === lastActiveLinearElement,
+            (tool) => tool.type === lastActiveLinearElement
           ) || LINEAR_ELEMENT_TOOLS[0]
         }
       />
@@ -373,132 +395,171 @@ export const MobileToolBar = ({
       )}
 
       {/* Other Shapes */}
-      <DropdownMenu open={isOtherShapesMenuOpen} placement="top">
-        <DropdownMenu.Trigger
-          className={clsx(
-            "App-toolbar__extra-tools-trigger App-toolbar__extra-tools-trigger--mobile",
-            {
-              "App-toolbar__extra-tools-trigger--selected":
-                extraToolSelected || isOtherShapesMenuOpen,
-            },
-          )}
-          onToggle={() => {
-            setIsOtherShapesMenuOpen(!isOtherShapesMenuOpen);
-            setAppState({ openMenu: null, openPopup: null });
-          }}
-          title={t("toolBar.extraTools")}
-          style={{
-            width: WIDTH,
-            height: WIDTH,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          {extraIcon}
-        </DropdownMenu.Trigger>
-        <DropdownMenu.Content
-          onClickOutside={() => setIsOtherShapesMenuOpen(false)}
-          onSelect={() => setIsOtherShapesMenuOpen(false)}
-          className="App-toolbar__extra-tools-dropdown"
-        >
-          {!showTextToolOutside && (
-            <DropdownMenu.Item
-              onSelect={() => app.setActiveTool({ type: "text" })}
-              icon={TextIcon}
-              shortcut={KEYS.T.toLocaleUpperCase()}
-              data-testid="toolbar-text"
-              selected={activeTool.type === "text"}
-            >
-              {t("toolBar.text")}
-            </DropdownMenu.Item>
-          )}
-
-          {/* Rich Text Tool */}
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "richText" })}
-            icon={RichTextIcon}
-            shortcut={KEYS.Y.toLocaleUpperCase()}
-            data-testid="toolbar-richText"
-            selected={activeTool.type === "richText"}
-          >
-            {t("toolBar.richText")}
-          </DropdownMenu.Item>
-
-          {!showImageToolOutside && (
-            <DropdownMenu.Item
-              onSelect={() => app.setActiveTool({ type: "image" })}
-              icon={ImageIcon}
-              data-testid="toolbar-image"
-              selected={activeTool.type === "image"}
-            >
-              {t("toolBar.image")}
-            </DropdownMenu.Item>
-          )}
-          {!showFrameToolOutside && (
-            <DropdownMenu.Item
-              onSelect={() => app.setActiveTool({ type: "frame" })}
-              icon={frameToolIcon}
-              shortcut={KEYS.F.toLocaleUpperCase()}
-              data-testid="toolbar-frame"
-              selected={frameToolSelected}
-            >
-              {t("toolBar.frame")}
-            </DropdownMenu.Item>
-          )}
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "embeddable" })}
-            icon={EmbedIcon}
-            data-testid="toolbar-embeddable"
-            selected={embeddableToolSelected}
-          >
-            {t("toolBar.embeddable")}
-          </DropdownMenu.Item>
-          <DropdownMenu.Item
-            onSelect={() => app.setActiveTool({ type: "laser" })}
-            icon={laserPointerToolIcon}
-            data-testid="toolbar-laser"
-            selected={laserToolSelected}
-            shortcut={KEYS.K.toLocaleUpperCase()}
-          >
-            {t("toolBar.laser")}
-          </DropdownMenu.Item>
-          <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
-            Generate
-          </div>
-          {app.props.aiEnabled !== false && <TTDDialogTriggerTunnel.Out />}
-          <DropdownMenu.Item
-            onSelect={() => app.setOpenDialog({ name: "ttd", tab: "mermaid" })}
-            icon={mermaidLogoIcon}
-            data-testid="toolbar-embeddable"
-          >
-            {t("toolBar.mermaidToExcalidraw")}
-          </DropdownMenu.Item>
-          {app.props.extraToolsMenuItems?.map((item) => (
-            <DropdownMenu.Item
-              key={item.id}
-              onSelect={item.onSelect}
-              icon={item.icon as any}
-              disabled={item.disabled}
-              data-testid={`toolbar-extra-${item.id}`}
-            >
-              {item.label}
-            </DropdownMenu.Item>
-          ))}
-          {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
-            <>
-              <DropdownMenu.Item
-                onSelect={() => app.onMagicframeToolSelect()}
-                icon={MagicIcon}
-                data-testid="toolbar-magicframe"
+      <Popover.Root
+        open={isMindmapMenuOpen}
+        onOpenChange={setIsMindmapMenuOpen}
+      >
+        <Popover.Anchor asChild>
+          <div>
+            <DropdownMenu open={isOtherShapesMenuOpen} placement="top">
+              <DropdownMenu.Trigger
+                className={clsx(
+                  "App-toolbar__extra-tools-trigger App-toolbar__extra-tools-trigger--mobile",
+                  {
+                    "App-toolbar__extra-tools-trigger--selected":
+                      extraToolSelected || isOtherShapesMenuOpen,
+                  }
+                )}
+                onToggle={() => {
+                  setIsMindmapMenuOpen(false);
+                  setIsOtherShapesMenuOpen(!isOtherShapesMenuOpen);
+                  setAppState({ openMenu: null, openPopup: null });
+                }}
+                title={t("toolBar.extraTools")}
+                style={{
+                  width: WIDTH,
+                  height: WIDTH,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
               >
-                {t("toolBar.magicframe")}
-                <DropdownMenu.Item.Badge>AI</DropdownMenu.Item.Badge>
-              </DropdownMenu.Item>
-            </>
-          )}
-        </DropdownMenu.Content>
-      </DropdownMenu>
+                {extraIcon}
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content
+                onClickOutside={() => setIsOtherShapesMenuOpen(false)}
+                onSelect={() => setIsOtherShapesMenuOpen(false)}
+                className="App-toolbar__extra-tools-dropdown"
+              >
+                {!showTextToolOutside && (
+                  <DropdownMenu.Item
+                    onSelect={() => app.setActiveTool({ type: "text" })}
+                    icon={TextIcon}
+                    shortcut={KEYS.T.toLocaleUpperCase()}
+                    data-testid="toolbar-text"
+                    selected={activeTool.type === "text"}
+                  >
+                    {t("toolBar.text")}
+                  </DropdownMenu.Item>
+                )}
+
+                {app.props.UIOptions.toolbarLayout === "left" &&
+                  app.props.role !== "member" &&
+                  app.props.UIOptions.tools?.rectangle !== false && (
+                    <DropdownMenu.Item
+                      icon={<MindmapIcon />}
+                      data-testid="toolbar-mindmap"
+                      selected={mindmapSelected}
+                      onSelect={() => {
+                        setIsOtherShapesMenuOpen(false);
+                        app.setActiveTool({
+                          type: "custom",
+                          customType: COURSEWARE_MINDMAP_TOOL,
+                        });
+                        setIsMindmapMenuOpen(true);
+                      }}
+                    >
+                      思维导图
+                    </DropdownMenu.Item>
+                  )}
+
+                {/* Rich Text Tool */}
+                <DropdownMenu.Item
+                  onSelect={() => app.setActiveTool({ type: "richText" })}
+                  icon={RichTextIcon}
+                  shortcut={KEYS.Y.toLocaleUpperCase()}
+                  data-testid="toolbar-richText"
+                  selected={activeTool.type === "richText"}
+                >
+                  {t("toolBar.richText")}
+                </DropdownMenu.Item>
+
+                {!showImageToolOutside && (
+                  <DropdownMenu.Item
+                    onSelect={() => app.setActiveTool({ type: "image" })}
+                    icon={ImageIcon}
+                    data-testid="toolbar-image"
+                    selected={activeTool.type === "image"}
+                  >
+                    {t("toolBar.image")}
+                  </DropdownMenu.Item>
+                )}
+                {!showFrameToolOutside && (
+                  <DropdownMenu.Item
+                    onSelect={() => app.setActiveTool({ type: "frame" })}
+                    icon={frameToolIcon}
+                    shortcut={KEYS.F.toLocaleUpperCase()}
+                    data-testid="toolbar-frame"
+                    selected={frameToolSelected}
+                  >
+                    {t("toolBar.frame")}
+                  </DropdownMenu.Item>
+                )}
+                <DropdownMenu.Item
+                  onSelect={() => app.setActiveTool({ type: "embeddable" })}
+                  icon={EmbedIcon}
+                  data-testid="toolbar-embeddable"
+                  selected={embeddableToolSelected}
+                >
+                  {t("toolBar.embeddable")}
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  onSelect={() => app.setActiveTool({ type: "laser" })}
+                  icon={laserPointerToolIcon}
+                  data-testid="toolbar-laser"
+                  selected={laserToolSelected}
+                  shortcut={KEYS.K.toLocaleUpperCase()}
+                >
+                  {t("toolBar.laser")}
+                </DropdownMenu.Item>
+                <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
+                  Generate
+                </div>
+                {app.props.aiEnabled !== false && (
+                  <TTDDialogTriggerTunnel.Out />
+                )}
+                <DropdownMenu.Item
+                  onSelect={() =>
+                    app.setOpenDialog({ name: "ttd", tab: "mermaid" })
+                  }
+                  icon={mermaidLogoIcon}
+                  data-testid="toolbar-embeddable"
+                >
+                  {t("toolBar.mermaidToExcalidraw")}
+                </DropdownMenu.Item>
+                {app.props.extraToolsMenuItems?.map((item) => (
+                  <DropdownMenu.Item
+                    key={item.id}
+                    onSelect={item.onSelect}
+                    icon={item.icon as any}
+                    disabled={item.disabled}
+                    data-testid={`toolbar-extra-${item.id}`}
+                  >
+                    {item.label}
+                  </DropdownMenu.Item>
+                ))}
+                {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
+                  <>
+                    <DropdownMenu.Item
+                      onSelect={() => app.onMagicframeToolSelect()}
+                      icon={MagicIcon}
+                      data-testid="toolbar-magicframe"
+                    >
+                      {t("toolBar.magicframe")}
+                      <DropdownMenu.Item.Badge>AI</DropdownMenu.Item.Badge>
+                    </DropdownMenu.Item>
+                  </>
+                )}
+              </DropdownMenu.Content>
+            </DropdownMenu>
+          </div>
+        </Popover.Anchor>
+        <MindmapToolContent
+          app={app}
+          mobile
+          onChoose={() => setIsMindmapMenuOpen(false)}
+        />
+      </Popover.Root>
     </div>
   );
 };

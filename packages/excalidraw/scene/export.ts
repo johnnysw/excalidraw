@@ -1,3 +1,4 @@
+import { getReferencedFileIds } from '@excalidraw/element/fileReferences';
 import rough from "roughjs/bin/rough";
 
 import {
@@ -22,7 +23,6 @@ import {
 } from "@excalidraw/element";
 
 import {
-  getInitializedImageElements,
   updateImageCache,
 } from "@excalidraw/element";
 
@@ -47,6 +47,7 @@ import type { Bounds } from "@excalidraw/element";
 
 import type {
   ExcalidrawElement,
+  FileId,
   ExcalidrawFrameLikeElement,
   ExcalidrawTextElement,
   NonDeletedExcalidrawElement,
@@ -236,9 +237,7 @@ export const exportToCanvas = async (
 
   const { imageCache } = await updateImageCache({
     imageCache: new Map(),
-    fileIds: getInitializedImageElements(elementsForRender).map(
-      (element) => element.fileId,
-    ),
+    fileIds: elementsForRender.flatMap(getReferencedFileIds) as FileId[],
     files,
   });
 

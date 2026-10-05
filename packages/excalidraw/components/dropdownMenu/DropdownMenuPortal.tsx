@@ -7,6 +7,7 @@ import { KEYS } from "@excalidraw/common";
 
 import { useExcalidrawContainer } from "../App";
 import { Island } from "../Island";
+import { hideTooltip } from "../Tooltip";
 
 import { DropdownMenuContentPropsContext } from "./common";
 
@@ -20,6 +21,7 @@ const DropdownMenuPortal = ({
   onCloseAutoFocus,
   style,
   placement = "bottom",
+  align = "start",
 }: MenuContentProps) => {
   const { container } = useExcalidrawContainer();
   const markerRef = useRef<HTMLSpanElement>(null);
@@ -56,9 +58,10 @@ const DropdownMenuPortal = ({
               )}
               side={placement}
               sideOffset={10}
-              align="start"
+              align={align}
               collisionBoundary={container}
               collisionPadding={{ top: 72, bottom: 72, left: 8, right: 8 }}
+              onEscapeKeyDown={() => hideTooltip({ immediate: true })}
               onInteractOutside={(event) => {
                 if (
                   event.target instanceof Node &&
@@ -79,6 +82,7 @@ const DropdownMenuPortal = ({
               }}
               onKeyDown={(event) => {
                 if (event.key === KEYS.ESCAPE) {
+                  hideTooltip({ immediate: true });
                   event.preventDefault();
                   event.stopPropagation();
                   event.nativeEvent.stopImmediatePropagation();
@@ -126,6 +130,7 @@ const DropdownMenuPortal = ({
                 margin: 0,
               }}
               data-testid="dropdown-menu"
+              data-tooltip-obstacle
             >
               <DropdownMenuContentPropsContext.Provider value={{ onSelect }}>
                 <Island

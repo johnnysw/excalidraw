@@ -13,11 +13,14 @@ import type {
 } from "@excalidraw/excalidraw/types";
 
 import { getElementAbsoluteCoords } from "./bounds";
+import { getCoursewareBraceSelection } from "./coursewareBrace";
+import { isCoursewareMindmapElement } from "./coursewareMindmapType";
 import {
   isElbowArrow,
   isFrameLikeElement,
   isImageElement,
   isLinearElement,
+  isLineElement,
 } from "./typeChecks";
 
 import type { Bounds } from "./bounds";
@@ -39,6 +42,7 @@ export type TransformHandleDirection =
   | "se";
 
 export type TransformHandleType = TransformHandleDirection | "rotation";
+export type RotationHandlePosition = "bottom" | "bottom-left";
 
 export type TransformHandle = Bounds;
 export type TransformHandles = Partial<{
@@ -53,6 +57,39 @@ const transformHandleSizes: { [k in PointerType]: number } = {
 };
 
 const ROTATION_RESIZE_HANDLE_GAP = 16;
+
+export const COURSEWARE_ROTATION_HANDLE_ICON_SIZE = 16;
+export const COURSEWARE_ROTATION_HANDLE_COLOR = "#7b9af8";
+
+/** The missing upper-right quadrant leaves the lower-left resize handle reachable. */
+export const isPointInRotationHandle = (
+  handle: TransformHandle,
+  x: number,
+  y: number,
+  angle: Radians,
+  position: RotationHandlePosition,
+) => {
+  if (position === "bottom") {
+    return (
+      x >= handle[0] &&
+      x <= handle[0] + handle[2] &&
+      y >= handle[1] &&
+      y <= handle[1] + handle[3]
+    );
+  }
+  const center = pointFrom(
+    handle[0] + handle[2] / 2,
+    handle[1] + handle[3] / 2,
+  );
+  const [localX, localY] = pointRotateRads(
+    pointFrom(x, y),
+    center,
+    -angle as Radians,
+  );
+  const dx = localX - center[0];
+  const dy = localY - center[1];
+  return Math.hypot(dx, dy) <= handle[2] / 2 && !(dx > 0 && dy < 0);
+};
 
 export const DEFAULT_OMIT_SIDES = {
   e: true,
@@ -138,6 +175,7 @@ export const getTransformHandlesFromCoords = (
   omitSides: { [T in TransformHandleType]?: boolean } = {},
   margin = 4,
   spacing = DEFAULT_TRANSFORM_HANDLE_SPACING,
+  rotationHandlePosition: RotationHandlePosition = "bottom",
 ): TransformHandles => {
   const size = transformHandleSizes[pointerType];
   const handleWidth = size / zoom.value;
@@ -150,6 +188,8 @@ export const getTransformHandlesFromCoords = (
   const height = y2 - y1;
   const dashedLineMargin = margin / zoom.value;
   const centeringOffset = (size - spacing * 2) / (2 * zoom.value);
+  const rotationSize = (pointerType === "mouse" ? 24 : 44) / zoom.value;
+  const rotationOffset = (pointerType === "mouse" ? 12 : 16) / zoom.value;
 
   const transformHandles: TransformHandles = {
     nw: omitSides.nw
@@ -198,6 +238,16 @@ export const getTransformHandlesFromCoords = (
         ),
     rotation: omitSides.rotation
       ? undefined
+      : rotationHandlePosition === "bottom-left"
+      ? generateTransformHandle(
+          x1 - dashedLineMargin - rotationOffset - rotationSize / 2,
+          y2 + dashedLineMargin + rotationOffset - rotationSize / 2,
+          rotationSize,
+          rotationSize,
+          cx,
+          cy,
+          angle,
+        )
       : generateTransformHandle(
           x1 + width / 2 - handleWidth / 2,
           y2 +
@@ -275,6 +325,7 @@ export const getTransformHandles = (
   elementsMap: ElementsMap,
   pointerType: PointerType = "mouse",
   omitSides: { [T in TransformHandleType]?: boolean } = DEFAULT_OMIT_SIDES,
+  rotationHandlePosition: RotationHandlePosition = "bottom",
 ): TransformHandles => {
   // so that when locked element is selected (especially when you toggle lock
   // via keyboard) the locked element is visually distinct, indicating
@@ -287,7 +338,9 @@ export const getTransformHandles = (
     return {};
   }
 
-  if (element.type === "freedraw" || isLinearElement(element)) {
+  if (isCoursewareMindmapElement(element)) {
+    omitSides = { ...omitSides, n: true, s: true, e: true, w: true };
+  } else if (element.type === "freedraw" || isLinearElement(element)) {
     if (element.points.length === 2) {
       // only check the last point because starting point is always (0,0)
       const [, p1] = element.points;
@@ -322,7 +375,30 @@ export const getTransformHandles = (
     omitSides,
     margin,
     isImageElement(element) ? 0 : undefined,
+    rotationHandlePosition,
   );
+};
+
+export const getCoursewareBraceWidthHandles = (
+  elements: readonly NonDeletedExcalidrawElement[],
+  zoom: Zoom,
+  elementsMap: ElementsMap,
+  pointerType: PointerType = "mouse",
+): TransformHandles => {
+  const brace = getCoursewareBraceSelection(elements);
+  if (!brace) {
+    return {};
+  }
+  const { e, w } = getTransformHandles(brace.container, zoom, elementsMap, pointerType, {
+    n: true,
+    s: true,
+    nw: true,
+    ne: true,
+    sw: true,
+    se: true,
+    rotation: true,
+  });
+  return { e, w };
 };
 
 export const hasBoundingBox = (
@@ -344,7 +420,10 @@ export const hasBoundingBox = (
     // Elbow arrows cannot be resized as single selected elements
     return false;
   }
-  if (!isLinearElement(element)) {
+  if (
+    !isLinearElement(element) ||
+    (isLineElement(element) && element.polygon)
+  ) {
     return true;
   }
 

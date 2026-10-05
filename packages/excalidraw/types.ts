@@ -230,6 +230,7 @@ export type InteractiveCanvasAppState = Readonly<
     isBindingEnabled: AppState["isBindingEnabled"];
     suggestedBinding: AppState["suggestedBinding"];
     isRotating: AppState["isRotating"];
+    lastPointerDownWith: AppState["lastPointerDownWith"];
     elementsToHighlight: AppState["elementsToHighlight"];
     // Collaborators
     collaborators: AppState["collaborators"];
@@ -346,6 +347,10 @@ export interface AppState {
     initialized: boolean;
   };
   preferredEraserMode: EraserMode;
+  coursewareBrush: import("./coursewareBrush").CoursewareBrushState;
+  coursewareEmoji: string;
+  coursewareStickyColor: string;
+  coursewareMindmap: import("./coursewareMindmap/config").MindmapToolPreference;
   penMode: boolean;
   penDetected: boolean;
   exportBackground: boolean;
@@ -381,7 +386,7 @@ export interface AppState {
   zoom: Zoom;
   openMenu: "canvas" | null;
   openPopup:
-    | "coursewareSelection"
+    | "presentation"
     | "canvasBackground"
     | "elementBackground"
     | "elementStroke"
@@ -687,6 +692,20 @@ export interface ExcalidrawProps {
   ) => JSX.Element | null;
   /** Optional host action rendered before the left toolbar's tool controls. */
   renderToolbarStart?: () => React.ReactNode;
+  /** Host-supplied picker keeps the drawing package independent of UI libraries. */
+  renderEmojiPicker?: (input: {
+    active: boolean;
+    selectedEmoji?: string;
+    disabled: boolean;
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onEmojiSelect: (emoji: string) => void;
+    onDefaultEmojiSelect: (emoji: string) => void;
+    triggerContent?: React.ReactNode;
+    triggerClassName: string;
+    popoverSide: "right";
+    popoverAlign: "start";
+  }) => React.ReactNode;
   renderEmptyPropertiesPanel?: () => React.ReactNode;
   langCode?: Language["code"];
   viewModeEnabled?: boolean;
@@ -869,6 +888,7 @@ export type AppClassProperties = {
   onPointerDownEmitter: App["onPointerDownEmitter"];
 
   bindModeHandler: App["bindModeHandler"];
+  mindmap: App["mindmap"];
 };
 
 export type PointerDownState = Readonly<{

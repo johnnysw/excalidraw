@@ -15,6 +15,8 @@ import {
 } from "./utils";
 
 import { elementCenterPoint } from "./bounds";
+import { isCoursewareMindmapElement } from "./coursewareMindmapType";
+import { distanceToCoursewareMindmap } from "./coursewareMindmapTransform";
 
 import type {
   ElementsMap,
@@ -31,6 +33,9 @@ export const distanceToElement = (
   elementsMap: ElementsMap,
   p: GlobalPoint,
 ): number => {
+  if (isCoursewareMindmapElement(element)) {
+    return distanceToCoursewareMindmap(element, { x: p[0], y: p[1] });
+  }
   switch (element.type) {
     case "selection":
     case "rectangle":

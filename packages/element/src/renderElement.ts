@@ -65,10 +65,15 @@ import {
   isImageElement,
 } from "./typeChecks";
 import { getContainingFrame } from "./frame";
-import { getSvgPathFromStroke } from "./freedrawGeometry";
+import { getFreedrawStrokeOptions, getSvgPathFromStroke } from "./freedrawGeometry";
 import { getCornerRadius } from "./utils";
 
 import { ShapeCache } from "./shape";
+import { isCoursewareStickyElement } from "./coursewareSticky";
+import { isCoursewareBraceElement } from "./coursewareBrace";
+import { drawCoursewareSticky } from "./coursewareStickyCanvas";
+import { isCoursewareMindmapElement } from "./coursewareMindmapType";
+import { drawCoursewareMindmap } from "./coursewareMindmapCanvas";
 
 import type {
   ExcalidrawElement,
@@ -82,7 +87,6 @@ import type {
   ElementsMap,
 } from "./types";
 
-import type { StrokeOptions } from "perfect-freehand";
 import type { RoughCanvas } from "roughjs/bin/canvas";
 
 // using a stronger invert (100% vs our regular 93%) and saturate
@@ -113,6 +117,9 @@ const shouldResetImageFilter = (
 };
 
 const getCanvasPadding = (element: ExcalidrawElement) => {
+  if (isCoursewareStickyElement(element)) {
+    return 40 * window.devicePixelRatio;
+  }
   switch (element.type) {
     case "freedraw":
       return element.strokeWidth * 12;
@@ -308,7 +315,7 @@ const generateElementCanvas = (
     context.filter = IMAGE_INVERT_FILTER;
   }
 
-  drawElementOnCanvas(element, elementsMap, rc, context, renderConfig);
+  drawElementOnCanvas(element, elementsMap, rc, context, renderConfig, appState);
 
   context.restore();
 
@@ -481,6 +488,7 @@ const drawElementOnCanvas = (
   rc: RoughCanvas,
   context: CanvasRenderingContext2D,
   renderConfig: StaticCanvasRenderConfig,
+  appState?: StaticCanvasAppState | InteractiveCanvasAppState,
 ) => {
   switch (element.type) {
     case "rectangle":
@@ -488,9 +496,21 @@ const drawElementOnCanvas = (
     case "embeddable":
     case "diamond":
     case "ellipse": {
+      if (isCoursewareBraceElement(element)) {
+        break;
+      }
       context.lineJoin = "round";
       context.lineCap = "round";
-      if (isSlideBackgroundSolidEllipse(element)) {
+      if (isCoursewareMindmapElement(element)) {
+        drawCoursewareMindmap(element, context, {
+          imageCache: renderConfig.imageCache,
+          imageFilter: appState?.theme === THEME.DARK
+            ? renderConfig.isExporting ? "none" : IMAGE_INVERT_FILTER
+            : undefined,
+        });
+      } else if (isCoursewareStickyElement(element)) {
+        drawCoursewareSticky(element, context);
+      } else if (isSlideBackgroundSolidEllipse(element)) {
         drawSlideBackgroundSolidEllipse(element, context);
       } else {
         rc.draw(ShapeCache.get(element)!);
@@ -514,7 +534,9 @@ const drawElementOnCanvas = (
         context.save();
         context.strokeStyle = element.strokeColor;
         context.lineWidth = Math.max(0.01, element.strokeWidth * 4.25);
-        context.lineCap = "round";
+        context.lineCap = element.customData?.coursewareBrushMode === "highlighter"
+          ? "butt"
+          : "round";
         context.lineJoin = "round";
         context.stroke(pendingPreview);
         context.restore();
@@ -591,6 +613,19 @@ const drawElementOnCanvas = (
         }
         context.canvas.setAttribute("dir", rtl ? "rtl" : "ltr");
         context.save();
+        const textContainer = getContainerElement(element, elementsMap);
+        if (textContainer && (isCoursewareStickyElement(textContainer) || isCoursewareBraceElement(textContainer))) {
+          const maxWidth = getBoundTextMaxWidth(textContainer, element);
+          const maxHeight = getBoundTextMaxHeight(textContainer, element as ExcalidrawTextElementWithContainer);
+          context.beginPath();
+          context.rect(
+            element.textAlign === "center" ? (element.width - maxWidth) / 2 : element.textAlign === "right" ? element.width - maxWidth : 0,
+            element.verticalAlign === "middle" ? (element.height - maxHeight) / 2 : element.verticalAlign === "bottom" ? element.height - maxHeight : 0,
+            maxWidth,
+            maxHeight,
+          );
+          context.clip();
+        }
         context.font = getFontString(element);
         context.fillStyle = element.strokeColor;
         context.textAlign = element.textAlign as CanvasTextAlign;
@@ -631,6 +666,7 @@ const drawElementOnCanvas = (
                 fontSize: run.style.fontSize,
                 fontFamily: run.style.fontFamily,
                 fontWeight: run.style.fontWeight,
+                customData: element.customData,
               });
               if (outlineWidth > 0) {
                 context.lineWidth = outlineWidth;
@@ -1052,7 +1088,7 @@ export const renderElement = (
         context.translate(cx, cy);
         context.rotate(element.angle);
         context.translate(-shiftX, -shiftY);
-        drawElementOnCanvas(element, allElementsMap, rc, context, renderConfig);
+        drawElementOnCanvas(element, allElementsMap, rc, context, renderConfig, appState);
         context.restore();
       } else {
         const elementWithCanvas = generateElementWithCanvas(
@@ -1151,6 +1187,7 @@ export const renderElement = (
             tempRc,
             tempCanvasContext,
             renderConfig,
+            appState,
           );
 
           tempCanvasContext.translate(shiftX, shiftY);
@@ -1196,6 +1233,7 @@ export const renderElement = (
             rc,
             context,
             renderConfig,
+            appState,
           );
         }
 
@@ -1299,7 +1337,7 @@ const freedrawGeometrySignatures = new WeakMap<
 >();
 
 const getFreedrawGeometrySignature = (element: ExcalidrawFreeDrawElement) =>
-  `${element.version}:${element.versionNonce}:${element.points.length}:${element.pressures.length}`;
+  `${element.version}:${element.versionNonce}:${element.points.length}:${element.pressures.length}:${element.customData?.coursewareBrushMode ?? "pen"}`;
 
 export const setFreedrawPendingPreview = (
   element: ExcalidrawFreeDrawElement,
@@ -1494,15 +1532,11 @@ export function getFreedrawOutlinePoints(element: ExcalidrawFreeDrawElement) {
     : [[0, 0, 0.5]];
 
   // Consider changing the options for simulated pressure vs real pressure
-  const options: StrokeOptions = {
+  const options = getFreedrawStrokeOptions({
     simulatePressure: element.simulatePressure,
-    size: element.strokeWidth * 4.25,
-    thinning: 0.6,
-    smoothing: 0.5,
-    streamline: 0.5,
-    easing: (t) => Math.sin((t * Math.PI) / 2), // https://easings.net/#easeOutSine
-    last: true,
-  };
+    strokeWidth: element.strokeWidth,
+    brushMode: element.customData?.coursewareBrushMode,
+  });
 
   return getStroke(inputPoints as number[][], options) as [number, number][];
 }

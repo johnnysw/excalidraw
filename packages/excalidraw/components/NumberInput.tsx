@@ -23,9 +23,11 @@ export const NumberInput: React.FC<NumberInputProps> = ({
   const [inputValue, setInputValue] = useState(String(value));
   const [isFocused, setIsFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const inputEditedRef = useRef(false);
 
   useEffect(() => {
     setInputValue(String(value));
+    inputEditedRef.current = false;
   }, [value]);
 
   const getStep = (stepValue: number) =>
@@ -52,7 +54,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
 
   const handleBlur = () => {
     setIsFocused(false);
-    commitValue(inputValue);
+    if (inputEditedRef.current) {
+      commitValue(inputValue);
+      inputEditedRef.current = false;
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -89,7 +94,10 @@ export const NumberInput: React.FC<NumberInputProps> = ({
         type="text" // Use text to completely bypass browser number input behaviors
         inputMode="decimal"
         value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
+        onChange={(e) => {
+          inputEditedRef.current = true;
+          setInputValue(e.target.value);
+        }}
         onFocus={() => setIsFocused(true)}
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}

@@ -37,7 +37,7 @@ import type {
 } from "@excalidraw/element/types";
 
 import { trackEvent } from "../../analytics";
-import { getTooltipDiv, updateTooltipPosition } from "../../components/Tooltip";
+import { hideTooltip, showTooltip } from "../../components/Tooltip";
 
 import { t } from "../../i18n";
 
@@ -405,11 +405,7 @@ const renderTooltip = (
     return;
   }
 
-  const tooltipDiv = getTooltipDiv();
-
-  tooltipDiv.classList.add("excalidraw-tooltip--visible");
-  tooltipDiv.style.maxWidth = "20rem";
-  tooltipDiv.textContent = isElementLink(element.link)
+  const label = isElementLink(element.link)
     ? t("labels.link.goToElement")
     : element.link;
 
@@ -426,15 +422,17 @@ const renderTooltip = (
     appState,
   );
 
-  updateTooltipPosition(
-    tooltipDiv,
+  showTooltip(
     {
       left: linkViewportCoords.x,
       top: linkViewportCoords.y,
       width: linkWidth,
       height: linkHeight,
     },
+    label,
+    false,
     "top",
+    { maxWidth: "20rem" },
   );
   trackEvent("hyperlink", "tooltip", "link-icon");
 
@@ -446,7 +444,7 @@ export const hideHyperlinkToolip = () => {
   }
   if (IS_HYPERLINK_TOOLTIP_VISIBLE) {
     IS_HYPERLINK_TOOLTIP_VISIBLE = false;
-    getTooltipDiv().classList.remove("excalidraw-tooltip--visible");
+    hideTooltip({ owner: null });
   }
 };
 

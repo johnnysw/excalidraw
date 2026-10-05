@@ -8,6 +8,7 @@ import type { ToolButtonSize } from "./ToolButton";
 
 type PenModeIconProps = {
   title?: string;
+  showNativeTooltip?: boolean;
   name?: string;
   checked: boolean;
   onChange?(): void;
@@ -32,7 +33,7 @@ export const PenModeButton = (props: PenModeIconProps) => {
           "is-mobile": props.isMobile,
         },
       )}
-      title={`${props.title}`}
+      title={props.showNativeTooltip === false ? undefined : props.title}
     >
       <input
         className="ToolIcon_type_checkbox"

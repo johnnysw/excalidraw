@@ -33,6 +33,8 @@ import {
   getElementBounds,
 } from "./bounds";
 import { LinearElementEditor } from "./linearElementEditor";
+import { getCoursewareBraceSelection, isCoursewareBraceElement } from "./coursewareBrace";
+import { getCoursewareMindmap, isCoursewareMindmapElement } from "./coursewareMindmapType";
 import {
   getBoundTextElement,
   getBoundTextElementId,
@@ -59,6 +61,7 @@ import {
   isFreeDrawElement,
   isImageElement,
   isLinearElement,
+  isLineElement,
   isTextElement,
 } from "./typeChecks";
 
@@ -98,8 +101,62 @@ export const transformElements = (
   pointerY: number,
   centerX: number,
   centerY: number,
+  rotationOrigin?: { x: number; y: number },
 ): boolean => {
+  if (selectedElements.some(isCoursewareMindmapElement)) {
+    shouldMaintainAspectRatio = true;
+  }
   const elementsMap = scene.getNonDeletedElementsMap();
+  if (transformHandleType === "e" || transformHandleType === "w") {
+    const brace = getCoursewareBraceSelection(selectedElements);
+    const originalContainer = brace && originalElements.get(brace.container.id);
+    const originalCurve = brace && originalElements.get(brace.curve.id);
+    if (brace && originalContainer && isCoursewareBraceElement(originalContainer) &&
+      originalCurve && isLineElement(originalCurve)) {
+      const center = pointFrom(
+        originalContainer.x + originalContainer.width / 2,
+        originalContainer.y + originalContainer.height / 2,
+      );
+      const [localPointerX] = pointRotateRads(
+        pointFrom(pointerX, pointerY), center, -originalContainer.angle as Radians,
+      );
+      const direction = transformHandleType === "e" ? 1 : -1;
+      const boundText = getBoundTextElement(brace.container, elementsMap);
+      const minWidth = Math.min(originalContainer.width, originalCurve.width + 16 +
+        (boundText ? getApproxMinLineWidth(getFontString(boundText), boundText.lineHeight) : 14));
+      const nextWidth = Math.max(minWidth, shouldResizeFromCenter
+        ? direction * (localPointerX - center[0]) * 2
+        : direction * (localPointerX - (center[0] - direction * originalContainer.width / 2)));
+      const deltaWidth = nextWidth - originalContainer.width;
+      const centerShift = shouldResizeFromCenter ? 0 : direction * deltaWidth / 2;
+      const cos = Math.cos(originalContainer.angle);
+      const sin = Math.sin(originalContainer.angle);
+      const curveSide = originalContainer.customData?.coursewareBraceSide === "left" ? -1 : 1;
+      const curveShift = centerShift + curveSide * deltaWidth / 2;
+
+      // Change the text area's width along its local axis without scaling the curve or font.
+      scene.mutateElement(brace.container, {
+        x: center[0] + centerShift * cos - nextWidth / 2,
+        y: originalContainer.y + centerShift * sin,
+        width: nextWidth,
+        customData: {
+          ...originalContainer.customData,
+          coursewareBraceWidthRatio: originalCurve.width / nextWidth,
+        },
+      });
+      scene.mutateElement(brace.curve, {
+        x: originalCurve.x + curveShift * cos,
+        y: originalCurve.y + curveShift * sin,
+      });
+      handleBindTextResize(brace.container, scene, transformHandleType);
+      if (boundText) {
+        scene.mutateElement(boundText, computeBoundTextPosition(brace.container, boundText, elementsMap));
+      }
+      updateBoundElements(brace.container, scene);
+      scene.triggerUpdate();
+      return true;
+    }
+  }
   if (selectedElements.length === 1) {
     const [element] = selectedElements;
     if (transformHandleType === "rotation") {
@@ -110,6 +167,8 @@ export const transformElements = (
           pointerX,
           pointerY,
           shouldRotateWithDiscreteAngle,
+          rotationOrigin,
+          originalElements.get(element.id),
         );
         updateBoundElements(element, scene);
       }
@@ -162,6 +221,7 @@ export const transformElements = (
         shouldRotateWithDiscreteAngle,
         centerX,
         centerY,
+        rotationOrigin,
       );
       return true;
     } else if (transformHandleType) {
@@ -208,6 +268,8 @@ const rotateSingleElement = (
   pointerX: number,
   pointerY: number,
   shouldRotateWithDiscreteAngle: boolean,
+  rotationOrigin?: { x: number; y: number },
+  originalElement: NonDeletedExcalidrawElement = element,
 ) => {
   const [x1, y1, x2, y2] = getElementAbsoluteCoords(
     element,
@@ -219,8 +281,16 @@ const rotateSingleElement = (
   if (isFrameLikeElement(element)) {
     angle = 0 as Radians;
   } else {
-    angle = ((3 * Math.PI) / 2 +
-      Math.atan2(pointerY - cy, pointerX - cx)) as Radians;
+    angle = (
+      rotationOrigin
+        ? originalElement.angle +
+          Math.atan2(pointerY - cy, pointerX - cx) -
+          Math.atan2(rotationOrigin.y - cy, rotationOrigin.x - cx)
+        : (3 * Math.PI) / 2 + Math.atan2(pointerY - cy, pointerX - cx)
+    ) as Radians;
+    if (rotationOrigin) {
+      angle = normalizeRadians(angle);
+    }
     if (shouldRotateWithDiscreteAngle) {
       angle = (angle + SHIFT_LOCKING_ANGLE / 2) as Radians;
       angle = (angle - (angle % SHIFT_LOCKING_ANGLE)) as Radians;
@@ -429,10 +499,18 @@ const rotateMultipleElements = (
   shouldRotateWithDiscreteAngle: boolean,
   centerX: number,
   centerY: number,
+  rotationOrigin?: { x: number; y: number },
 ) => {
   const elementsMap = scene.getNonDeletedElementsMap();
-  let centerAngle =
-    (5 * Math.PI) / 2 + Math.atan2(pointerY - centerY, pointerX - centerX);
+  let centerAngle = rotationOrigin
+    ? normalizeRadians(
+        (Math.atan2(pointerY - centerY, pointerX - centerX) -
+          Math.atan2(
+            rotationOrigin.y - centerY,
+            rotationOrigin.x - centerX,
+          )) as Radians,
+      )
+    : (5 * Math.PI) / 2 + Math.atan2(pointerY - centerY, pointerX - centerX);
   if (shouldRotateWithDiscreteAngle) {
     centerAngle += SHIFT_LOCKING_ANGLE / 2;
     centerAngle -= centerAngle % SHIFT_LOCKING_ANGLE;
@@ -513,14 +591,17 @@ export const getResizeOffsetXY = (
   x: number,
   y: number,
 ): [number, number] => {
+  const brace = transformHandleType === "e" || transformHandleType === "w"
+    ? getCoursewareBraceSelection(selectedElements)
+    : null;
   const [x1, y1, x2, y2] =
-    selectedElements.length === 1
+    brace ? getElementAbsoluteCoords(brace.container, elementsMap) : selectedElements.length === 1
       ? getElementAbsoluteCoords(selectedElements[0], elementsMap)
       : getCommonBounds(selectedElements);
   const cx = (x1 + x2) / 2;
   const cy = (y1 + y2) / 2;
   const angle = (
-    selectedElements.length === 1 ? selectedElements[0].angle : 0
+    brace ? brace.container.angle : selectedElements.length === 1 ? selectedElements[0].angle : 0
   ) as Radians;
   [x, y] = pointRotateRads(
     pointFrom(x, y),
@@ -861,6 +942,19 @@ export const resizeSingleElement = (
   }
 
   // flipping
+  const originalMindmap = getCoursewareMindmap(origElement);
+  if (isCoursewareMindmapElement(latestElement) && originalMindmap) {
+    scene.mutateElement(latestElement, {
+      customData: {
+        ...latestElement.customData,
+        mindmap: {
+          ...originalMindmap,
+          flipX: nextWidth < 0 ? !originalMindmap.flipX : !!originalMindmap.flipX,
+          flipY: nextHeight < 0 ? !originalMindmap.flipY : !!originalMindmap.flipY,
+        },
+      },
+    });
+  }
   if (nextWidth < 0) {
     newOrigin.x = newOrigin.x + nextWidth;
   }
@@ -1360,6 +1454,7 @@ export const resizeMultipleElements = (
         startBinding?: ExcalidrawElbowArrowElement["startBinding"];
         endBinding?: ExcalidrawElbowArrowElement["endBinding"];
         fixedSegments?: ExcalidrawElbowArrowElement["fixedSegments"];
+        customData?: ExcalidrawElement["customData"];
       };
     }[] = [];
 
@@ -1399,6 +1494,18 @@ export const resizeMultipleElements = (
         angle,
         ...rescaledPoints,
       };
+
+      const mindmap = getCoursewareMindmap(orig);
+      if (mindmap && (flipByX || flipByY)) {
+        update.customData = {
+          ...orig.customData,
+          mindmap: {
+            ...mindmap,
+            flipX: flipByX ? !mindmap.flipX : !!mindmap.flipX,
+            flipY: flipByY ? !mindmap.flipY : !!mindmap.flipY,
+          },
+        };
+      }
 
       if (isElbowArrow(orig)) {
         // Mirror fixed point binding for elbow arrows

@@ -360,6 +360,9 @@ const _renderNewElementScene = ({
     hasActiveFreedrawStroke &&
       newElement?.type === "freedraw" &&
       newElement.angle === 0 &&
+      // Fill each highlighter stroke once so translucent segments do not
+      // darken at joins; use the same flat-cap outline as the saved stroke.
+      newElement.customData?.coursewareBrushMode !== "highlighter" &&
       !activeFreedrawIncrementalPreviewFailures.has(newElement),
   );
   const frameId =

@@ -23,6 +23,9 @@ export const getTextElementBaseStyle = (element: ExcalidrawTextElement) => ({
   fontWeight: element.fontWeight ?? "normal",
   textOutlineColor: element.textOutlineColor,
   textOutlineWidth: element.textOutlineWidth,
+  ...(element.customData?.coursewareObjectType === "sticky-text"
+    ? { customData: element.customData }
+    : {}),
 });
 
 export const normalizeTextElementStyleRanges = <

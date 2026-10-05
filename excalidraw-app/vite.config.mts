@@ -23,6 +23,14 @@ export default defineConfig(({ mode }) => {
     envDir: "../",
     resolve: {
       alias: [
+      {
+        find: /^@excalidraw\/mindmap$/,
+        replacement: path.resolve(__dirname, '../packages/mindmap/src/index.ts'),
+      },
+      {
+        find: /^@excalidraw\/mindmap\/(.*)/,
+        replacement: path.resolve(__dirname, '../packages/mindmap/src/$1'),
+      },
         {
           find: /^@excalidraw\/common$/,
           replacement: path.resolve(

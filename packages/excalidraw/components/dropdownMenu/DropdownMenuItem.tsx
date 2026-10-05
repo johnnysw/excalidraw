@@ -5,6 +5,7 @@ import { THEME } from "@excalidraw/common";
 import type { ValueOf } from "@excalidraw/common/utility-types";
 
 import { useExcalidrawAppState } from "../App";
+import { hideTooltip, showTooltip } from "../Tooltip";
 
 import MenuItemContent from "./DropdownMenuItemContent";
 import {
@@ -24,6 +25,8 @@ const DropdownMenuItem = ({
   hovered,
   selected,
   textStyle,
+  tooltipLabel,
+  tooltipPosition = "right",
   onSelect,
   onClick,
   ...rest
@@ -38,9 +41,21 @@ const DropdownMenuItem = ({
   selected?: boolean;
   textStyle?: React.CSSProperties;
   className?: string;
+  tooltipLabel?: React.ReactNode;
+  tooltipPosition?: "bottom" | "top" | "right";
 } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, "onSelect">) => {
   const handleClick = useHandleDropdownMenuItemClick(onClick, onSelect);
   const ref = useRef<HTMLButtonElement>(null);
+  const hasTooltip = tooltipLabel !== undefined && tooltipLabel !== null;
+
+  useEffect(() => {
+    const owner = ref.current;
+    return () => {
+      if (owner) {
+        hideTooltip({ immediate: true, owner });
+      }
+    };
+  }, [hasTooltip]);
 
   useEffect(() => {
     if (hovered) {
@@ -60,7 +75,44 @@ const DropdownMenuItem = ({
       value={value}
       onClick={handleClick}
       className={getDropdownMenuItemClassName(className, selected, hovered)}
-      title={rest.title ?? rest["aria-label"]}
+      title={hasTooltip ? undefined : rest.title ?? rest["aria-label"]}
+      onPointerEnter={(event) => {
+        rest.onPointerEnter?.(event);
+        if (hasTooltip) {
+          // Custom tools may render a React label; use its displayed text.
+          const label =
+            typeof tooltipLabel === "string"
+              ? tooltipLabel
+              : event.currentTarget.textContent?.trim();
+          if (label) {
+            showTooltip(event.currentTarget, label, false, tooltipPosition);
+          }
+        }
+      }}
+      onPointerLeave={(event) => {
+        rest.onPointerLeave?.(event);
+        if (hasTooltip) {
+          hideTooltip({ owner: event.currentTarget });
+        }
+      }}
+      onPointerDownCapture={(event) => {
+        rest.onPointerDownCapture?.(event);
+        if (hasTooltip) {
+          hideTooltip({ immediate: true, owner: event.currentTarget });
+        }
+      }}
+      onClickCapture={(event) => {
+        rest.onClickCapture?.(event);
+        if (hasTooltip) {
+          hideTooltip({ immediate: true, owner: event.currentTarget });
+        }
+      }}
+      onKeyDownCapture={(event) => {
+        rest.onKeyDownCapture?.(event);
+        if (hasTooltip && event.key === "Escape") {
+          hideTooltip({ owner: event.currentTarget });
+        }
+      }}
     >
       <MenuItemContent textStyle={textStyle} icon={icon} shortcut={shortcut}>
         {children}

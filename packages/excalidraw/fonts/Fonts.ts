@@ -25,6 +25,7 @@ import {
 import { ShapeCache } from "@excalidraw/element";
 
 import { isTextElement } from "@excalidraw/element";
+import { getCoursewareMindmap, isCoursewareMindmapElement } from "@excalidraw/element/coursewareMindmapType";
 
 import type {
   ExcalidrawElement,
@@ -132,6 +133,10 @@ export class Fonts {
     const elementsMap = this.scene.getNonDeletedElementsMap();
 
     for (const element of this.scene.getNonDeletedElements()) {
+      if (isCoursewareMindmapElement(element)) {
+        didUpdate = true;
+        ShapeCache.delete(element);
+      }
       if (isTextElement(element)) {
         didUpdate = true;
         ShapeCache.delete(element);
@@ -429,6 +434,11 @@ export class Fonts {
   ): Array<ExcalidrawTextElement["fontFamily"]> {
     return Array.from(
       elements.reduce((families, element) => {
+        if (isCoursewareMindmapElement(element)) {
+          // The existing whiteboard uses Arial. Helvetica's catalog entry is
+          // the native sans-serif family (no web-font substitute is loaded).
+          families.add(FONT_FAMILY.Helvetica);
+        }
         if (isTextElement(element)) {
           families.add(element.fontFamily);
           for (const range of Fonts.getNormalizedTextStyleRanges(element)) {
@@ -451,6 +461,16 @@ export class Fonts {
     const charsPerFamily: Record<number, Set<string>> = {};
 
     for (const element of elements) {
+      const mindmap = getCoursewareMindmap(element);
+      if (mindmap) {
+        const family = FONT_FAMILY.Helvetica;
+        const characters = charsPerFamily[family] ?? (charsPerFamily[family] = new Set());
+        for (const node of Object.values(mindmap.nodes)) {
+          for (const char of `${node.label ?? ""}${node.summary ?? ""}${node.icon ?? ""}`) {
+            characters.add(char);
+          }
+        }
+      }
       if (!isTextElement(element)) {
         continue;
       }

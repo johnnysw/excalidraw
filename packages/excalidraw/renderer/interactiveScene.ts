@@ -23,8 +23,10 @@ import {
   deconstructRectanguloidElement,
   elementCenterPoint,
   getCornerRadius,
+  generateLinearCollisionShape,
   getOmitSidesForEditorInterface,
   getTransformHandles,
+  getCoursewareBraceWidthHandles,
   getTransformHandlesFromCoords,
   hasBoundingBox,
   isElbowArrow,
@@ -35,6 +37,8 @@ import {
   isLineElement,
   isTextElement,
   LinearElementEditor,
+  COURSEWARE_ROTATION_HANDLE_COLOR,
+  COURSEWARE_ROTATION_HANDLE_ICON_SIZE,
 } from "@excalidraw/element";
 
 import { renderSelectionElement } from "@excalidraw/element";
@@ -51,6 +55,7 @@ import { getCommonBounds, getElementAbsoluteCoords } from "@excalidraw/element";
 import type {
   TransformHandles,
   TransformHandleType,
+  RotationHandlePosition,
 } from "@excalidraw/element";
 
 import type {
@@ -60,6 +65,7 @@ import type {
   ExcalidrawFrameLikeElement,
   ExcalidrawImageElement,
   ExcalidrawLinearElement,
+  ExcalidrawPolygonElement,
   ExcalidrawTextElement,
   GroupId,
   NonDeleted,
@@ -121,6 +127,43 @@ const drawRotationIcon = (
   context.fillStyle = strokeColor;
   context.fill(rotationIconPath2D);
 
+  context.restore();
+};
+
+const drawCoursewareRotationIcon = (
+  context: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  angle: number,
+  zoom: number,
+) => {
+  const size = COURSEWARE_ROTATION_HANDLE_ICON_SIZE / zoom;
+  context.save();
+  context.translate(cx, cy);
+  context.rotate(angle);
+  context.translate(-size / 2, -size / 2);
+  context.scale(size / 28, size / 28);
+  context.strokeStyle = COURSEWARE_ROTATION_HANDLE_COLOR;
+  context.fillStyle = COURSEWARE_ROTATION_HANDLE_COLOR;
+  context.lineWidth = 2.6;
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.beginPath();
+  context.moveTo(6, 6.5);
+  context.lineTo(6, 11);
+  context.bezierCurveTo(6, 17.1, 10.9, 22, 17, 22);
+  context.lineTo(22.5, 22);
+  context.stroke();
+  context.beginPath();
+  context.moveTo(6, 0.5);
+  context.lineTo(0.5, 6.5);
+  context.lineTo(11.5, 6.5);
+  context.closePath();
+  context.moveTo(27.5, 22);
+  context.lineTo(22, 17);
+  context.lineTo(22, 27);
+  context.closePath();
+  context.fill();
   context.restore();
 };
 
@@ -219,6 +262,35 @@ const renderSingleLinearPoint = <Point extends GlobalPoint | LocalPoint>(
   );
 };
 
+const renderPolygonBindingOutline = (
+  context: CanvasRenderingContext2D,
+  element: ExcalidrawPolygonElement,
+) => {
+  // Collision geometry already includes rotation, so draw it in scene space.
+  // Reusing it also keeps the hint on concave and curved outlines.
+  context.translate(element.x, element.y);
+  context.beginPath();
+  for (const { op, data } of generateLinearCollisionShape(element)) {
+    if (op === "move") {
+      context.moveTo(data[0], data[1]);
+    } else if (op === "lineTo") {
+      context.lineTo(data[0], data[1]);
+    } else if (op === "bcurveTo") {
+      context.bezierCurveTo(
+        data[0],
+        data[1],
+        data[2],
+        data[3],
+        data[4],
+        data[5],
+      );
+    }
+  }
+  context.closePath();
+  context.lineJoin = "round";
+  context.stroke();
+};
+
 const renderBindingHighlightForBindableElement_simple = (
   context: CanvasRenderingContext2D,
   element: ExcalidrawBindableElement,
@@ -254,6 +326,18 @@ const renderBindingHighlightForBindableElement_simple = (
   }
 
   switch (element.type) {
+    case "line":
+      context.save();
+      context.lineWidth =
+        clamp(1.75, element.strokeWidth, 4) /
+        Math.max(0.25, appState.zoom.value);
+      context.strokeStyle =
+        appState.theme === THEME.DARK
+          ? "rgba(3, 93, 161, 1)"
+          : "rgba(106, 189, 252, 1)";
+      renderPolygonBindingOutline(context, element);
+      context.restore();
+      break;
     case "magicframe":
     case "frame":
       context.save();
@@ -441,6 +525,19 @@ const renderBindingHighlightForBindableElement_complex = (
   }
 
   switch (element.type) {
+    case "line":
+      context.save();
+      context.translate(appState.scrollX, appState.scrollY);
+      context.lineWidth =
+        clamp(2.5, element.strokeWidth * 1.75, 4) /
+        Math.max(0.25, appState.zoom.value);
+      context.strokeStyle =
+        appState.theme === THEME.DARK
+          ? `rgba(3, 93, 161, ${opacity / 2})`
+          : `rgba(106, 189, 252, ${opacity / 2})`;
+      renderPolygonBindingOutline(context, element);
+      context.restore();
+      break;
     case "magicframe":
     case "frame":
       context.save();
@@ -842,7 +939,13 @@ const renderLinearPointHandles = (
   element: NonDeleted<ExcalidrawLinearElement>,
   elementsMap: RenderableElementsMap,
 ) => {
-  if (!appState.selectedLinearElement) {
+  if (
+    !appState.selectedLinearElement ||
+    !LinearElementEditor.shouldShowPointHandles(
+      element,
+      appState.selectedLinearElement,
+    )
+  ) {
     return;
   }
   context.save();
@@ -966,6 +1069,7 @@ const renderTransformHandles = (
   appState: InteractiveCanvasAppState,
   transformHandles: TransformHandles,
   angle: number,
+  rotationHandlePosition: RotationHandlePosition = "bottom",
 ): void => {
   Object.keys(transformHandles).forEach((key) => {
     const transformHandle = transformHandles[key as TransformHandleType];
@@ -978,6 +1082,17 @@ const renderTransformHandles = (
         context.strokeStyle = renderConfig.selectionColor;
       }
       if (key === "rotation") {
+        if (rotationHandlePosition === "bottom-left") {
+          drawCoursewareRotationIcon(
+            context,
+            x + width / 2,
+            y + height / 2,
+            angle,
+            appState.zoom.value,
+          );
+          context.restore();
+          return;
+        }
         // 绘制旋转图标
         const iconSize = width * 2.5; // 图标大小
         const cx = x + width / 2;
@@ -1163,6 +1278,8 @@ const _renderInteractiveScene = ({
   if (canvas === null) {
     return { atLeastOneVisibleElement: false, elementsMap };
   }
+  const rotationHandlePosition: RotationHandlePosition =
+    app.props.UIOptions.toolbarLayout === "left" ? "bottom-left" : "bottom";
 
   const [normalizedWidth, normalizedHeight] = getNormalizedCanvasDimensions(
     canvas,
@@ -1337,7 +1454,11 @@ const _renderInteractiveScene = ({
       (el) => el.id === editor.elementId, // Don't forget bound text elements!
     );
 
-    if (!appState.selectedLinearElement.isDragging) {
+    if (
+      isLinearElement(firstSelectedLinear) &&
+      LinearElementEditor.shouldShowPointHandles(firstSelectedLinear, editor) &&
+      !editor.isDragging
+    ) {
       if (editor.segmentMidPointHoveredCoords) {
         renderElbowArrowMidPointHighlight(context, appState);
       } else if (
@@ -1500,7 +1621,21 @@ const _renderInteractiveScene = ({
         elementsMap,
         "mouse", // when we render we don't know which pointer type so use mouse,
         getOmitSidesForEditorInterface(editorInterface),
+        rotationHandlePosition,
       );
+      if (
+        rotationHandlePosition === "bottom-left" &&
+        appState.lastPointerDownWith !== "mouse"
+      ) {
+        transformHandles.rotation = getTransformHandles(
+          selectedElements[0],
+          appState.zoom,
+          elementsMap,
+          appState.lastPointerDownWith,
+          getOmitSidesForEditorInterface(editorInterface),
+          rotationHandlePosition,
+        ).rotation;
+      }
       if (
         !appState.viewModeEnabled &&
         showBoundingBox &&
@@ -1515,6 +1650,7 @@ const _renderInteractiveScene = ({
           appState,
           transformHandles,
           selectedElements[0].angle,
+          rotationHandlePosition,
         );
       }
 
@@ -1569,7 +1705,28 @@ const _renderInteractiveScene = ({
               rotation: true,
             }
           : getOmitSidesForEditorInterface(editorInterface),
+        undefined,
+        undefined,
+        rotationHandlePosition,
       );
+      if (
+        rotationHandlePosition === "bottom-left" &&
+        appState.lastPointerDownWith !== "mouse"
+      ) {
+        transformHandles.rotation = getTransformHandlesFromCoords(
+          [x1, y1, x2, y2, (x1 + x2) / 2, (y1 + y2) / 2],
+          0 as Radians,
+          appState.zoom,
+          appState.lastPointerDownWith,
+          isFrameSelected ? { rotation: true } : {},
+          undefined,
+          undefined,
+          rotationHandlePosition,
+        ).rotation;
+      }
+      Object.assign(transformHandles, getCoursewareBraceWidthHandles(
+        selectedElements, appState.zoom, elementsMap,
+      ));
       if (selectedElements.some((element) => !element.locked)) {
         renderTransformHandles(
           context,
@@ -1577,6 +1734,7 @@ const _renderInteractiveScene = ({
           appState,
           transformHandles,
           0,
+          rotationHandlePosition,
         );
       }
     }

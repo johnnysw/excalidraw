@@ -58,6 +58,10 @@ export const requestFreedrawGeometry = async (
         versionNonce: element.versionNonce,
         simulatePressure: element.simulatePressure,
         strokeWidth: element.strokeWidth,
+        brushMode:
+          element.customData?.coursewareBrushMode === "highlighter"
+            ? "highlighter"
+            : "pen",
         points: pointData.buffer,
         pressures: pressureData.buffer,
         pointCount: element.points.length,

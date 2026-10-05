@@ -26,6 +26,14 @@ import { measureText } from "./textMeasurements";
 import { wrapText } from "./textWrapping";
 import { layoutTextElement } from "./textLayout";
 import {
+  getCoursewareStickyPadding,
+  isCoursewareStickyElement,
+} from "./coursewareSticky";
+import {
+  getCoursewareBraceTextRect,
+  isCoursewareBraceElement,
+} from "./coursewareBrace";
+import {
   isBoundToContainer,
   isArrowElement,
   isTextElement,
@@ -116,7 +124,7 @@ export const redrawTextBoundingBox = (
     );
     const maxContainerWidth = getBoundTextMaxWidth(container, textElement);
 
-    if (!isArrowElement(container) && metrics.height > maxContainerHeight) {
+    if (!isArrowElement(container) && !isCoursewareStickyElement(container) && !isCoursewareBraceElement(container) && metrics.height > maxContainerHeight) {
       const nextHeight = computeContainerDimensionForBoundText(
         metrics.height,
         container.type,
@@ -125,7 +133,7 @@ export const redrawTextBoundingBox = (
       updateOriginalContainerCache(container.id, nextHeight);
     }
 
-    if (metrics.width > maxContainerWidth) {
+    if (!isCoursewareStickyElement(container) && !isCoursewareBraceElement(container) && metrics.width > maxContainerWidth) {
       const nextWidth = computeContainerDimensionForBoundText(
         metrics.width,
         container.type,
@@ -200,7 +208,7 @@ export const handleBindTextResize = (
       }
     }
     // increase height in case text element height exceeds
-    if (nextHeight > maxHeight) {
+    if (!isCoursewareStickyElement(container) && !isCoursewareBraceElement(container) && nextHeight > maxHeight) {
       containerHeight = computeContainerDimensionForBoundText(
         nextHeight,
         container.type,
@@ -275,8 +283,12 @@ export const computeBoundTextPosition = (
 
   if (angle !== 0) {
     const contentCenter = pointFrom(
-      containerCoords.x + maxContainerWidth / 2,
-      containerCoords.y + maxContainerHeight / 2,
+      isCoursewareBraceElement(container)
+        ? container.x + container.width / 2
+        : containerCoords.x + maxContainerWidth / 2,
+      isCoursewareBraceElement(container)
+        ? container.y + container.height / 2
+        : containerCoords.y + maxContainerHeight / 2,
     );
     const textCenter = pointFrom(
       x + boundTextElement.width / 2,
@@ -370,8 +382,15 @@ export const getContainerCenter = (
 };
 
 export const getContainerCoords = (container: NonDeletedExcalidrawElement) => {
-  let offsetX = BOUND_TEXT_PADDING;
-  let offsetY = BOUND_TEXT_PADDING;
+  if (isCoursewareBraceElement(container)) {
+    const rect = getCoursewareBraceTextRect(container);
+    return { x: container.x + rect.x, y: container.y + rect.y };
+  }
+  const padding = isCoursewareStickyElement(container)
+    ? getCoursewareStickyPadding(container)
+    : BOUND_TEXT_PADDING;
+  let offsetX = padding;
+  let offsetY = padding;
 
   if (container.type === "ellipse") {
     // The derivation of coordinates is explained in https://github.com/excalidraw/excalidraw/pull/6172
@@ -484,6 +503,12 @@ export const getBoundTextMaxWidth = (
   boundTextElement: ExcalidrawTextElement | null,
 ) => {
   const { width } = container;
+  if (isCoursewareBraceElement(container)) {
+    return getCoursewareBraceTextRect(container).width;
+  }
+  if (isCoursewareStickyElement(container)) {
+    return Math.max(1, width - getCoursewareStickyPadding(container) * 2);
+  }
   if (isArrowElement(container)) {
     const minWidth =
       (boundTextElement?.fontSize ?? DEFAULT_FONT_SIZE) *
@@ -509,6 +534,12 @@ export const getBoundTextMaxHeight = (
   boundTextElement: ExcalidrawTextElementWithContainer,
 ) => {
   const { height } = container;
+  if (isCoursewareBraceElement(container)) {
+    return getCoursewareBraceTextRect(container).height;
+  }
+  if (isCoursewareStickyElement(container)) {
+    return Math.max(1, height - getCoursewareStickyPadding(container) * 2);
+  }
   if (isArrowElement(container)) {
     const containerHeight = height - BOUND_TEXT_PADDING * 8 * 2;
     if (containerHeight <= 0) {

@@ -1,3 +1,4 @@
+import { normalizeMindmapObject } from "@excalidraw/mindmap";
 import { isFiniteNumber, pointFrom } from "@excalidraw/math";
 
 import {
@@ -55,6 +56,7 @@ import { normalizeTextStyleRanges } from "@excalidraw/element";
 import { getNormalizedDimensions } from "@excalidraw/element";
 
 import { isInvisiblySmallElement } from "@excalidraw/element";
+import { isCoursewareBraceElement } from "@excalidraw/element/coursewareBrace";
 
 import type { LocalPoint, Radians } from "@excalidraw/math";
 
@@ -159,6 +161,7 @@ const repairBinding = <T extends ExcalidrawArrowElement>(
   if (boundElement) {
     if (binding.mode) {
       return {
+        ...binding,
         elementId: binding.elementId,
         mode: binding.mode || "orbit",
         fixedPoint: normalizeFixedPoint(binding.fixedPoint || [0.5, 0.5]),
@@ -400,7 +403,13 @@ export const restoreElement = (
 
       // if empty text, mark as deleted. We keep in array
       // for data integrity purposes (collab etc.)
-      if (opts?.deleteInvisibleElements && !text && !element.isDeleted) {
+      const isStickyBoundText =
+        element.customData?.coursewareObjectType === "sticky-text" &&
+        element.containerId &&
+        elementsMap.get(element.containerId)?.customData?.coursewareObjectType === "sticky";
+      const textContainer = element.containerId ? elementsMap.get(element.containerId) : undefined;
+      const isBraceBoundText = !!textContainer && isCoursewareBraceElement(textContainer);
+      if (opts?.deleteInvisibleElements && !text && !element.isDeleted && !isStickyBoundText && !isBraceBoundText) {
         // TODO: we should not do this since it breaks sync / versioning when we exchange / apply just deltas and restore the elements (deletion isn't recorded)
         element = { ...element, originalText: text, isDeleted: true };
         element = bumpVersion(element);
@@ -511,8 +520,14 @@ export const restoreElement = (
     }
 
     // generic elements
+    case "rectangle": {
+      const restored = restoreElementWithProperties(element, {});
+      if (restored.customData?.coursewareObjectType === "mindmap" && restored.customData.mindmap) {
+        return { ...restored, customData: { ...restored.customData, mindmap: normalizeMindmapObject(restored.customData.mindmap) } } as typeof element;
+      }
+      return restored as typeof element;
+    }
     case "ellipse":
-    case "rectangle":
     case "diamond":
     case "iframe":
     case "embeddable":

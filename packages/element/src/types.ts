@@ -336,6 +336,7 @@ export type ExcalidrawTextElement = _ExcalidrawElementBase &
 
 export type ExcalidrawBindableElement =
   | ExcalidrawRectangleElement
+  | ExcalidrawPolygonElement
   | ExcalidrawDiamondElement
   | ExcalidrawEllipseElement
   | ExcalidrawTextElement
@@ -360,6 +361,9 @@ export type FixedPoint = [number, number];
 export type BindMode = "inside" | "orbit" | "skip";
 
 export type FixedPointBinding = {
+  /** Optional internal node anchor for a courseware mindmap. */
+  mindmapNodeId?: string;
+  mindmapNodePoint?: FixedPoint;
   elementId: ExcalidrawBindableElement["id"];
 
   // Represents the fixed point binding information in form of a vertical and
@@ -410,6 +414,10 @@ export type ExcalidrawLineElement = ExcalidrawLinearElement &
     type: "line";
     polygon: boolean;
   }>;
+
+/** A closed shape stored as a line, including courseware shape presets. */
+export type ExcalidrawPolygonElement = ExcalidrawLineElement &
+  Readonly<{ polygon: true }>;
 
 export type FixedSegment = {
   start: LocalPoint;

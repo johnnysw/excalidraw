@@ -1,3 +1,4 @@
+import { resolveMindmapNodeBinding } from "./coursewareMindmapBinding";
 import {
   clamp,
   pointDistance,
@@ -2228,6 +2229,10 @@ const getGlobalPoint = (
   }
 
   if (element) {
+    const binding = startOrEnd === "start" ? arrow.startBinding : arrow.endBinding;
+    if (binding?.mindmapNodeId) {
+      return resolveMindmapNodeBinding(element, binding) ?? initialPoint;
+    }
     return getGlobalFixedPointForBindableElement(
       fixedPointRatio || [0, 0],
       element,

@@ -1,3 +1,4 @@
+import { getReferencedFileIds } from "@excalidraw/element/fileReferences";
 import {
   ALLOWED_PASTE_MIME_TYPES,
   EXPORT_DATA_TYPES,
@@ -165,11 +166,9 @@ export const serializeAsClipboardJSON = ({
   let foundFile = false;
 
   const _files = elements.reduce((acc, element) => {
-    if (isInitializedImageElement(element)) {
+    for (const fileId of getReferencedFileIds(element)) {
       foundFile = true;
-      if (files && files[element.fileId]) {
-        acc[element.fileId] = files[element.fileId];
-      }
+      if (files?.[fileId]) acc[fileId] = files[fileId];
     }
     return acc;
   }, {} as BinaryFiles);

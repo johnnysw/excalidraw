@@ -1,0 +1,1189 @@
+.excalidraw {
+  --mindmap-bg: #fff;
+  --mindmap-toolbar-bg: rgba(255, 255, 255, 0.94);
+  --mindmap-toolbar-border: rgba(203, 213, 225, 0.92);
+  --mindmap-border: #dee0e3;
+  --mindmap-text: #1f2329;
+  --mindmap-toolbar-color: #475569;
+  --mindmap-muted: #646a73;
+  --mindmap-accent: #385efa;
+  --mindmap-hover: rgba(31, 35, 41, 0.08);
+  --mindmap-active-bg: #f0f4ff;
+  --mindmap-active-border: #bacefd;
+  &.theme--dark {
+    --mindmap-bg: var(--island-bg-color);
+    --mindmap-toolbar-bg: var(--island-bg-color);
+    --mindmap-toolbar-border: var(--default-border-color);
+    --mindmap-border: var(--default-border-color);
+    --mindmap-text: var(--text-primary-color);
+    --mindmap-toolbar-color: var(--text-primary-color);
+    --mindmap-muted: var(--text-secondary-color);
+    --mindmap-accent: var(--color-primary);
+    --mindmap-hover: var(--button-hover-bg);
+    --mindmap-active-bg: var(--color-primary-light);
+    --mindmap-active-border: var(--color-primary);
+  }
+  .Courseware-mindmap-popover {
+    box-sizing: border-box;
+    padding: 6px;
+    border: 1px solid var(--mindmap-border);
+    border-radius: 6px;
+    max-height: min(
+      520px,
+      calc(100dvh - 24px),
+      var(--radix-popover-content-available-height, 520px)
+    );
+    max-width: min(
+      calc(100vw - 24px),
+      var(--radix-popover-content-available-width, 100vw)
+    );
+    overflow: auto;
+    overscroll-behavior: contain;
+    color: var(--mindmap-text);
+    background: var(--mindmap-bg);
+    box-shadow:
+      0 8px 24px 8px rgba(31, 35, 41, 0.04),
+      0 6px 12px rgba(31, 35, 41, 0.04),
+      0 4px 8px -8px rgba(31, 35, 41, 0.06);
+    z-index: 6;
+    button {
+      box-sizing: border-box;
+      border: 1px solid transparent;
+      border-radius: 5px;
+      background: transparent;
+      color: var(--mindmap-muted);
+      cursor: pointer;
+      &:hover,
+      &:focus-visible,
+      &.is-active,
+      &[aria-pressed="true"],
+      &[aria-selected="true"],
+      &[aria-checked="true"] {
+        border-color: var(--mindmap-active-border);
+        background: var(--mindmap-active-bg);
+        color: var(--mindmap-accent);
+        outline: none;
+      }
+      &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+    }
+    &.is-content,
+    &.is-font-size {
+      padding: 4px;
+    }
+    &.is-layout {
+      padding: 0;
+      .Courseware-mindmap-layout {
+        box-sizing: border-box;
+        width: 150px;
+        padding: 10px;
+        section + section {
+          margin-top: 10px;
+        }
+        h3 {
+          margin-bottom: 5px;
+          line-height: 18px;
+        }
+        img {
+          width: auto;
+          height: auto;
+          max-width: 50px;
+          max-height: 24px;
+        }
+        section:last-child {
+          padding-top: 9px;
+          border-top: 1px solid var(--mindmap-border);
+        }
+      }
+      .Courseware-mindmap-layout__grid {
+        width: 130px;
+        grid-template-columns: repeat(2, 63px);
+        gap: 4px;
+        button {
+          width: 63px;
+          height: 30px;
+        }
+      }
+      [data-layout-family="tree"] .Courseware-mindmap-layout__grid,
+      .Courseware-mindmap-layout__branches {
+        display: grid;
+        grid-template-columns: repeat(3, 40px);
+        gap: 5px;
+        button {
+          width: 40px;
+          height: 30px;
+        }
+      }
+    }
+  }
+  .Courseware-mindmap-layout {
+    width: 268px;
+    max-width: 100%;
+    section + section {
+      margin-top: 12px;
+    }
+    h3 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary-color);
+    }
+    button {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 5px;
+      cursor: pointer;
+      &[aria-pressed="true"] {
+        background: var(--color-primary-light);
+      }
+      &:hover {
+        background: var(--button-hover-bg);
+      }
+    }
+    img {
+      width: 48px;
+      height: 40px;
+    }
+  }
+  .Courseware-mindmap-layout__grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    button {
+      width: 60px;
+      height: 48px;
+    }
+  }
+  .Courseware-mindmap-layout__branches {
+    display: flex;
+    gap: 8px;
+    button {
+      width: 56px;
+      height: 32px;
+    }
+    svg {
+      width: 26px;
+      height: 18px;
+    }
+  }
+  .Courseware-mindmap-preview {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .Courseware-mindmap-selection {
+    position: absolute;
+    pointer-events: none;
+    box-sizing: border-box;
+    z-index: 3;
+  }
+  .Courseware-mindmap-width-controls {
+    position: absolute;
+    pointer-events: none;
+    z-index: 4;
+    .Tooltip {
+      position: static;
+    }
+    button {
+      position: absolute;
+      top: 50%;
+      width: 8px;
+      height: 18px;
+      margin-top: -9px;
+      padding: 0;
+      border: 1px solid var(--mindmap-accent);
+      border-radius: 3px;
+      background: var(--mindmap-bg);
+      pointer-events: auto;
+      cursor: ew-resize;
+      &.is-left {
+        left: -4px;
+      }
+      &.is-right {
+        right: -4px;
+      }
+    }
+  }
+  .Courseware-mindmap-workspace {
+    position: absolute;
+    right: 12px;
+    top: 72px;
+    bottom: 72px;
+    width: min(340px, calc(100% - 24px));
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--mindmap-border);
+    border-radius: 8px;
+    color: var(--mindmap-text);
+    background: var(--mindmap-bg);
+    box-shadow: 0 6px 24px rgba(31, 35, 41, 0.12);
+    z-index: 5;
+    pointer-events: auto;
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      border-bottom: 1px solid var(--mindmap-border);
+    }
+    button {
+      cursor: pointer;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      padding: 6px 8px;
+      color: inherit;
+      background: transparent;
+      &:hover,
+      &:focus-visible {
+        background: var(--mindmap-hover);
+      }
+      &:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
+    }
+    input,
+    textarea,
+    select {
+      box-sizing: border-box;
+      max-width: 100%;
+      min-width: 0;
+      border: 1px solid var(--mindmap-border);
+      border-radius: 4px;
+      padding: 6px;
+      color: inherit;
+      background: var(--mindmap-bg);
+    }
+    textarea {
+      width: 100%;
+      resize: vertical;
+    }
+  }
+  .Courseware-mindmap-workspace-tabs {
+    display: flex;
+    gap: 3px;
+    padding: 6px;
+    overflow-x: auto;
+    flex-shrink: 0;
+    button {
+      flex: 1;
+      white-space: nowrap;
+      &[aria-selected="true"] {
+        color: var(--mindmap-accent);
+        background: var(--mindmap-active-bg);
+      }
+    }
+  }
+  .Courseware-mindmap-workspace-body {
+    min-height: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    padding: 12px;
+  }
+  .Courseware-mindmap-workspace-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    font-size: 12px;
+    label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    p {
+      margin: 0;
+      color: var(--mindmap-muted);
+      line-height: 1.6;
+    }
+    input:not([type="checkbox"]),
+    select {
+      flex: 1;
+    }
+  }
+  .Courseware-mindmap-outline {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    [role="treeitem"] {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      border-radius: 4px;
+      &.is-selected {
+        background: var(--mindmap-active-bg);
+      }
+      input {
+        width: 100%;
+        border-color: transparent;
+        background: transparent;
+      }
+      button {
+        padding: 4px;
+      }
+    }
+  }
+  .Courseware-mindmap-theme-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    button {
+      border-color: var(--mindmap-border);
+      &[aria-pressed="true"] {
+        background: var(--mindmap-active-bg);
+      }
+    }
+    span {
+      display: block;
+      padding: 8px;
+      border: 1px solid transparent;
+      border-radius: 5px;
+    }
+    i {
+      display: block;
+      margin-top: 8px;
+      font-style: normal;
+    }
+  }
+  .Courseware-mindmap-structure-list {
+    display: flex;
+    flex-direction: column;
+    div {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+    }
+  }
+  .Courseware-mindmap-minimap {
+    position: absolute;
+    right: 12px;
+    bottom: 72px;
+    width: 180px;
+    padding: 6px;
+    border: 1px solid var(--mindmap-border);
+    border-radius: 6px;
+    background: var(--mindmap-bg);
+    z-index: 5;
+    pointer-events: auto;
+    header {
+      display: flex;
+      justify-content: space-between;
+    }
+    button {
+      border: 0;
+      background: transparent;
+      color: var(--mindmap-text);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 4px;
+    }
+    svg {
+      display: block;
+      width: 100%;
+      height: 100px;
+      cursor: crosshair;
+    }
+  }
+  .Courseware-mindmap-drop-message {
+    position: absolute;
+    left: 50%;
+    bottom: 88px;
+    transform: translateX(-50%);
+    background: var(--mindmap-bg);
+    color: var(--mindmap-accent);
+    border: 1px solid var(--mindmap-border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .Courseware-mindmap-editor-format {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 4px;
+    border: 1px solid var(--mindmap-border);
+    border-radius: 6px;
+    background: var(--mindmap-bg);
+    color: var(--mindmap-text);
+    pointer-events: auto;
+    z-index: 6;
+    button {
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      border: 0;
+      border-radius: 4px;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      &:hover {
+        background: var(--mindmap-hover);
+      }
+    }
+    input[type="color"] {
+      width: 28px;
+      height: 28px;
+      padding: 2px;
+      border: 0;
+      cursor: pointer;
+    }
+  }
+  .Courseware-mindmap-text-mirror {
+    position: absolute;
+    box-sizing: border-box;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .Courseware-mindmap-input-capture {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    padding: 0;
+    border: 0;
+    pointer-events: none;
+  }
+  &.excalidraw--mobile .Courseware-mindmap-workspace {
+    display: flex;
+    right: 0;
+    left: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-height: 65%;
+    border-radius: 8px 8px 0 0;
+  }
+  .Courseware-mindmap-selection-outline {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .Courseware-mindmap-node-actions {
+    position: absolute;
+    left: calc(100% + 8px);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    gap: 4px;
+    pointer-events: auto;
+    button {
+      border-radius: 50%;
+      border: 1px solid var(--color-primary);
+      background: var(--island-bg-color);
+      color: var(--color-primary);
+      height: 24px;
+      width: 24px;
+      cursor: pointer;
+      padding: 0;
+    }
+  }
+  .Courseware-mindmap-text-editor {
+    position: absolute;
+    z-index: 5;
+    padding: 8px;
+    border: 2px solid var(--color-primary);
+    border-radius: 5px;
+    box-sizing: border-box;
+    outline: none;
+    resize: none;
+    font-family: sans-serif;
+    line-height: 1.45;
+  }
+  // Whiteboard node-toolbar metrics, scoped to this canvas adapter.
+  .Courseware-mindmap-toolbar {
+    position: absolute;
+    z-index: 4;
+    display: flex;
+    box-sizing: border-box;
+    height: 40px;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 4px;
+    border: 1px solid var(--mindmap-toolbar-border);
+    border-radius: 8px;
+    background: var(--mindmap-toolbar-bg);
+    box-shadow: 0 10px 28px rgba(15, 23, 42, 0.12);
+    backdrop-filter: blur(14px);
+    max-width: calc(100% - 24px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+    pointer-events: auto;
+    > * {
+      flex-shrink: 0;
+    }
+    button {
+      box-sizing: border-box;
+      width: 40px;
+      min-width: 40px;
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      padding: 0 2px 0 4px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--mindmap-toolbar-color);
+      border-radius: 6px;
+      cursor: pointer;
+      &:hover,
+      &[data-state="open"],
+      &.is-active {
+        background: var(--mindmap-hover);
+        color: var(--mindmap-accent);
+      }
+      &:focus-visible {
+        outline: none;
+        box-shadow: inset 0 0 0 1px var(--mindmap-accent);
+      }
+      &:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+    }
+    svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      fill: none;
+    }
+    .Courseware-mindmap-chevron {
+      width: 8px;
+      height: 8px;
+      flex: 0 0 8px;
+      color: #94a3b8;
+    }
+    .Courseware-mindmap-text-color-trigger {
+      width: 37px;
+      min-width: 37px;
+      padding-inline: 4px 3px;
+    }
+    .Courseware-mindmap-more-trigger {
+      width: 28px;
+      min-width: 28px;
+      padding: 0;
+    }
+    .Courseware-mindmap-font-trigger {
+      width: 22px;
+      min-width: 22px;
+      flex: 0 0 22px;
+      padding: 0 2px 0 0;
+      border-radius: 0;
+    }
+  }
+  .Courseware-mindmap-font-size {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    width: 64px;
+    height: 32px;
+    flex: 0 0 64px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    overflow: hidden;
+    &:hover,
+    &:focus-within {
+      background: var(--mindmap-hover);
+    }
+    &:focus-within {
+      box-shadow: inset 0 0 0 1px var(--mindmap-accent);
+    }
+    input {
+      box-sizing: border-box;
+      width: 42px;
+      min-width: 0;
+      height: 100%;
+      flex: 1 1 auto;
+      padding: 0 0 0 8px;
+      border: 0;
+      outline: 0;
+      color: var(--mindmap-text);
+      background: transparent;
+      font: inherit;
+      font-size: 14px;
+      font-variant-numeric: tabular-nums;
+    }
+  }
+  .Courseware-mindmap-font-presets {
+    display: grid;
+    width: 66px;
+    grid-template-columns: 66px;
+    gap: 2px;
+    button {
+      height: 30px;
+      text-align: left;
+      padding: 0 8px;
+      font-size: 13px;
+    }
+  }
+  .Courseware-mindmap-divider {
+    width: 1px;
+    height: 20px;
+    background: var(--mindmap-border);
+    margin-inline: 3px;
+  }
+  .Courseware-mindmap-color-dot,
+  .Courseware-mindmap-color-ring {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    box-sizing: border-box;
+    border-radius: 50%;
+  }
+  .Courseware-mindmap-color-dot {
+    border: 1px solid rgba(15, 23, 42, 0.16);
+  }
+  .Courseware-mindmap-color-ring {
+    border: 2px solid currentColor;
+  }
+  .Courseware-mindmap-text-color-icon {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    > span {
+      position: absolute;
+      right: 2px;
+      bottom: 0;
+      width: 14px;
+      height: 2px;
+      border-radius: 999px;
+    }
+  }
+  .Courseware-mindmap-choice-row,
+  .Courseware-mindmap-color-palette,
+  .Courseware-mindmap-text-color-palette,
+  .Courseware-mindmap-decoration-scroll section > div {
+    > .excalidraw-tooltip-wrapper {
+      display: inline-flex;
+    }
+  }
+  .Courseware-mindmap-style-panel {
+    display: grid;
+    width: max-content;
+    min-width: 0;
+    gap: 8px;
+  }
+  .Courseware-mindmap-style-panel-title,
+  .Courseware-mindmap-tool-flyout-title {
+    color: var(--mindmap-text);
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .Courseware-mindmap-tool-flyout {
+    min-width: 116px;
+    display: grid;
+    gap: 8px;
+  }
+  .Courseware-mindmap-choice-row {
+    display: flex;
+    gap: 4px;
+    button {
+      width: 36px;
+      height: 32px;
+      flex: 0 0 36px;
+      padding: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+  .Courseware-mindmap-color-palette {
+    display: grid;
+    grid-template-columns: repeat(9, 26px);
+    gap: 1px;
+    &.is-stroke {
+      grid-template-columns: repeat(6, 26px);
+    }
+    button {
+      display: inline-flex;
+      width: 26px;
+      height: 26px;
+      align-items: center;
+      justify-content: center;
+      padding: 1px;
+      border: 2px solid transparent;
+      border-radius: 50%;
+      > span {
+        width: 20px;
+        height: 20px;
+        box-sizing: border-box;
+        border: 1px solid rgba(31, 35, 41, 0.14);
+        border-radius: 50%;
+      }
+      &:hover,
+      &:focus-visible,
+      &[aria-selected="true"] {
+        border-color: var(--mindmap-accent);
+        background: transparent;
+      }
+    }
+  }
+  .Courseware-mindmap-custom-color,
+  .Courseware-mindmap-opacity-control {
+    display: grid;
+    min-height: 32px;
+    align-items: center;
+    gap: 8px;
+    color: var(--mindmap-muted);
+    font-size: 12px;
+  }
+  .Courseware-mindmap-custom-color {
+    grid-template-columns: 1fr 36px;
+    input[type="color"] {
+      width: 36px;
+      height: 28px;
+      padding: 2px;
+      border: 1px solid var(--mindmap-border);
+      border-radius: 5px;
+      background: var(--mindmap-bg);
+    }
+  }
+  .Courseware-mindmap-opacity-control {
+    grid-template-columns: auto minmax(96px, 1fr) 34px;
+    input {
+      min-width: 0;
+      accent-color: var(--mindmap-accent);
+    }
+    output {
+      text-align: end;
+      font-variant-numeric: tabular-nums;
+      color: var(--mindmap-text);
+    }
+  }
+  .Courseware-mindmap-stroke-width-preview,
+  .Courseware-mindmap-line-preview {
+    display: block;
+    width: 22px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+  .Courseware-mindmap-line-preview {
+    height: 2px;
+    &.is-dash {
+      background: repeating-linear-gradient(
+        90deg,
+        currentColor 0 7px,
+        transparent 7px 11px
+      );
+    }
+    &.is-dot {
+      background: radial-gradient(circle, currentColor 1px, transparent 1.25px)
+        left center / 6px 2px repeat-x;
+    }
+  }
+  .Courseware-mindmap-text-color-panel {
+    display: grid;
+    width: 242px;
+    gap: 12px;
+    .Courseware-mindmap-color-palette button {
+      height: 28px;
+    }
+  }
+  .Courseware-mindmap-text-color-palette {
+    display: grid;
+    grid-template-columns: repeat(9, 26px);
+    gap: 1px;
+    button {
+      display: inline-flex;
+      width: 26px;
+      height: 28px;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      > span {
+        position: relative;
+        font-size: 15px;
+        font-weight: 500;
+        line-height: 20px;
+        &::after {
+          position: absolute;
+          right: 0;
+          bottom: 0;
+          left: 0;
+          height: 2px;
+          border-radius: 999px;
+          background: currentColor;
+          content: "";
+        }
+      }
+    }
+  }
+  .Courseware-mindmap-format-popover {
+    display: inline-grid;
+    width: max-content;
+    gap: 4px;
+    .Courseware-mindmap-choice-row + .Courseware-mindmap-choice-row {
+      padding-top: 4px;
+      border-top: 1px solid var(--mindmap-border);
+    }
+    button {
+      width: 32px;
+      height: 32px;
+      flex-basis: 32px;
+    }
+  }
+  .Courseware-mindmap-menu,
+  .Courseware-mindmap-content-menu {
+    display: grid;
+    min-width: 196px;
+    gap: 0;
+    button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 30px;
+      padding: 4px 8px;
+      font-size: 13px;
+      text-align: left;
+      > span {
+        flex: 1;
+        white-space: nowrap;
+      }
+      &.is-danger {
+        color: #d92d20;
+      }
+    }
+    svg {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+    }
+    kbd {
+      margin-inline-start: auto;
+      color: var(--mindmap-muted);
+      font: inherit;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+  }
+  .Courseware-mindmap-menu {
+    min-width: 252px;
+  }
+  .Courseware-mindmap-menu-separator {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--mindmap-border);
+  }
+  .Courseware-mindmap-menu-chevron {
+    margin-inline-start: auto;
+    color: var(--mindmap-muted);
+  }
+  .Courseware-mindmap-menu-field {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 8px;
+    font-size: 13px;
+    input {
+      width: 72px;
+      min-height: 28px;
+      border: 1px solid var(--mindmap-border);
+      border-radius: 4px;
+      background: var(--mindmap-bg);
+      color: var(--mindmap-text);
+    }
+  }
+  .Courseware-mindmap-decoration-picker {
+    width: min(486px, calc(100vw - 48px));
+    max-width: 100%;
+    color: var(--mindmap-text);
+  }
+  .Courseware-mindmap-decoration-header {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr) 30px;
+    min-height: 42px;
+    align-items: center;
+    border-bottom: 1px solid var(--mindmap-border);
+    button {
+      display: inline-flex;
+      width: 28px;
+      height: 28px;
+      align-items: center;
+      justify-content: center;
+    }
+    strong {
+      font-size: 14px;
+      font-weight: 500;
+      text-align: center;
+    }
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+  .Courseware-mindmap-decoration-search {
+    display: flex;
+    height: 32px;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 4px 6px;
+    padding: 0 10px;
+    border: 1px solid var(--mindmap-border);
+    border-radius: 6px;
+    color: var(--mindmap-muted);
+    &:focus-within {
+      border-color: var(--mindmap-accent);
+    }
+    svg {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 16px;
+    }
+    input {
+      width: 100%;
+      min-width: 0;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--mindmap-text);
+      font-size: 13px;
+    }
+  }
+  .Courseware-mindmap-decoration-scroll {
+    max-height: 280px;
+    overflow: auto;
+    padding: 2px 4px 8px;
+    section + section {
+      margin-top: 12px;
+    }
+    section > span {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--mindmap-muted);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    section > div {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+      gap: 6px;
+    }
+    button {
+      display: inline-flex;
+      min-width: 34px;
+      height: 34px;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+    svg {
+      width: 18px;
+      height: 18px;
+    }
+  }
+  .Courseware-mindmap-search {
+    position: absolute;
+    right: 16px;
+    top: 72px;
+    z-index: 5;
+    width: 268px;
+    max-width: calc(100% - 32px);
+    padding: 10px;
+    border-radius: 8px;
+    background: var(--island-bg-color);
+    box-shadow: var(--shadow-island);
+    input {
+      width: calc(100% - 32px);
+    }
+    > output {
+      display: block;
+      font-size: 12px;
+      padding: 8px 0;
+    }
+    > div {
+      display: flex;
+      flex-direction: column;
+      max-height: 320px;
+      overflow: auto;
+      button {
+        text-align: left;
+        padding: 8px;
+      }
+      small {
+        display: block;
+        opacity: 0.65;
+      }
+    }
+    button {
+      border: 0;
+      background: transparent;
+      color: var(--text-primary-color);
+      cursor: pointer;
+    }
+  }
+}
+
+.excalidraw {
+  .Courseware-mindmap-image-plane {
+    position: absolute;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .Courseware-mindmap-image {
+    position: absolute;
+    pointer-events: none;
+    &.is-selected {
+      outline: 1px solid var(--color-primary);
+    }
+  }
+  .Courseware-mindmap-image-target {
+    position: absolute;
+    inset: 0;
+    background: transparent;
+    border: 0;
+    pointer-events: auto;
+    cursor: move;
+    width: 100%;
+    height: 100%;
+  }
+  .Courseware-mindmap-image-handle {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    padding: 0;
+    border: 1px solid var(--color-primary);
+    background: var(--island-bg-color);
+    pointer-events: auto;
+    &.nw {
+      left: -4px;
+      top: -4px;
+      cursor: nwse-resize;
+    }
+    &.ne {
+      right: -4px;
+      top: -4px;
+      cursor: nesw-resize;
+    }
+    &.sw {
+      left: -4px;
+      bottom: -4px;
+      cursor: nesw-resize;
+    }
+    &.se {
+      right: -4px;
+      bottom: -4px;
+      cursor: nwse-resize;
+    }
+  }
+}
+
+.excalidraw {
+  .Courseware-mindmap-marquee {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+    border: 1px solid var(--color-primary);
+    background: var(--color-primary-light);
+    opacity: 0.45;
+  }
+  .Courseware-mindmap-drop-target {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+    outline: 3px solid var(--color-primary);
+    border-radius: 5px;
+  }
+  .Courseware-mindmap-readonly-search {
+    position: absolute;
+    z-index: 4;
+    right: 16px;
+    top: 72px;
+    background: var(--island-bg-color);
+    color: var(--text-primary-color);
+    border: 0;
+    border-radius: 6px;
+    padding: 8px;
+    box-shadow: var(--shadow-island);
+    cursor: pointer;
+  }
+}
+
+.excalidraw .Courseware-mindmap-multi-selection-mode {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--island-bg-color);
+  box-shadow: var(--shadow-island);
+  pointer-events: auto;
+  button {
+    cursor: pointer;
+    color: var(--color-primary);
+    background: none;
+    border: 0;
+  }
+}
+
+.excalidraw .Courseware-mindmap-outline textarea {
+  resize: vertical;
+  flex: 1;
+  min-width: 0;
+  min-height: 28px;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary-color);
+  font: inherit;
+  padding: 4px;
+  &:focus {
+    border-color: var(--color-primary);
+    outline: 0;
+  }
+}
+
+.excalidraw .Courseware-mindmap-outline [role="treeitem"] {
+  position: relative;
+  &.is-drop-inside {
+    background: var(--color-primary-light);
+    box-shadow: inset 0 0 0 2px var(--color-primary);
+    border-radius: 4px;
+  }
+  &.is-drop-before::before,
+  &.is-drop-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--color-primary);
+    pointer-events: none;
+  }
+  &.is-drop-before::before {
+    top: 0;
+  }
+  &.is-drop-after::after {
+    bottom: 0;
+  }
+  &.is-drop-invalid {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}

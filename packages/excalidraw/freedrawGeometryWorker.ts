@@ -1,5 +1,8 @@
 import { getStroke } from "perfect-freehand";
-import { getSvgPathFromStroke } from "@excalidraw/element/freedrawGeometry";
+import {
+  getFreedrawStrokeOptions,
+  getSvgPathFromStroke,
+} from "@excalidraw/element/freedrawGeometry";
 
 export type FreedrawGeometryWorkerRequest = {
   elementId: string;
@@ -7,6 +10,7 @@ export type FreedrawGeometryWorkerRequest = {
   versionNonce: number;
   simulatePressure: boolean;
   strokeWidth: number;
+  brushMode?: "pen" | "highlighter";
   points: ArrayBuffer;
   pressures: ArrayBuffer;
   pointCount: number;
@@ -24,7 +28,7 @@ export const WorkerUrl: URL | undefined = import.meta.url
   ? new URL(import.meta.url)
   : undefined;
 
-const getOutline = (request: FreedrawGeometryWorkerRequest) => {
+export const getOutline = (request: FreedrawGeometryWorkerRequest) => {
   const pointData = new Float64Array(request.points);
   const pressureData = new Float64Array(request.pressures);
   const points = Array.from({ length: request.pointCount }, (_, index) => {
@@ -35,15 +39,7 @@ const getOutline = (request: FreedrawGeometryWorkerRequest) => {
     return point;
   });
 
-  const outline = getStroke(points, {
-    simulatePressure: request.simulatePressure,
-    size: request.strokeWidth * 4.25,
-    thinning: 0.6,
-    smoothing: 0.5,
-    streamline: 0.5,
-    easing: (t) => Math.sin((t * Math.PI) / 2),
-    last: true,
-  });
+  const outline = getStroke(points, getFreedrawStrokeOptions(request));
   const outlineData = new Float64Array(outline.length * 2);
   outline.forEach((point, index) => {
     outlineData[index * 2] = point[0];

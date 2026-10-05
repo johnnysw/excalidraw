@@ -93,9 +93,14 @@ export const isWritableElement = (
 
 export const getFontFamilyString = ({
   fontFamily,
+  customData,
 }: {
   fontFamily: FontFamilyValues;
+  customData?: Record<string, unknown> | null;
 }) => {
+  if (customData?.coursewareObjectType === "sticky-text") {
+    return "PingFang SC, Source Han Sans CN, sans-serif";
+  }
   for (const [fontFamilyString, id] of Object.entries(FONT_FAMILY)) {
     if (id === fontFamily) {
       return `${fontFamilyString}${getFontFamilyFallbacks(id)
@@ -111,12 +116,14 @@ export const getFontString = ({
   fontSize,
   fontFamily,
   fontWeight,
+  customData,
 }: {
   fontSize: number;
   fontFamily: FontFamilyValues;
   fontWeight?: "normal" | "bold";
+  customData?: Record<string, unknown> | null;
 }) => {
-  return `${fontWeight === "bold" ? "900 " : ""}${fontSize}px ${getFontFamilyString({ fontFamily })}` as FontString;
+  return `${fontWeight === "bold" ? "900 " : ""}${fontSize}px ${getFontFamilyString({ fontFamily, customData })}` as FontString;
 };
 
 /** executes callback in the frame that's after the current one */

@@ -28,6 +28,7 @@ import {
 import { ColorPicker } from "../components/ColorPicker/ColorPicker";
 import { ToolButton } from "../components/ToolButton";
 import { Tooltip } from "../components/Tooltip";
+import { getToolNumericKey } from "../components/shapes";
 import {
   handIcon,
   LassoIcon,
@@ -526,7 +527,19 @@ export const actionToggleEraserTool = register({
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
   },
-  keyTest: (event) => event.key === KEYS.E || event.key === KEYS["4"],
+  keyTest: (event, appState, elements, app) => {
+    const toolbarLayout = app.props.UIOptions.toolbarLayout;
+    if (
+      toolbarLayout === "left" &&
+      (event.altKey || event.ctrlKey || event.metaKey)
+    ) {
+      return false;
+    }
+    return (
+      event.key === KEYS.E ||
+      event.key === getToolNumericKey("eraser", toolbarLayout)
+    );
+  },
 });
 
 export const actionToggleLassoTool = register({
@@ -600,6 +613,15 @@ export const actionToggleHandTool = register({
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
   },
-  keyTest: (event) =>
-    !event.altKey && !event[KEYS.CTRL_OR_CMD] && event.key === KEYS["2"],
+  keyTest: (event, appState, elements, app) => {
+    const toolbarLayout = app.props.UIOptions.toolbarLayout;
+    const isCourseware = toolbarLayout === "left";
+    return (
+      !event.altKey &&
+      !event[KEYS.CTRL_OR_CMD] &&
+      (!isCourseware || (!event.ctrlKey && !event.metaKey)) &&
+      (event.key === getToolNumericKey("hand", toolbarLayout) ||
+        (isCourseware && event.key === KEYS.H))
+    );
+  },
 });

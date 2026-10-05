@@ -19,6 +19,7 @@ import { LinearElementEditor } from "@excalidraw/element";
 import {
   getBoundTextElement,
   getBoundTextMaxWidth,
+  getBoundTextMaxHeight,
   getContainerElement,
 } from "@excalidraw/element";
 import { getLineHeightInPx } from "@excalidraw/element";
@@ -39,6 +40,11 @@ import { ShapeCache } from "@excalidraw/element";
 import { getFreeDrawSvgPath, IMAGE_INVERT_FILTER } from "@excalidraw/element";
 
 import { getElementAbsoluteCoords } from "@excalidraw/element";
+import { isCoursewareStickyElement } from "@excalidraw/element/coursewareSticky";
+import { isCoursewareBraceElement } from "@excalidraw/element/coursewareBrace";
+import { createCoursewareStickySvgNode } from "@excalidraw/element/coursewareStickySvg";
+import { isCoursewareMindmapElement } from "@excalidraw/element/coursewareMindmapType";
+import { createCoursewareMindmapSvgNode } from "@excalidraw/element/coursewareMindmapSvg";
 
 import type {
   ExcalidrawElement,
@@ -179,8 +185,17 @@ const renderElementToSvg = (
     case "rectangle":
     case "diamond":
     case "ellipse": {
+      if (isCoursewareBraceElement(element)) {
+        break;
+      }
       let node: SVGElement;
-      if (isSlideBackgroundSolidEllipse(element)) {
+      if (isCoursewareMindmapElement(element)) {
+        node = createCoursewareMindmapSvgNode(element, svgRoot, files, {
+          imageFilter: renderConfig.exportWithDarkMode ? IMAGE_INVERT_FILTER : undefined,
+        });
+      } else if (isCoursewareStickyElement(element)) {
+        node = createCoursewareStickySvgNode(element, svgRoot);
+      } else if (isSlideBackgroundSolidEllipse(element)) {
         node = createSlideBackgroundSolidEllipseSvgNode(element, svgRoot);
       } else {
         node = roughSVGDrawWithPrecision(
@@ -190,8 +205,12 @@ const renderElementToSvg = (
         );
       }
       if (opacity !== 1) {
-        node.setAttribute("stroke-opacity", `${opacity}`);
-        node.setAttribute("fill-opacity", `${opacity}`);
+        if (isCoursewareMindmapElement(element)) {
+          node.setAttribute("opacity", `${opacity}`);
+        } else {
+          node.setAttribute("stroke-opacity", `${opacity}`);
+          node.setAttribute("fill-opacity", `${opacity}`);
+        }
       }
       node.setAttribute("stroke-linecap", "round");
       node.setAttribute(
@@ -654,6 +673,24 @@ const renderElementToSvg = (
             offsetY || 0
           }) rotate(${degree} ${cx} ${cy})`,
         );
+        const fixedTextContainer = getContainerElement(element, elementsMap);
+        if (fixedTextContainer && (isCoursewareStickyElement(fixedTextContainer) || isCoursewareBraceElement(fixedTextContainer))) {
+          const clipId = `${isCoursewareBraceElement(fixedTextContainer) ? "brace" : "sticky"}-text-${element.id}`;
+          const clip = svgRoot.ownerDocument!.createElementNS(SVG_NS, "clipPath");
+          clip.setAttribute("id", clipId);
+          const rectangle = svgRoot.ownerDocument!.createElementNS(SVG_NS, "rect");
+          const maxWidth = getBoundTextMaxWidth(fixedTextContainer, element);
+          const maxHeight = getBoundTextMaxHeight(fixedTextContainer, element as ExcalidrawTextElementWithContainer);
+          rectangle.setAttribute("x", String(element.textAlign === "center" ? (element.width - maxWidth) / 2 : element.textAlign === "right" ? element.width - maxWidth : 0));
+          rectangle.setAttribute("y", String(element.verticalAlign === "middle" ? (element.height - maxHeight) / 2 : element.verticalAlign === "bottom" ? element.height - maxHeight : 0));
+          rectangle.setAttribute("width", String(maxWidth));
+          rectangle.setAttribute("height", String(maxHeight));
+          clip.appendChild(rectangle);
+          const defs = svgRoot.ownerDocument!.createElementNS(SVG_NS, "defs");
+          defs.appendChild(clip);
+          node.appendChild(defs);
+          node.setAttribute("clip-path", `url(#${clipId})`);
+        }
         if (element.textStyleRanges?.length) {
           const textContainer = getContainerElement(element, elementsMap);
           const layout = layoutTextElement(element, {
@@ -684,7 +721,10 @@ const renderElementToSvg = (
               tspan.setAttribute("x", `${run.x}`);
               tspan.setAttribute(
                 "font-family",
-                getFontFamilyString({ fontFamily: run.style.fontFamily }),
+                getFontFamilyString({
+                  fontFamily: run.style.fontFamily,
+                  customData: element.customData,
+                }),
               );
               tspan.setAttribute("font-size", `${run.style.fontSize}px`);
               tspan.setAttribute("font-weight", run.style.fontWeight);

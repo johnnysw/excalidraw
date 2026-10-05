@@ -19,6 +19,8 @@
       "@excalidraw/excalidraw/*": ["./excalidraw/*"],
       "@excalidraw/math": ["./math/src/index.ts"],
       "@excalidraw/math/*": ["./math/src/*"],
+      "@excalidraw/mindmap": ["./mindmap/src/index.ts"],
+      "@excalidraw/mindmap/*": ["./mindmap/src/*"],
       "@excalidraw/utils": ["./utils/src/index.ts"],
       "@excalidraw/utils/*": ["./utils/src/*"]
     }

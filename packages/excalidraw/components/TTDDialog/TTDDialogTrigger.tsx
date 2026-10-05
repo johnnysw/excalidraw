@@ -1,7 +1,11 @@
 import { trackEvent } from "../../analytics";
 import { useTunnels } from "../../context/tunnels";
 import { useI18n } from "../../i18n";
-import { useExcalidrawSetAppState } from "../App";
+import {
+  useAppProps,
+  useEditorInterface,
+  useExcalidrawSetAppState,
+} from "../App";
 import DropdownMenu from "../dropdownMenu/DropdownMenu";
 import { brainIcon } from "../icons";
 
@@ -17,6 +21,14 @@ export const TTDDialogTrigger = ({
   const { t } = useI18n();
   const { TTDDialogTriggerTunnel } = useTunnels();
   const setAppState = useExcalidrawSetAppState();
+  const { UIOptions } = useAppProps();
+  const editorInterface = useEditorInterface();
+  const isLeftToolbar =
+    UIOptions.toolbarLayout === "left" &&
+    editorInterface.formFactor !== "phone";
+  const tooltipLabel = typeof children === "string"
+    ? children
+    : t("labels.textToDiagram");
 
   return (
     <TTDDialogTriggerTunnel.In>
@@ -26,6 +38,7 @@ export const TTDDialogTrigger = ({
           setAppState({ openDialog: { name: "ttd", tab: "text-to-diagram" } });
         }}
         icon={icon ?? brainIcon}
+        tooltipLabel={isLeftToolbar ? tooltipLabel : undefined}
       >
         {children ?? t("labels.textToDiagram")}
         <DropdownMenu.Item.Badge>AI</DropdownMenu.Item.Badge>

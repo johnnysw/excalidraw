@@ -3,6 +3,8 @@ import OpenColor from "open-color";
 import { CURSOR_TYPE, MIME_TYPES, THEME } from "@excalidraw/common";
 
 import { isHandToolActive, isEraserActive } from "./appState";
+import { getCoursewareShapePreset } from "./coursewareShapes";
+import { getCoursewareInsertTool } from "./coursewareInsertTools";
 
 import type { AppState, DataURL } from "./types";
 
@@ -100,7 +102,11 @@ export const setCursorForShape = (
         ? laserPointerCursorDataURL_lightMode
         : laserPointerCursorDataURL_darkMode;
     interactiveCanvas.style.cursor = `url(${url}), auto`;
-  } else if (!["image", "custom"].includes(appState.activeTool.type)) {
+  } else if (
+    getCoursewareShapePreset(appState.activeTool) ||
+    getCoursewareInsertTool(appState.activeTool) ||
+    !["image", "custom"].includes(appState.activeTool.type)
+  ) {
     interactiveCanvas.style.cursor = CURSOR_TYPE.CROSSHAIR;
   } else if (appState.activeTool.type !== "image") {
     interactiveCanvas.style.cursor = CURSOR_TYPE.AUTO;

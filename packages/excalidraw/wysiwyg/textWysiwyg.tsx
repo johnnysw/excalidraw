@@ -37,6 +37,8 @@ import {
 } from "@excalidraw/element";
 
 import type { TextStyle } from "@excalidraw/element";
+import { isCoursewareStickyElement } from "@excalidraw/element/coursewareSticky";
+import { isCoursewareBraceElement } from "@excalidraw/element/coursewareBrace";
 
 import type {
   ExcalidrawElement,
@@ -717,7 +719,7 @@ export const textWysiwyg = ({
     }
     const currentFont = editable.style.fontFamily.replace(/"/g, "");
     if (
-      getFontFamilyString({ fontFamily: updatedTextElement.fontFamily }) !==
+      getFontFamilyString(updatedTextElement) !==
       currentFont
     ) {
       return true;
@@ -744,6 +746,8 @@ export const textWysiwyg = ({
         updatedTextElement,
         app.scene.getNonDeletedElementsMap(),
       );
+      const isFixedTextContainer = !!container &&
+        (isCoursewareStickyElement(container) || isCoursewareBraceElement(container));
 
       let width = updatedTextElement.width;
 
@@ -793,7 +797,7 @@ export const textWysiwyg = ({
         );
 
         // autogrow container height if text exceeds
-        if (!isArrowElement(container) && height > maxHeight) {
+        if (!isArrowElement(container) && !isFixedTextContainer && height > maxHeight) {
           const targetContainerHeight = computeContainerDimensionForBoundText(
             height,
             container.type,
@@ -805,6 +809,7 @@ export const textWysiwyg = ({
           // autoshrink container height until original container height
           // is reached when text is removed
           !isArrowElement(container) &&
+          !isFixedTextContainer &&
           container.height > originalContainerData.height &&
           height < maxHeight
         ) {
@@ -834,12 +839,17 @@ export const textWysiwyg = ({
 
       // add 5% buffer otherwise it causes wysiwyg to jump
       height *= 1.05;
+      if (isFixedTextContainer) {
+        height = Math.min(height, maxHeight);
+      }
 
       const font = getFontString(updatedTextElement);
 
       // Make sure text editor height doesn't go beyond viewport
       const editorMaxHeight =
-        (appState.height - viewportY) / appState.zoom.value;
+        isFixedTextContainer
+          ? Math.min(maxHeight, (appState.height - viewportY) / appState.zoom.value)
+          : (appState.height - viewportY) / appState.zoom.value;
       Object.assign(editable.style, {
         font,
         // must be defined *after* font ¯\_(ツ)_/¯
@@ -862,6 +872,7 @@ export const textWysiwyg = ({
         opacity: updatedTextElement.opacity / 100,
         filter: "var(--theme-filter)",
         maxHeight: `${editorMaxHeight}px`,
+        overflow: isFixedTextContainer ? "hidden" : "visible",
       });
 
       // Mirror canvas text outline in WYSIWYG editor using CSS stroke
@@ -892,7 +903,7 @@ export const textWysiwyg = ({
         // After rendering rich text, check if content height exceeds container height
         // (e.g., when some text has a larger fontSize via textStyleRanges).
         // If so, expand the editor to fit the content.
-        if (editable.scrollHeight > editable.clientHeight) {
+        if (!isFixedTextContainer && editable.scrollHeight > editable.clientHeight) {
           editable.style.height = `${editable.scrollHeight * 1.05}px`;
         }
 
@@ -988,6 +999,7 @@ export const textWysiwyg = ({
       span.style.fontSize = `${style.fontSize ?? textElement.fontSize}px`;
       span.style.fontFamily = getFontFamilyString({
         fontFamily: style.fontFamily ?? textElement.fontFamily,
+        customData: textElement.customData,
       });
       span.style.fontWeight = style.fontWeight ?? "normal";
       span.style.lineHeight = `${textElement.lineHeight}`;
@@ -1276,11 +1288,11 @@ export const textWysiwyg = ({
     }
   };
 
-  const restoreSelectionByOffset = (
+  function restoreSelectionByOffset(
     start: number,
     end: number,
     direction: TextEditorSelection["direction"] = "forward",
-  ) => {
+  ) {
     restoreContentEditableSelection(
       editable,
       start,
@@ -1288,7 +1300,7 @@ export const textWysiwyg = ({
       lastSavedText,
       direction,
     );
-  };
+  }
 
   const commitEditorUpdate = ({
     before,
@@ -1958,7 +1970,7 @@ export const textWysiwyg = ({
           // updating an arrow label may change bounds, prevent stale cache:
           bumpVersion(container);
         }
-      } else {
+      } else if (!isCoursewareStickyElement(container) && !isCoursewareBraceElement(container)) {
         app.scene.mutateElement(container, {
           boundElements: container.boundElements?.filter(
             (ele) =>
@@ -2030,6 +2042,9 @@ export const textWysiwyg = ({
         !!(target as Element).closest(".compact-shape-actions-island"));
 
     setTimeout(() => {
+      if (isDestroyed) {
+        return;
+      }
       // If we interacted within shape actions menu or its popovers/triggers,
       // keep submit disabled and don't steal focus back to textarea.
       if (inShapeActionsMenu || isPropertiesTrigger || isPropertiesContent) {

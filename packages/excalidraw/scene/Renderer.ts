@@ -14,7 +14,6 @@ import type {
 
 import type { Scene } from "@excalidraw/element";
 
-import { renderStaticSceneThrottled } from "../renderer/staticScene";
 import { markExcalidrawPerf } from "../reactUtils";
 
 import type { RenderableElementsMap } from "./types";
@@ -493,7 +492,6 @@ export class Renderer {
   // NOTE Doesn't destroy everything (scene, rc, etc.) because it may not be
   // safe to break TS contract here (for upstream cases)
   public destroy() {
-    renderStaticSceneThrottled.cancel();
     this.getRenderableElements.clear();
     this.spatialIndexCache = null;
   }

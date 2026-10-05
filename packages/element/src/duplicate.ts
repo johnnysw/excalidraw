@@ -35,6 +35,7 @@ import {
   isTextElement,
 } from "./typeChecks";
 import { normalizeTextElementStyleRanges } from "./textStyleRanges";
+import { cloneCoursewareMindmapForDuplication } from "./coursewareMindmapType";
 
 import { getBoundTextElement, getContainerElement } from "./textElement";
 
@@ -79,6 +80,7 @@ export const duplicateElement = <TElement extends ExcalidrawElement>(
   }
 
   copy.id = randomId();
+  copy.customData = cloneCoursewareMindmapForDuplication(copy as ExcalidrawElement, copy.id, copy as ExcalidrawElement);
   copy.updated = getUpdatedTimestamp();
   if (randomizeSeed) {
     copy.seed = randomInteger();

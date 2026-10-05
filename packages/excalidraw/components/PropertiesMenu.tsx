@@ -1,3 +1,4 @@
+import { isCoursewareMindmapElement } from "@excalidraw/element/coursewareMindmapType";
 /**
  * 属性面板 - 显示选中元素的属性
  *
@@ -44,6 +45,11 @@ import { isTextFormatBrushActive } from "../actions/actionStyles";
 import { t } from "../i18n";
 import { NumberInput } from "./NumberInput";
 import { actionChangeStrokeWidth } from "../actions/actionProperties";
+import {
+  COURSEWARE_BRUSH_MAX_WIDTH,
+  isCoursewareBrushSettingsContext,
+  isCoursewareBrushWidthLimitedContext,
+} from "../coursewareBrush";
 import { ColorPicker } from "./ColorPicker/ColorPicker";
 import { Switch } from "./Switch";
 import "./PropertiesMenu.scss";
@@ -180,18 +186,28 @@ export const PropertiesMenu: React.FC = () => {
   // 检查是否可以编辑某些属性
   const canEditStrokeColor =
     app.state.activeTool.type !== "selection" ||
-    targetElements.some((el) => hasStrokeColor(el.type));
+    targetElements.some((el) => (!isCoursewareMindmapElement(el) && hasStrokeColor(el.type)));
   const canEditBackgroundColor =
     app.state.activeTool.type !== "selection" ||
-    targetElements.some((el) => hasBackground(el.type));
+    targetElements.some((el) => (!isCoursewareMindmapElement(el) && hasBackground(el.type)));
   const isFreedrawToolActive = app.state.activeTool.type === "freedraw";
+  const usesBrushSettings = isCoursewareBrushSettingsContext(
+    elements,
+    app.state,
+    app,
+  );
+  const usesBrushWidthLimit = isCoursewareBrushWidthLimitedContext(
+    elements,
+    app.state,
+    app,
+  );
   const canEditStrokeWidth =
-    isFreedrawToolActive || targetElements.some((el) => hasStrokeWidth(el.type));
+    isFreedrawToolActive || targetElements.some((el) => (!isCoursewareMindmapElement(el) && hasStrokeWidth(el.type)));
   const canEditStrokeStyle = targetElements.some((el) =>
-    hasStrokeStyle(el.type),
+    (!isCoursewareMindmapElement(el) && hasStrokeStyle(el.type)),
   );
   const canEditRoundness = targetElements.some((el) =>
-    canChangeRoundness(el.type),
+    (!isCoursewareMindmapElement(el) && canChangeRoundness(el.type)),
   );
   const canEditTextProps =
     app.state.activeTool.type === "text" ||
@@ -286,7 +302,7 @@ export const PropertiesMenu: React.FC = () => {
       !isTransparent(app.state.currentItemBackgroundColor)) ||
     targetElements.some(
       (element) =>
-        hasBackground(element.type) && !isTransparent(element.backgroundColor),
+        (!isCoursewareMindmapElement(element) && hasBackground(element.type)) && !isTransparent(element.backgroundColor),
     );
 
   // 对齐相关
@@ -423,6 +439,8 @@ export const PropertiesMenu: React.FC = () => {
       {canEditStrokeWidth && (() => {
         const strokeWidthValue = targetElements.length > 0
           ? targetElements[0].strokeWidth
+          : usesBrushSettings
+          ? app.state.coursewareBrush[app.state.coursewareBrush.mode].strokeWidth
           : app.state.currentItemStrokeWidth;
         return (
           <div className="PropertiesMenu__section">
@@ -433,7 +451,7 @@ export const PropertiesMenu: React.FC = () => {
                 <NumberInput
                   value={strokeWidthValue}
                   min={0.1}
-                  max={100}
+                  max={usesBrushWidthLimit ? COURSEWARE_BRUSH_MAX_WIDTH : 100}
                   step={(value) => (value < 0.5 ? 0.1 : 0.5)}
                   onChange={(value) => {
                     actionManager.executeAction(actionChangeStrokeWidth, "ui", value);
@@ -444,17 +462,6 @@ export const PropertiesMenu: React.FC = () => {
           </div>
         );
       })()}
-
-      {/* 笔触形状 (自由绘制) */}
-      {(app.state.activeTool.type === "freedraw" ||
-        targetElements.some((element) => element.type === "freedraw")) && (
-        <div className="PropertiesMenu__section">
-          <div className="PropertiesMenu__section-title">笔触形状</div>
-          <div className="PropertiesMenu__actions">
-            {actionManager.renderAction("changeStrokeShape")}
-          </div>
-        </div>
-      )}
 
       {/* 边框样式 */}
       {canEditStrokeStyle && (
@@ -589,7 +596,7 @@ export const PropertiesMenu: React.FC = () => {
       )}
 
       {/* 图层 */}
-      {(targetElements.length > 0 || isFreedrawToolActive) && (
+      {targetElements.length > 0 && (
         <div className="PropertiesMenu__section">
           <div className="PropertiesMenu__section-title">图层</div>
           <div className="PropertiesMenu__button-row buttonList">

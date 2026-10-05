@@ -20,6 +20,8 @@ import "./fonts/fonts.css";
 import type { AppProps, ExcalidrawProps } from "./types";
 import type { ExcalidrawElement } from "@excalidraw/element/types";
 
+export { configureCoursewareMindmapImageFetcher } from "./coursewareMindmap/exchangeResources";
+
 polyfill();
 
 const ExcalidrawBase = (props: ExcalidrawProps) => {
@@ -36,6 +38,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     renderTopLeftUI,
     renderTopRightUI,
     renderToolbarStart,
+    renderEmojiPicker,
     renderEmptyPropertiesPanel,
     langCode = defaultLang.code,
     viewModeEnabled,
@@ -139,6 +142,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
           renderToolbarStart={renderToolbarStart}
+          renderEmojiPicker={renderEmojiPicker}
           renderEmptyPropertiesPanel={renderEmptyPropertiesPanel}
           langCode={langCode}
           viewModeEnabled={viewModeEnabled}
@@ -303,6 +307,7 @@ export { parseLibraryTokensFromUrl, useHandleLibrary } from "./data/library";
 
 export { Sidebar } from "./components/Sidebar/Sidebar";
 export { Button } from "./components/Button";
+export { Tooltip } from "./components/Tooltip";
 export { Footer };
 export { MainMenu };
 export { Ellipsify } from "./components/Ellipsify";

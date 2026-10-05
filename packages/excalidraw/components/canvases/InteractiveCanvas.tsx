@@ -261,6 +261,7 @@ const getRelevantAppStateProps = (
   frameRendering: appState.frameRendering,
   shouldCacheIgnoreZoom: appState.shouldCacheIgnoreZoom,
   exportScale: appState.exportScale,
+  lastPointerDownWith: appState.lastPointerDownWith,
   presentationMode: appState.presentationMode,
   presentationStep: appState.presentationStep,
   animationProgress: appState.animationProgress,

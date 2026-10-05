@@ -3,7 +3,10 @@ import React, { useEffect, useRef } from "react";
 import { isShallowEqual } from "@excalidraw/common";
 
 import { isRenderThrottlingEnabled } from "../../reactUtils";
-import { renderStaticScene } from "../../renderer/staticScene";
+import {
+  cancelStaticSceneRender,
+  renderStaticScene,
+} from "../../renderer/staticScene";
 
 import type { StaticCanvasRenderConfig } from "../../scene/types";
 import type { AppState, StaticCanvasAppState } from "../../types";
@@ -26,6 +29,11 @@ type StaticCanvasProps = {
 const StaticCanvas = (props: StaticCanvasProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const isComponentMounted = useRef(false);
+
+  useEffect(() => {
+    const canvas = props.canvas;
+    return () => cancelStaticSceneRender(canvas);
+  }, [props.canvas]);
 
   useEffect(() => {
     props.canvas.style.width = `${props.appState.width}px`;

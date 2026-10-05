@@ -1,3 +1,5 @@
+import { COURSEWARE_MINDMAP_TOOL } from "../coursewareMindmap/config";
+import { isCoursewareMindmapElement } from "@excalidraw/element/coursewareMindmapType";
 import clsx from "clsx";
 import { Fragment, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
@@ -116,11 +118,12 @@ export const canChangeStrokeColor = (
   }
 
   return (
-    (hasStrokeColor(appState.activeTool.type) &&
+    (appState.activeTool.customType !== COURSEWARE_MINDMAP_TOOL &&
+      hasStrokeColor(appState.activeTool.type) &&
       commonSelectedType !== "image" &&
       commonSelectedType !== "frame" &&
       commonSelectedType !== "magicframe") ||
-    targetElements.some((element) => hasStrokeColor(element.type))
+    targetElements.some((element) => (!isCoursewareMindmapElement(element) && hasStrokeColor(element.type)))
   );
 };
 
@@ -130,7 +133,7 @@ export const canChangeBackgroundColor = (
 ) => {
   return (
     hasBackground(appState.activeTool.type) ||
-    targetElements.some((element) => hasBackground(element.type))
+    targetElements.some((element) => (!isCoursewareMindmapElement(element) && hasBackground(element.type)))
   );
 };
 
@@ -166,7 +169,7 @@ export const SelectedShapeActions = ({
       !isTransparent(appState.currentItemBackgroundColor)) ||
     targetElements.some(
       (element) =>
-        hasBackground(element.type) && !isTransparent(element.backgroundColor),
+        (!isCoursewareMindmapElement(element) && hasBackground(element.type)) && !isTransparent(element.backgroundColor),
     );
 
   const showLinkIcon =
@@ -198,7 +201,7 @@ export const SelectedShapeActions = ({
       {showFillIcons && renderAction("changeFillStyle")}
 
       {(hasStrokeWidth(appState.activeTool.type) ||
-        targetElements.some((element) => hasStrokeWidth(element.type))) &&
+        targetElements.some((element) => (!isCoursewareMindmapElement(element) && hasStrokeWidth(element.type)))) &&
         renderAction("changeStrokeWidth")}
 
       {(appState.activeTool.type === "freedraw" ||
@@ -206,7 +209,7 @@ export const SelectedShapeActions = ({
         renderAction("changeStrokeShape")}
 
       {(hasStrokeStyle(appState.activeTool.type) ||
-        targetElements.some((element) => hasStrokeStyle(element.type))) && (
+        targetElements.some((element) => (!isCoursewareMindmapElement(element) && hasStrokeStyle(element.type)))) && (
         <>
           {renderAction("changeStrokeStyle")}
           {renderAction("changeSloppiness")}
@@ -214,7 +217,7 @@ export const SelectedShapeActions = ({
       )}
 
       {(canChangeRoundness(appState.activeTool.type) ||
-        targetElements.some((element) => canChangeRoundness(element.type))) && (
+        targetElements.some((element) => (!isCoursewareMindmapElement(element) && canChangeRoundness(element.type)))) && (
         <>{renderAction("changeRoundness")}</>
       )}
 
@@ -337,7 +340,7 @@ const CombinedShapeProperties = ({
       !isTransparent(appState.currentItemBackgroundColor)) ||
     targetElements.some(
       (element) =>
-        hasBackground(element.type) && !isTransparent(element.backgroundColor),
+        (!isCoursewareMindmapElement(element) && hasBackground(element.type)) && !isTransparent(element.backgroundColor),
     );
 
   const shouldShowCombinedProperties =
@@ -395,12 +398,12 @@ const CombinedShapeProperties = ({
               {showFillIcons && renderAction("changeFillStyle")}
               {(hasStrokeWidth(appState.activeTool.type) ||
                 targetElements.some((element) =>
-                  hasStrokeWidth(element.type),
+                  (!isCoursewareMindmapElement(element) && hasStrokeWidth(element.type)),
                 )) &&
                 renderAction("changeStrokeWidth")}
               {(hasStrokeStyle(appState.activeTool.type) ||
                 targetElements.some((element) =>
-                  hasStrokeStyle(element.type),
+                  (!isCoursewareMindmapElement(element) && hasStrokeStyle(element.type)),
                 )) && (
                 <>
                   {renderAction("changeStrokeStyle")}
@@ -409,7 +412,7 @@ const CombinedShapeProperties = ({
               )}
               {(canChangeRoundness(appState.activeTool.type) ||
                 targetElements.some((element) =>
-                  canChangeRoundness(element.type),
+                  (!isCoursewareMindmapElement(element) && canChangeRoundness(element.type)),
                 )) &&
                 renderAction("changeRoundness")}
               {renderAction("changeOpacity")}
@@ -1141,9 +1144,9 @@ export const SelectionTool = ({
 
   const letter =
     key && capitalizeString(typeof key === "string" ? key : key[0]);
-  const shortcut = letter
+  const shortcut = letter && numericKey
     ? `${letter} ${t("helpDialog.or")} ${numericKey}`
-    : `${numericKey}`;
+    : letter || numericKey || undefined;
 
   return (
     <ToolButton
@@ -1419,6 +1422,70 @@ export const ShapesSwitcher = ({
 };
 
 /** The same extra-tool actions are shared by the top and courseware toolbars. */
+export const MoreToolsMenuItems = ({
+  activeTool,
+  app,
+  UIOptions,
+  showTooltips = false,
+}: {
+  activeTool: UIAppState["activeTool"];
+  app: AppClassProperties;
+  UIOptions: AppProps["UIOptions"];
+  showTooltips?: boolean;
+}) => {
+  const { TTDDialogTriggerTunnel } = useTunnels();
+  return (
+    <>
+      {UIOptions.tools?.embeddable !== false && (
+        <DropdownMenu.Item
+          onSelect={() => app.setActiveTool({ type: "embeddable" })}
+          icon={EmbedIcon}
+          data-testid="toolbar-embeddable"
+          selected={activeTool.type === "embeddable"}
+          tooltipLabel={showTooltips ? t("toolBar.embeddable") : undefined}
+        >
+          {t("toolBar.embeddable")}
+        </DropdownMenu.Item>
+      )}
+      <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
+        Generate
+      </div>
+      {app.props.aiEnabled !== false && <TTDDialogTriggerTunnel.Out />}
+      <DropdownMenu.Item
+        onSelect={() => app.setOpenDialog({ name: "ttd", tab: "mermaid" })}
+        icon={mermaidLogoIcon}
+        data-testid="toolbar-mermaid"
+        tooltipLabel={showTooltips ? t("toolBar.mermaidToExcalidraw") : undefined}
+      >
+        {t("toolBar.mermaidToExcalidraw")}
+      </DropdownMenu.Item>
+      {app.props.extraToolsMenuItems?.map((item) => (
+        <DropdownMenu.Item
+          key={item.id}
+          onSelect={item.onSelect}
+          icon={item.icon as any}
+          disabled={item.disabled}
+          data-testid={`toolbar-extra-${item.id}`}
+          tooltipLabel={showTooltips ? item.label : undefined}
+        >
+          {item.label}
+        </DropdownMenu.Item>
+      ))}
+      {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
+        <DropdownMenu.Item
+          onSelect={() => app.onMagicframeToolSelect()}
+          icon={MagicIcon}
+          data-testid="toolbar-magicframe"
+          tooltipLabel={showTooltips ? t("toolBar.magicframe") : undefined}
+        >
+          {t("toolBar.magicframe")}
+          <DropdownMenu.Item.Badge>AI</DropdownMenu.Item.Badge>
+        </DropdownMenu.Item>
+      )}
+    </>
+  );
+};
+
 export const MoreToolsMenu = ({
   activeTool,
   setAppState,
@@ -1447,7 +1514,6 @@ export const MoreToolsMenu = ({
     UIOptions.toolbarLayout === "left" &&
     editorInterface.formFactor !== "phone";
   const embeddableToolSelected = activeTool.type === "embeddable";
-  const { TTDDialogTriggerTunnel } = useTunnels();
   return (
     <DropdownMenu
       open={isExtraToolsMenuOpen}
@@ -1477,46 +1543,12 @@ export const MoreToolsMenu = ({
         portal={isLeftToolbar}
         onCloseAutoFocus={onCloseAutoFocus}
       >
-        <DropdownMenu.Item
-          onSelect={() => app.setActiveTool({ type: "embeddable" })}
-          icon={EmbedIcon}
-          data-testid="toolbar-embeddable"
-          selected={embeddableToolSelected}
-        >
-          {t("toolBar.embeddable")}
-        </DropdownMenu.Item>
-        <div style={{ margin: "6px 0", fontSize: 14, fontWeight: 600 }}>
-          Generate
-        </div>
-        {app.props.aiEnabled !== false && <TTDDialogTriggerTunnel.Out />}
-        <DropdownMenu.Item
-          onSelect={() => app.setOpenDialog({ name: "ttd", tab: "mermaid" })}
-          icon={mermaidLogoIcon}
-          data-testid="toolbar-embeddable"
-        >
-          {t("toolBar.mermaidToExcalidraw")}
-        </DropdownMenu.Item>
-        {app.props.extraToolsMenuItems?.map((item) => (
-          <DropdownMenu.Item
-            key={item.id}
-            onSelect={item.onSelect}
-            icon={item.icon as any}
-            disabled={item.disabled}
-            data-testid={`toolbar-extra-${item.id}`}
-          >
-            {item.label}
-          </DropdownMenu.Item>
-        ))}
-        {app.props.aiEnabled !== false && app.plugins.diagramToCode && (
-          <DropdownMenu.Item
-            onSelect={() => app.onMagicframeToolSelect()}
-            icon={MagicIcon}
-            data-testid="toolbar-magicframe"
-          >
-            {t("toolBar.magicframe")}
-            <DropdownMenu.Item.Badge>AI</DropdownMenu.Item.Badge>
-          </DropdownMenu.Item>
-        )}
+        <MoreToolsMenuItems
+          app={app}
+          activeTool={activeTool}
+          UIOptions={UIOptions}
+          showTooltips={isLeftToolbar}
+        />
       </DropdownMenu.Content>
     </DropdownMenu>
   );

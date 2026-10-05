@@ -1,3 +1,4 @@
+import { getReferencedFileIds } from '@excalidraw/element/fileReferences';
 import {
   DEFAULT_FILENAME,
   EXPORT_DATA_TYPES,
@@ -35,13 +36,10 @@ const filterOutDeletedFiles = (
 ) => {
   const nextFiles: BinaryFiles = {};
   for (const element of elements) {
-    if (
-      !element.isDeleted &&
-      "fileId" in element &&
-      element.fileId &&
-      files[element.fileId]
-    ) {
-      nextFiles[element.fileId] = files[element.fileId];
+    if (!element.isDeleted) {
+      for (const fileId of getReferencedFileIds(element)) {
+        if (files[fileId]) nextFiles[fileId] = files[fileId];
+      }
     }
   }
   return nextFiles;

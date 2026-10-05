@@ -75,6 +75,7 @@ import { Island } from "./Island";
 import { JSONExportDialog } from "./JSONExportDialog";
 import { LaserPointerButton } from "./LaserPointerButton";
 import CoursewareToolbar from "./CoursewareToolbar";
+import { CoursewareBrushToolbar } from "./CoursewareBrushToolbar";
 
 import "./LayerUI.scss";
 import "./Toolbar.scss";
@@ -107,6 +108,7 @@ interface LayerUIProps {
   renderTopLeftUI?: ExcalidrawProps["renderTopLeftUI"];
   renderTopRightUI?: ExcalidrawProps["renderTopRightUI"];
   renderToolbarStart?: ExcalidrawProps["renderToolbarStart"];
+  renderEmojiPicker?: ExcalidrawProps["renderEmojiPicker"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
   onExportImage: AppClassProperties["onExportImage"];
@@ -166,6 +168,7 @@ const LayerUI = ({
   renderTopLeftUI,
   renderTopRightUI,
   renderToolbarStart,
+  renderEmojiPicker,
   renderCustomStats,
   UIOptions,
   onExportImage,
@@ -183,6 +186,10 @@ const LayerUI = ({
   const isLeftToolbar =
     UIOptions.toolbarLayout === "left" &&
     editorInterface.formFactor !== "phone";
+  const isCoursewareToolbar =
+    isLeftToolbar &&
+    !appState.viewModeEnabled &&
+    appState.openDialog?.name !== "elementLinkSelector";
   const tunnels = useInitializeTunnels();
 
   const isMainMenuVisible = shareModePermissions?.mainMenu?.visible ?? true;
@@ -314,8 +321,10 @@ const LayerUI = ({
     <div style={{ position: "relative" }}>
       {/* wrapping to Fragment stops React from occasionally complaining
                 about identical Keys */}
-      {isMainMenuVisible && <tunnels.MainMenuTunnel.Out />}
-      {renderWelcomeScreen && <tunnels.WelcomeScreenMenuHintTunnel.Out />}
+      {isMainMenuVisible && !isCoursewareToolbar && <tunnels.MainMenuTunnel.Out />}
+      {renderWelcomeScreen && !isCoursewareToolbar && (
+        <tunnels.WelcomeScreenMenuHintTunnel.Out />
+      )}
     </div>
   );
 
@@ -476,11 +485,11 @@ const LayerUI = ({
                                 capitalizeString(
                                   typeof key === "string" ? key : key[0],
                                 );
-                              const shortcut = letter
+                              const shortcut = letter && numericKey
                                 ? `${letter} ${t(
                                     "helpDialog.or",
                                   )} ${numericKey}`
-                                : `${numericKey}`;
+                                : letter || numericKey || undefined;
                               return (
                                 <ToolButton
                                   className="Shape"
@@ -531,11 +540,11 @@ const LayerUI = ({
                                 capitalizeString(
                                   typeof key === "string" ? key : key[0],
                                 );
-                              const shortcut = letter
+                              const shortcut = letter && numericKey
                                 ? `${letter} ${t(
                                     "helpDialog.or",
                                   )} ${numericKey}`
-                                : `${numericKey}`;
+                                : letter || numericKey || undefined;
                               return (
                                 <EraserToolPopover
                                   app={app}
@@ -572,11 +581,11 @@ const LayerUI = ({
                                 capitalizeString(
                                   typeof key === "string" ? key : key[0],
                                 );
-                              const shortcut = letter
+                              const shortcut = letter && numericKey
                                 ? `${letter} ${t(
                                     "helpDialog.or",
                                   )} ${numericKey}`
-                                : `${numericKey}`;
+                                : letter || numericKey || undefined;
                               return (
                                 <ToolButton
                                   className="Shape"
@@ -693,7 +702,7 @@ const LayerUI = ({
       {/* render component fallbacks. Can be rendered anywhere as they'll be
           tunneled away. We only render tunneled components that actually
         have defaults when host do not render anything. */}
-      {isMainMenuVisible && (
+      {(isMainMenuVisible || isCoursewareToolbar) && (
         <DefaultMainMenu UIOptions={UIOptions} role={role} />
       )}
       {isSidebarVisible && (
@@ -825,9 +834,7 @@ const LayerUI = ({
           >
             {renderWelcomeScreen && <tunnels.WelcomeScreenCenterTunnel.Out />}
             {renderFixedSideContainer()}
-            {isLeftToolbar &&
-              !appState.viewModeEnabled &&
-              appState.openDialog?.name !== "elementLinkSelector" && (
+            {isCoursewareToolbar && (
                 <>
                   <CoursewareToolbar
                     app={app}
@@ -837,8 +844,13 @@ const LayerUI = ({
                     onLockToggle={onLockToggle}
                     onPenModeToggle={onPenModeToggle}
                     renderToolbarStart={renderToolbarStart}
-                    canPresent={canPresent}
-                    onPresent={onPresent}
+                    renderEmojiPicker={renderEmojiPicker}
+                  />
+                  <CoursewareBrushToolbar
+                    app={app}
+                    appState={appState}
+                    setAppState={setAppState}
+                    UIOptions={UIOptions}
                   />
                   {!appState.zenModeEnabled && (
                     <div className="Courseware-toolbar-hint">

@@ -206,6 +206,14 @@ export class LinearElementEditor {
 
   static POINT_HANDLE_SIZE = 10;
 
+  static shouldShowPointHandles(
+    element: ExcalidrawLinearElement,
+    editor: Pick<LinearElementEditor, "isEditing">,
+  ): boolean {
+    // Closed shapes expose their contour points only in explicit line editing.
+    return !isLineElement(element) || !element.polygon || editor.isEditing;
+  }
+
   /**
    * @param id the `elementId` from the instance of this class (so that we can
    *  statically guarantee this method returns an ExcalidrawLinearElement)
@@ -1008,7 +1016,10 @@ export class LinearElementEditor {
     const { elementId } = linearElementEditor;
     const element = LinearElementEditor.getElement(elementId, elementsMap);
 
-    if (!element) {
+    if (
+      !element ||
+      !LinearElementEditor.shouldShowPointHandles(element, linearElementEditor)
+    ) {
       return ret;
     }
 

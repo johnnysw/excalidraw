@@ -88,6 +88,12 @@ import type { Scene } from "@excalidraw/element";
 import type { CaptureUpdateActionType } from "@excalidraw/element";
 
 import { trackEvent } from "../analytics";
+import {
+  clampCoursewareBrushStrokeWidth,
+  isCoursewareBrushSettingsContext,
+  isCoursewareBrushWidthLimitedContext,
+  updateCoursewareBrush,
+} from "../coursewareBrush";
 import { RadioSelection } from "../components/RadioSelection";
 import { EditableDropdown } from "../components/EditableDropdown";
 import { NumberInput } from "../components/NumberInput";
@@ -437,6 +443,17 @@ export const actionChangeStrokeColor = register<
   trackEvent: false,
   perform: (elements, appState, value, app) => {
     const color = value?.currentItemStrokeColor;
+    if (color && isCoursewareBrushSettingsContext(elements, appState, app)) {
+      return {
+        appState: {
+          ...appState,
+          coursewareBrush: updateCoursewareBrush(appState.coursewareBrush, {
+            color,
+          }),
+        },
+        captureUpdate: CaptureUpdateAction.NEVER,
+      };
+    }
     if (color && appState.editingTextElement && appState.textEditorSelection) {
       const editingElement = elements.find(
         (el) => el.id === appState.editingTextElement?.id,
@@ -549,7 +566,12 @@ export const actionChangeStrokeColor = register<
                   (element) => element.strokeColor,
                   true,
                   (hasSelection) =>
-                    !hasSelection ? appState.currentItemStrokeColor : null,
+                    !hasSelection
+                      ? isCoursewareBrushSettingsContext(elements, appState, app)
+                        ? appState.coursewareBrush[appState.coursewareBrush.mode]
+                            .color
+                        : appState.currentItemStrokeColor
+                      : null,
                 )
           }
           onChange={(color) => updateData({ currentItemStrokeColor: color })}
@@ -874,14 +896,30 @@ export const actionChangeStrokeWidth = register<
   name: "changeStrokeWidth",
   label: "labels.strokeWidth",
   trackEvent: false,
-  perform: (elements, appState, value) => {
+  perform: (elements, appState, value, app) => {
+    if (isCoursewareBrushSettingsContext(elements, appState, app)) {
+      return {
+        appState: {
+          ...appState,
+          coursewareBrush: updateCoursewareBrush(appState.coursewareBrush, {
+            strokeWidth: value,
+          }),
+        },
+        captureUpdate: CaptureUpdateAction.NEVER,
+      };
+    }
+    const strokeWidth =
+      value !== undefined &&
+      isCoursewareBrushWidthLimitedContext(elements, appState, app)
+        ? clampCoursewareBrushStrokeWidth(value)
+        : value;
     return {
       elements: changeProperty(elements, appState, (el) =>
         newElementWith(el, {
-          strokeWidth: value,
+          strokeWidth,
         }),
       ),
-      appState: { ...appState, currentItemStrokeWidth: value },
+      appState: { ...appState, currentItemStrokeWidth: strokeWidth },
       captureUpdate: CaptureUpdateAction.IMMEDIATELY,
     };
   },
@@ -929,7 +967,12 @@ export const actionChangeStrokeWidth = register<
             (element) => element.strokeWidth,
             (element) => element.hasOwnProperty("strokeWidth"),
             (hasSelection) =>
-              hasSelection ? null : appState.currentItemStrokeWidth,
+              hasSelection
+                ? null
+                : isCoursewareBrushSettingsContext(elements, appState, app)
+                ? appState.coursewareBrush[appState.coursewareBrush.mode]
+                    .strokeWidth
+                : appState.currentItemStrokeWidth,
           )}
           onClick={(value) => updateData(value)}
         />
@@ -1193,7 +1236,18 @@ export const actionChangeOpacity = register<ExcalidrawElement["opacity"]>({
   name: "changeOpacity",
   label: "labels.opacity",
   trackEvent: false,
-  perform: (elements, appState, value) => {
+  perform: (elements, appState, value, app) => {
+    if (isCoursewareBrushSettingsContext(elements, appState, app)) {
+      return {
+        appState: {
+          ...appState,
+          coursewareBrush: updateCoursewareBrush(appState.coursewareBrush, {
+            opacity: value,
+          }),
+        },
+        captureUpdate: CaptureUpdateAction.NEVER,
+      };
+    }
     return {
       elements: changeProperty(
         elements,

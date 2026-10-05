@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 
 import { t } from "../i18n";
+import { isCoursewareBrushSettingsContext } from "../coursewareBrush";
 
 import "./Range.scss";
 
@@ -28,7 +29,16 @@ export const Range = ({ updateData, app, testId }: RangeProps) => {
     return acc;
   }, firstElement?.opacity ?? null);
 
-  const value = leastCommonOpacity ?? app.state.currentItemOpacity;
+  const usesBrushSettings = isCoursewareBrushSettingsContext(
+    app.scene.getNonDeletedElements(),
+    app.state,
+    app,
+  );
+  const value =
+    leastCommonOpacity ??
+    (usesBrushSettings
+      ? app.state.coursewareBrush[app.state.coursewareBrush.mode].opacity
+      : app.state.currentItemOpacity);
 
   useEffect(() => {
     if (rangeRef.current && valueRef.current) {
@@ -57,7 +67,7 @@ export const Range = ({ updateData, app, testId }: RangeProps) => {
           type="range"
           min="0"
           max="100"
-          step="10"
+          step={usesBrushSettings ? 1 : 10}
           onChange={(event) => {
             updateData(+event.target.value);
           }}

@@ -1,3 +1,8 @@
+import { installCoursewareMindmapTextMetrics } from "@excalidraw/element/mindmapTextMetrics";
+import type { ExcalidrawRectangleElement } from "@excalidraw/element/types";
+import { getReferencedFileIds, isCoursewareMindmapElement } from "@excalidraw/element/coursewareMindmap";
+import { CoursewareMindmapController } from "../coursewareMindmap/controller";
+import { CoursewareMindmapOverlay } from "./coursewareMindmap/MindmapOverlay";
 import clsx from "clsx";
 import throttle from "lodash.throttle";
 import React, { useContext } from "react";
@@ -35,6 +40,7 @@ import {
   ELEMENT_TRANSLATE_AMOUNT,
   EVENT,
   FRAME_STYLE,
+  FONT_FAMILY,
   IMAGE_MIME_TYPES,
   IMAGE_RENDER_TIMEOUT,
   LINE_CONFIRM_THRESHOLD,
@@ -111,6 +117,7 @@ import {
   setDesktopUIMode,
   isSelectionLikeTool,
   DEFAULT_ELEMENT_PROPS,
+  DEFAULT_FONT_FAMILY,
   STROKE_WIDTH,
 } from "@excalidraw/common";
 
@@ -235,6 +242,7 @@ import {
   transformElements,
   getCursorForResizingElement,
   getElementWithTransformHandleType,
+  getCoursewareBraceWidthHandleType,
   getTransformHandleTypeFromCoords,
   dragNewElement,
   dragSelectedElements,
@@ -250,6 +258,7 @@ import {
   isSimpleArrow,
   StoreDelta,
   type ApplyToOptions,
+  type RotationHandlePosition,
   positionElementsOnGrid,
   calculateFixedPointForNonElbowArrowBinding,
   bindOrUnbindBindingElement,
@@ -292,6 +301,22 @@ import type {
 } from "@excalidraw/element/types";
 
 import type { Mutable, ValueOf } from "@excalidraw/common/utility-types";
+
+import { getCoursewareBrushStyle } from "../coursewareBrush";
+import {
+  COURSEWARE_STICKY_STYLE,
+  isCoursewareStickyElement,
+} from "@excalidraw/element/coursewareSticky";
+import {
+  getCoursewareBraceTextRect,
+  getCoursewareBraceSelection,
+  isCoursewareBraceElement,
+} from "@excalidraw/element/coursewareBrace";
+import {
+  COURSEWARE_EMOJI_CUSTOM_TYPE,
+  COURSEWARE_STICKY_CUSTOM_TYPE,
+  getCoursewareInsertTool,
+} from "../coursewareInsertTools";
 
 import {
   actionAddToLibrary,
@@ -345,6 +370,12 @@ import { actions } from "../actions/register";
 import { getShortcutFromShortcutName } from "../actions/shortcuts";
 import { trackEvent } from "../analytics";
 import { AnimationFrameHandler } from "../animation-frame-handler";
+import {
+  getCoursewareShapeBounds,
+  getCoursewareShapeGeometry,
+  getCoursewareShapeContours,
+  getCoursewareShapePreset,
+} from "../coursewareShapes";
 import {
   getDefaultAppState,
   isEraserActive,
@@ -666,6 +697,7 @@ class App extends React.Component<AppProps, AppState> {
     editorInterfaceContextInitialValue,
   );
   private hasAppliedFreedrawDefaultStrokeWidth = false;
+  private disposeMindmapTextMetrics?: () => void;
 
   public excalidrawContainerRef = React.createRef<HTMLDivElement>();
 
@@ -675,6 +707,51 @@ class App extends React.Component<AppProps, AppState> {
   public visibleElements: readonly NonDeletedExcalidrawElement[];
   private canvasRenderData!: CanvasRenderData;
   private readCanvasRenderData = () => this.canvasRenderData;
+  /** Render a temporary tree without publishing it to history or autosave. */
+  public renderMindmapPreview = (
+    canvas: HTMLCanvasElement,
+    preview: ExcalidrawRectangleElement | readonly ExcalidrawRectangleElement[],
+  ) => {
+    const data = this.canvasRenderData;
+    const elementsMap = new Map(data.elementsMap);
+    const allElementsMap = new Map(data.allElementsMap);
+    const previews = Array.isArray(preview)
+      ? preview
+      : [preview as ExcalidrawRectangleElement];
+    const replacements = new Map(previews.map((element) => [element.id, element]));
+    for (const element of previews) {
+      if (element.isDeleted) {
+        elementsMap.delete(element.id);
+        allElementsMap.delete(element.id);
+      } else {
+        elementsMap.set(element.id, element as Ordered<NonDeletedExcalidrawElement>);
+        allElementsMap.set(element.id, element as Ordered<NonDeletedExcalidrawElement>);
+      }
+    }
+    // A cross-map draft replaces every affected tree in one render while keeping
+    // the document's stacking order. It never enters Scene or its save stream.
+    const visibleElements = data.visibleElements.flatMap((element) => {
+      const replacement = replacements.get(element.id);
+      replacements.delete(element.id);
+      return replacement
+        ? replacement.isDeleted ? [] : [replacement as NonDeletedExcalidrawElement]
+        : [element];
+    });
+    for (const element of replacements.values()) {
+      if (!element.isDeleted) visibleElements.push(element as NonDeletedExcalidrawElement);
+    }
+    renderStaticScene({
+      canvas, rc: rough.canvas(canvas), scale: window.devicePixelRatio,
+      elementsMap: elementsMap as typeof data.elementsMap,
+      allElementsMap: allElementsMap as typeof data.allElementsMap,
+      visibleElements, appState: this.state,
+      renderConfig: { imageCache: this.imageCache, isExporting: false,
+        renderGrid: isGridModeEnabled(this), canvasBackgroundColor: this.state.viewBackgroundColor,
+        embedsValidationStatus: this.embedsValidationStatus, elementsPendingErasure: this.elementsPendingErasure,
+        pendingFlowchartNodes: null },
+    }, false);
+  };
+
   private elementsContextValue: ExcalidrawElementsContextValue = {
     scene: null,
     revision: 0,
@@ -706,6 +783,7 @@ class App extends React.Component<AppProps, AppState> {
   public files: BinaryFiles = {};
   public imageCache: AppClassProperties["imageCache"] = new Map();
   private iFrameRefs = new Map<ExcalidrawElement["id"], HTMLIFrameElement>();
+  private coursewareShapeElements: ExcalidrawElement[] = [];
   /**
    * Indicates whether the embeddable's url has been validated for rendering.
    * If value not set, indicates that the validation is pending.
@@ -1407,6 +1485,8 @@ class App extends React.Component<AppProps, AppState> {
       files: BinaryFiles,
     ]
   >();
+
+  public mindmap = new CoursewareMindmapController(this);
 
   onPointerDownEmitter = new Emitter<
     [
@@ -2930,6 +3010,7 @@ class App extends React.Component<AppProps, AppState> {
       renderTopRightUI,
       renderTopLeftUI,
       renderToolbarStart,
+      renderEmojiPicker,
       renderCustomStats,
     } = this.props;
 
@@ -3156,6 +3237,12 @@ class App extends React.Component<AppProps, AppState> {
         onKeyDown={
           this.props.handleKeyboardGlobally ? undefined : this.onKeyDown
         }
+        onBeforeInput={(event) => {
+          if (this.mindmap.beforeInput(event.nativeEvent as InputEvent)) {
+            event.preventDefault();
+          }
+        }}
+        onCompositionStart={(event) => this.mindmap.beginComposition(event.nativeEvent)}
         onPointerEnter={this.toggleOverscrollBehavior}
         onPointerLeave={this.toggleOverscrollBehavior}
       >
@@ -3189,6 +3276,7 @@ class App extends React.Component<AppProps, AppState> {
                           renderTopLeftUI={renderTopLeftUI}
                           renderTopRightUI={renderTopRightUI}
                           renderToolbarStart={renderToolbarStart}
+                          renderEmojiPicker={renderEmojiPicker}
                           renderCustomStats={renderCustomStats}
                           showExitZenModeBtn={
                             typeof this.props?.zenModeEnabled === "undefined" &&
@@ -3521,6 +3609,7 @@ class App extends React.Component<AppProps, AppState> {
                           onPointerDown={this.handleCanvasPointerDown}
                           onDoubleClick={this.handleCanvasDoubleClick}
                         />
+                        <CoursewareMindmapOverlay app={this} />
                         {this.state.userToFollow && (
                           <FollowMode
                             width={this.state.width}
@@ -4277,7 +4366,13 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   public async componentDidMount() {
+    this.mindmap.activate();
     this.unmounted = false;
+    this.disposeMindmapTextMetrics = installCoursewareMindmapTextMetrics(() => {
+      if (this.unmounted) return;
+      this.scene.getNonDeletedElements().filter(isCoursewareMindmapElement).forEach(element => ShapeCache.delete(element));
+      this.setState({});
+    });
     this.excalidrawContainerValue.container =
       this.excalidrawContainerRef.current;
 
@@ -4358,6 +4453,8 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   public componentWillUnmount() {
+    this.disposeMindmapTextMetrics?.();
+    this.mindmap.dispose();
     (window as any).launchQueue?.setConsumer(() => {});
     this.renderer.destroy();
     this.scene.destroy();
@@ -4835,6 +4932,7 @@ class App extends React.Component<AppProps, AppState> {
     if (!isExcalidrawActive || isWritableElement(event.target)) {
       return;
     }
+    if (this.mindmap.clipboard.copy(event, true)) { return; }
     this.actionManager.executeAction(actionCut, "keyboard", event);
     event.preventDefault();
     event.stopPropagation();
@@ -4847,6 +4945,7 @@ class App extends React.Component<AppProps, AppState> {
     if (!isExcalidrawActive || isWritableElement(event.target)) {
       return;
     }
+    if (this.mindmap.clipboard.copy(event)) { return; }
     this.actionManager.executeAction(actionCopy, "keyboard", event);
     event.preventDefault();
     event.stopPropagation();
@@ -5092,7 +5191,7 @@ class App extends React.Component<AppProps, AppState> {
   }
 
   public pasteFromClipboard = withBatchedUpdates(
-    async (event: ClipboardEvent) => {
+    async (event: ClipboardEvent & { fromMindmapMenu?: boolean }) => {
       const isPlainPaste = !!IS_PLAIN_PASTE;
 
       // #686
@@ -5103,22 +5202,32 @@ class App extends React.Component<AppProps, AppState> {
         return;
       }
 
+      if (isWritableElement(target)) {
+        return;
+      }
+
+      // Read clipboardData before awaiting either paste path: Firefox clears it
+      // once the paste event's synchronous call stack has finished.
+      const dataTransferPromise = parseDataTransferEvent(event);
+      const [dataTransferList, handledByMindmap] = await Promise.all([
+        dataTransferPromise,
+        this.mindmap.clipboard.paste(event),
+      ]);
+      if (handledByMindmap) {
+        return;
+      }
+
       const elementUnderCursor = document.elementFromPoint(
         this.lastViewportPosition.x,
         this.lastViewportPosition.y,
       );
       if (
         event &&
-        (!(elementUnderCursor instanceof HTMLCanvasElement) ||
+        ((!event.fromMindmapMenu && !(elementUnderCursor instanceof HTMLCanvasElement)) ||
           isWritableElement(target))
       ) {
         return;
       }
-
-      // must be called in the same frame (thus before any awaits) as the paste
-      // event else some browsers (FF...) will clear the clipboardData
-      // (something something security)
-      const dataTransferList = await parseDataTransferEvent(event);
 
       const filesList = dataTransferList.getFiles();
 
@@ -5134,6 +5243,7 @@ class App extends React.Component<AppProps, AppState> {
         }
       }
 
+      this.mindmap.clear();
       await this.insertClipboardContent(data, filesList, isPlainPaste);
 
       this.setActiveTool(
@@ -6010,6 +6120,7 @@ class App extends React.Component<AppProps, AppState> {
   // Input handling
   private onKeyDown = withBatchedUpdates(
     (event: React.KeyboardEvent | KeyboardEvent) => {
+      if (this.mindmap.keyDown(event)) { return; }
       // normalize `event.key` when CapsLock is pressed #2372
 
       if (
@@ -6450,6 +6561,38 @@ class App extends React.Component<AppProps, AppState> {
         !this.state.selectionElement &&
         !this.state.selectedElementsAreBeingDragged
       ) {
+        if (
+          this.props.UIOptions.toolbarLayout === "left" &&
+          this.editorInterface.formFactor !== "phone" &&
+          !this.state.presentationMode &&
+          event.key.toLowerCase() === KEYS.P &&
+          this.isToolSupported("freedraw")
+        ) {
+          this.setState((state) => ({
+            coursewareBrush: {
+              ...state.coursewareBrush,
+              mode: event.shiftKey ? "highlighter" : "pen",
+            },
+          }));
+          this.setActiveTool({ type: "freedraw" });
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (
+          this.props.UIOptions.toolbarLayout === "left" &&
+          this.editorInterface.formFactor !== "phone" &&
+          !this.state.presentationMode &&
+          event.key.toLowerCase() === "n"
+        ) {
+          this.setActiveTool({
+            type: "custom",
+            customType: COURSEWARE_STICKY_CUSTOM_TYPE,
+          });
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         const shape = findShapeByKey(event.key, this);
         if (shape) {
           if (this.state.activeTool.type !== shape) {
@@ -6795,6 +6938,9 @@ class App extends React.Component<AppProps, AppState> {
     this.setState((prevState) => {
       const shouldApplyFreedrawDefaultStrokeWidth =
         nextActiveTool.type === "freedraw" &&
+        !(this.props.UIOptions.toolbarLayout === "left" &&
+          this.editorInterface.formFactor !== "phone" &&
+          !prevState.presentationMode) &&
         !this.hasAppliedFreedrawDefaultStrokeWidth &&
         prevState.currentItemStrokeWidth === DEFAULT_ELEMENT_PROPS.strokeWidth;
 
@@ -7066,7 +7212,9 @@ class App extends React.Component<AppProps, AppState> {
         }
       }),
       onSubmit: withBatchedUpdates(({ viaKeyboard, nextOriginalText }) => {
-        const isDeleted = !nextOriginalText.trim();
+        const container = getContainerElement(element, elementsMap);
+        const isDeleted = !nextOriginalText.trim() &&
+          !(container && (isCoursewareStickyElement(container) || isCoursewareBraceElement(container)));
         updateElement(nextOriginalText, isDeleted);
 
         // select the created text element only if submitting via keyboard
@@ -7081,15 +7229,27 @@ class App extends React.Component<AppProps, AppState> {
           // TODO either move this into finalize as well, or handle all state
           // updates in one place, skipping finalize action
           flushSync(() => {
-            this.setState((prevState) => ({
-              selectedElementIds: makeNextSelectedElementIds(
+            this.setState((prevState) => {
+              const selectedElementIds = makeNextSelectedElementIds(
                 {
                   ...prevState.selectedElementIds,
                   [elementIdToSelect]: true,
                 },
                 prevState,
-              ),
-            }));
+              );
+              return container && isCoursewareBraceElement(container)
+                ? selectGroupsForSelectedElements(
+                    { selectedElementIds, editingGroupId: prevState.editingGroupId },
+                    this.scene.getNonDeletedElements(),
+                    prevState,
+                    this,
+                  )
+                : {
+                    selectedElementIds,
+                    selectedGroupIds: prevState.selectedGroupIds,
+                    editingGroupId: prevState.editingGroupId,
+                  };
+            });
           });
         }
 
@@ -7328,12 +7488,18 @@ class App extends React.Component<AppProps, AppState> {
   private getTextBindableContainerAtPosition(x: number, y: number) {
     const elements = this.scene.getNonDeletedElements();
     const selectedElements = this.scene.getSelectedElements(this.state);
-    if (selectedElements.length === 1) {
+    if (selectedElements.length === 1 && selectedElements[0].customData?.coursewareObjectType !== "brace-curve") {
+      if (isTextElement(selectedElements[0])) {
+        const container = getContainerElement(selectedElements[0], this.scene.getNonDeletedElementsMap());
+        if (container && isCoursewareBraceElement(container)) {
+          return container;
+        }
+      }
       return isTextBindableContainer(selectedElements[0], false)
         ? selectedElements[0]
         : null;
     }
-    let hitElement = null;
+    let hitElement: NonDeletedExcalidrawElement | null = null;
     // We need to do hit testing from front (end of the array) to back (beginning of the array)
     for (let index = elements.length - 1; index >= 0; --index) {
       if (elements[index].isDeleted) {
@@ -7360,6 +7526,18 @@ class App extends React.Component<AppProps, AppState> {
       }
     }
 
+    if (hitElement) {
+      const hitGroupIds = hitElement.groupIds;
+      const braceContainer = isTextElement(hitElement)
+        ? getContainerElement(hitElement, this.scene.getNonDeletedElementsMap())
+        : hitElement.customData?.coursewareObjectType === "brace-curve"
+        ? elements.find((candidate) => isCoursewareBraceElement(candidate) &&
+            candidate.groupIds.some((id) => hitGroupIds.includes(id)))
+        : null;
+      if (braceContainer && isCoursewareBraceElement(braceContainer)) {
+        return braceContainer;
+      }
+    }
     return isTextBindableContainer(hitElement, false) ? hitElement : null;
   }
 
@@ -7415,6 +7593,13 @@ class App extends React.Component<AppProps, AppState> {
       }
     } else {
       existingTextElement = this.getTextElementAtPosition(sceneX, sceneY);
+    }
+
+    if (container && (isCoursewareStickyElement(container) || isCoursewareBraceElement(container))) {
+      existingTextElement = getBoundTextElement(
+        container,
+        this.scene.getNonDeletedElementsMap(),
+      );
     }
 
     const fontFamily =
@@ -7551,6 +7736,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasDoubleClick = (
     event: React.MouseEvent<HTMLCanvasElement>,
   ) => {
+    if (this.mindmap.doubleClick(event)) { return; }
     // case: double-clicking with arrow/line tool selected would both create
     // text and enter multiElement mode
     if (this.state.multiElement) {
@@ -7656,6 +7842,18 @@ class App extends React.Component<AppProps, AppState> {
     if (selectedElements.length === 1 && isImageElement(selectedElements[0])) {
       this.startImageCropping(selectedElements[0]);
       return;
+    }
+
+    if (!event[KEYS.CTRL_OR_CMD] && !this.state.viewModeEnabled && !this.state.selectedLinearElement?.isEditing) {
+      const container = this.getTextBindableContainerAtPosition(sceneX, sceneY);
+      if (container && isCoursewareBraceElement(container) && hitElementBoundingBox(
+        pointFrom(sceneX, sceneY), container, this.scene.getNonDeletedElementsMap(),
+        this.getElementHitThreshold(container),
+      )) {
+        resetCursor(this.interactiveCanvas);
+        this.startTextEditing({ sceneX, sceneY, container });
+        return;
+      }
     }
 
     resetCursor(this.interactiveCanvas);
@@ -7860,6 +8058,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerMove = (
     event: React.PointerEvent<HTMLCanvasElement>,
   ) => {
+    this.mindmap.pointerMove(event);
     this.savePointer(event.clientX, event.clientY, this.state.cursorButton);
     this.lastPointerMoveEvent = event.nativeEvent;
     const scenePointer = viewportCoordsToSceneCoords(event, this.state);
@@ -8279,6 +8478,7 @@ class App extends React.Component<AppProps, AppState> {
         // better way of showing them is found
         !(
           isLinearElement(selectedElements[0]) &&
+          !(isLineElement(selectedElements[0]) && selectedElements[0].polygon) &&
           (this.editorInterface.userAgent.isMobileDevice ||
             selectedElements[0].points.length === 2)
         )
@@ -8293,6 +8493,7 @@ class App extends React.Component<AppProps, AppState> {
             event.pointerType,
             this.scene.getNonDeletedElementsMap(),
             this.editorInterface,
+            this.rotationHandlePosition,
           );
         if (
           elementWithTransformHandleType &&
@@ -8310,19 +8511,31 @@ class App extends React.Component<AppProps, AppState> {
       !isOverScrollBar &&
       this.state.openDialog?.name !== "elementLinkSelector"
     ) {
-      const transformHandleType = getTransformHandleTypeFromCoords(
+      const braceWidthHandleType = getCoursewareBraceWidthHandleType(
+        selectedElements,
+        this.scene.getNonDeletedElementsMap(),
+        scenePointerX,
+        scenePointerY,
+        this.state.zoom,
+        event.pointerType,
+      );
+      const transformHandleType = braceWidthHandleType || getTransformHandleTypeFromCoords(
         getCommonBounds(selectedElements),
         scenePointerX,
         scenePointerY,
         this.state.zoom,
         event.pointerType,
         this.editorInterface,
+        this.rotationHandlePosition,
       );
       if (transformHandleType) {
         setCursor(
           this.interactiveCanvas,
           getCursorForResizingElement({
             transformHandleType,
+            element: braceWidthHandleType
+              ? getCoursewareBraceSelection(selectedElements)?.container
+              : undefined,
           }),
         );
         return;
@@ -8554,20 +8767,27 @@ class App extends React.Component<AppProps, AppState> {
           threshold: this.getElementHitThreshold(element),
         })
       ) {
-        hoverPointIndex = LinearElementEditor.getPointIndexUnderCursor(
-          element,
-          elementsMap,
-          this.state.zoom,
-          scenePointerX,
-          scenePointerY,
-        );
-        segmentMidPointHoveredCoords =
-          LinearElementEditor.getSegmentMidpointHitCoords(
+        if (
+          LinearElementEditor.shouldShowPointHandles(
+            element,
             linearElementEditor,
-            { x: scenePointerX, y: scenePointerY },
-            this.state,
-            this.scene.getNonDeletedElementsMap(),
+          )
+        ) {
+          hoverPointIndex = LinearElementEditor.getPointIndexUnderCursor(
+            element,
+            elementsMap,
+            this.state.zoom,
+            scenePointerX,
+            scenePointerY,
           );
+          segmentMidPointHoveredCoords =
+            LinearElementEditor.getSegmentMidpointHitCoords(
+              linearElementEditor,
+              { x: scenePointerX, y: scenePointerY },
+              this.state,
+              this.scene.getNonDeletedElementsMap(),
+            );
+        }
         const isHoveringAPointHandle = isElbowArrow(element)
           ? hoverPointIndex === 0 ||
             hoverPointIndex === element.points.length - 1
@@ -8635,6 +8855,7 @@ class App extends React.Component<AppProps, AppState> {
   private handleCanvasPointerDown = (
     event: React.PointerEvent<HTMLElement>,
   ) => {
+    if (!isHoldingSpace && !isPanning && this.mindmap.pointerDown(event)) { return; }
     if (this.state.penMode && this.state.activeTool.type === "freedraw") {
       if (event.pointerType === "touch") {
         // Treat touch contacts during pen freedraw as palm input. Adding them to
@@ -9042,6 +9263,14 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState,
       );
     } else if (this.state.activeTool.type === "custom") {
+      if (getCoursewareShapePreset(this.state.activeTool)) {
+        this.createCoursewareShapeOnPointerDown(pointerDownState);
+      } else if (getCoursewareInsertTool(this.state.activeTool)) {
+        this.createCoursewareInsertOnPointerDown(
+          pointerDownState,
+          getCoursewareInsertTool(this.state.activeTool)!,
+        );
+      }
       setCursorForShape(this.interactiveCanvas, this.state);
     } else if (this.state.activeTool.type === "richText") {
       // richText 工具的实际行为由宿主应用通过 props.onPointerDown 控制
@@ -9526,6 +9755,7 @@ class App extends React.Component<AppProps, AppState> {
         !isElbowArrow(selectedElements[0]) &&
         !(
           isLinearElement(selectedElements[0]) &&
+          !(isLineElement(selectedElements[0]) && selectedElements[0].polygon) &&
           (this.editorInterface.userAgent.isMobileDevice ||
             selectedElements[0].points.length === 2)
         ) &&
@@ -9544,6 +9774,7 @@ class App extends React.Component<AppProps, AppState> {
             event.pointerType,
             this.scene.getNonDeletedElementsMap(),
             this.editorInterface,
+            this.rotationHandlePosition,
           );
         if (elementWithTransformHandleType != null) {
           if (
@@ -9566,13 +9797,21 @@ class App extends React.Component<AppProps, AppState> {
           }
         }
       } else if (selectedElements.length > 1) {
-        pointerDownState.resize.handleType = getTransformHandleTypeFromCoords(
+        pointerDownState.resize.handleType = getCoursewareBraceWidthHandleType(
+          selectedElements,
+          elementsMap,
+          pointerDownState.origin.x,
+          pointerDownState.origin.y,
+          this.state.zoom,
+          event.pointerType,
+        ) || getTransformHandleTypeFromCoords(
           getCommonBounds(selectedElements),
           pointerDownState.origin.x,
           pointerDownState.origin.y,
           this.state.zoom,
           event.pointerType,
           this.editorInterface,
+          this.rotationHandlePosition,
         );
       }
       if (pointerDownState.resize.handleType) {
@@ -10016,25 +10255,29 @@ class App extends React.Component<AppProps, AppState> {
 
     const simulatePressure = event.pressure === 0.5;
 
+    const coursewareBrushStyle =
+      this.props.UIOptions.toolbarLayout === "left" &&
+      this.editorInterface.formFactor !== "phone" &&
+      !this.state.presentationMode
+        ? getCoursewareBrushStyle(this.state.coursewareBrush)
+        : null;
+
     const element = newFreeDrawElement({
       type: elementType,
       x: gridX,
       y: gridY,
-      ...(this.state.presentationMode &&
-      this.state.presentationAnnotationSessionId
-        ? {
-            customData: {
-              annotationSessionId: this.state.presentationAnnotationSessionId,
-            },
-          }
+      ...(coursewareBrushStyle
+        ? { customData: coursewareBrushStyle.customData }
+        : this.state.presentationMode && this.state.presentationAnnotationSessionId
+        ? { customData: { annotationSessionId: this.state.presentationAnnotationSessionId } }
         : {}),
-      strokeColor: this.state.currentItemStrokeColor,
+      strokeColor: coursewareBrushStyle?.strokeColor ?? this.state.currentItemStrokeColor,
       backgroundColor: this.state.currentItemBackgroundColor,
       fillStyle: this.state.currentItemFillStyle,
-      strokeWidth: this.state.currentItemStrokeWidth,
+      strokeWidth: coursewareBrushStyle?.strokeWidth ?? this.state.currentItemStrokeWidth,
       strokeStyle: this.state.currentItemStrokeStyle,
       roughness: this.state.currentItemRoughness,
-      opacity: this.state.currentItemOpacity,
+      opacity: coursewareBrushStyle?.opacity ?? this.state.currentItemOpacity,
       roundness: null,
       simulatePressure,
       locked: false,
@@ -10485,6 +10728,182 @@ class App extends React.Component<AppProps, AppState> {
         }
       : null;
   }
+
+  private createCoursewareShapeOnPointerDown = (
+    pointerDownState: PointerDownState,
+  ): void => {
+    const { x, y } = pointerDownState.originInGrid;
+    const frame = this.getTopLayerFrameAtSceneCoords({ x, y });
+    const preset = getCoursewareShapePreset(this.state.activeTool)!;
+    const contours = getCoursewareShapeContours(preset);
+    const isBrace = preset.kind === "brace" || preset.kind === "brace-right";
+    const groupIds = contours.length > 1 || isBrace ? [nanoid()] : [];
+    const textContainer = isBrace ? newElement({
+      type: "rectangle",
+      x,
+      y,
+      width: 0,
+      height: 0,
+      strokeColor: "transparent",
+      backgroundColor: "transparent",
+      strokeWidth: 0,
+      roughness: 0,
+      roundness: null,
+      frameId: frame?.id ?? null,
+      groupIds,
+      customData: {
+        coursewareObjectType: "brace",
+        coursewareBraceSide: preset.kind === "brace" ? "right" : "left",
+      },
+    }) : null;
+    const elements = contours.map((contour) =>
+      newLinearElement({
+        type: "line",
+        x,
+        y,
+        points: [pointFrom<LocalPoint>(0, 0), pointFrom<LocalPoint>(0, 0)],
+        polygon: contour.closed,
+        strokeColor: this.state.currentItemStrokeColor,
+        backgroundColor: contour.closed
+          ? this.state.currentItemBackgroundColor
+          : "transparent",
+        fillStyle: this.state.currentItemFillStyle,
+        strokeWidth: this.state.currentItemStrokeWidth,
+        strokeStyle: this.state.currentItemStrokeStyle,
+        roughness: this.state.currentItemRoughness,
+        opacity: this.state.currentItemOpacity,
+        roundness: null,
+        frameId: frame?.id ?? null,
+        groupIds,
+        ...(textContainer ? {
+          customData: { coursewareObjectType: "brace-curve" },
+        } : {}),
+      }),
+    );
+    const element = elements[0];
+    this.coursewareShapeElements = textContainer ? [...elements, textContainer] : elements;
+    this.scene.insertElements(this.coursewareShapeElements);
+    this.setState({
+      newElement: element,
+      multiElement: null,
+      selectedLinearElement: null,
+    });
+  };
+
+  private createCoursewareInsertOnPointerDown = (
+    pointerDownState: PointerDownState,
+    tool:
+      | typeof COURSEWARE_EMOJI_CUSTOM_TYPE
+      | typeof COURSEWARE_STICKY_CUSTOM_TYPE,
+  ): void => {
+    const { x, y } = pointerDownState.originInGrid;
+    const frame = this.getTopLayerFrameAtSceneCoords({ x, y });
+    const frameId = frame?.id ?? null;
+
+    if (tool === COURSEWARE_EMOJI_CUSTOM_TYPE) {
+      const element = newTextElement({
+        x: x + 28,
+        y: y + 28,
+        text: this.state.coursewareEmoji,
+        originalText: this.state.coursewareEmoji,
+        fontSize: 48,
+        fontFamily: DEFAULT_FONT_FAMILY,
+        strokeColor: this.state.currentItemStrokeColor,
+        backgroundColor: "transparent",
+        fillStyle: "solid",
+        strokeWidth: 0,
+        strokeStyle: "solid",
+        roughness: 0,
+        opacity: 100,
+        textAlign: "center",
+        verticalAlign: VERTICAL_ALIGN.MIDDLE,
+        autoResize: false,
+        width: 56,
+        frameId,
+        customData: {
+          coursewareObjectType: "emoji",
+          coursewareEmoji: this.state.coursewareEmoji,
+        },
+      });
+      this.scene.insertElement(element);
+      this.store.scheduleCapture();
+      this.setState((prevState) => ({
+        newElement: null,
+        selectedElementIds: makeNextSelectedElementIds(
+          { [element.id]: true },
+          prevState,
+        ),
+        selectedGroupIds: {},
+      }));
+      this.scene.triggerUpdate();
+      return;
+    }
+
+    const stickyColor = this.state.coursewareStickyColor;
+    const style = COURSEWARE_STICKY_STYLE;
+    const sticky = newElement({
+      type: "rectangle",
+      x,
+      y,
+      width: style.width,
+      height: style.height,
+      strokeColor: "transparent",
+      backgroundColor: stickyColor,
+      fillStyle: "solid",
+      strokeWidth: 0,
+      strokeStyle: "solid",
+      roughness: 0,
+      opacity: 100,
+      roundness: { type: ROUNDNESS.ADAPTIVE_RADIUS, value: style.cornerRadius },
+      frameId,
+      customData: {
+        coursewareObjectType: "sticky",
+        coursewareStickyColor: stickyColor,
+        coursewareStickyPadding: style.padding,
+      },
+    });
+    const text = newTextElement({
+      x: x + style.padding,
+      y: y + style.padding,
+      text: "",
+      originalText: "",
+      width: style.width - style.padding * 2,
+      fontSize: style.fontSize,
+      fontFamily: FONT_FAMILY.Helvetica,
+      strokeColor: "#1f2329",
+      backgroundColor: "transparent",
+      fillStyle: "solid",
+      strokeWidth: 0,
+      strokeStyle: "solid",
+      roughness: 0,
+      opacity: 100,
+      textAlign: "left",
+      verticalAlign: VERTICAL_ALIGN.TOP,
+      lineHeight: style.lineHeight as ExcalidrawTextElement["lineHeight"],
+      autoResize: false,
+      containerId: sticky.id,
+      frameId,
+      customData: {
+        coursewareObjectType: "sticky-text",
+        coursewareStickyId: sticky.id,
+        coursewareStickyColor: stickyColor,
+      },
+    });
+    const stickyWithText = newElementWith(sticky, {
+      boundElements: [{ type: "text", id: text.id }],
+    });
+    this.scene.insertElements([stickyWithText, text]);
+    this.store.scheduleCapture();
+    this.setState((prevState) => ({
+      newElement: null,
+      selectedElementIds: makeNextSelectedElementIds(
+        { [stickyWithText.id]: true, [text.id]: true },
+        prevState,
+      ),
+      selectedGroupIds: {},
+    }));
+    this.scene.triggerUpdate();
+  };
 
   private createGenericElementOnPointerDown = (
     elementType: ExcalidrawGenericElement["type"] | "embeddable",
@@ -11361,6 +11780,15 @@ class App extends React.Component<AppProps, AppState> {
               newElement,
             });
           }
+        } else if (
+          isLinearElement(newElement) &&
+          !newElement.isDeleted &&
+          getCoursewareShapePreset(this.state.activeTool)
+        ) {
+          pointerDownState.drag.hasOccurred = true;
+          pointerDownState.lastCoords.x = pointerCoords.x;
+          pointerDownState.lastCoords.y = pointerCoords.y;
+          this.maybeDragNewGenericElement(pointerDownState, event, false);
         } else if (isLinearElement(newElement) && !newElement.isDeleted) {
           pointerDownState.drag.hasOccurred = true;
           const points = newElement.points;
@@ -11587,6 +12015,15 @@ class App extends React.Component<AppProps, AppState> {
         isCropping,
       } = this.state;
 
+      if (
+        activeTool.type === "selection" &&
+        pointerDownState.boxSelection.hasOccurred &&
+        this.state.selectionElement &&
+        childEvent.type !== "pointercancel"
+      ) {
+        this.mindmap.completeMarquee(this.state.selectionElement, childEvent.shiftKey);
+      }
+
       this.setState((prevState) => ({
         isResizing: false,
         isRotating: false,
@@ -11781,6 +12218,12 @@ class App extends React.Component<AppProps, AppState> {
         pointerDownState.eventListeners.onKeyUp!,
       );
 
+      const coursewareShapeElements =
+        this.coursewareShapeElements[0]?.id === newElement?.id
+          ? this.coursewareShapeElements
+          : [];
+      this.coursewareShapeElements = [];
+
       if (newElement?.type === "freedraw") {
         const finalizedStroke = this.finalizeActiveFreedrawStroke(
           newElement,
@@ -11809,7 +12252,22 @@ class App extends React.Component<AppProps, AppState> {
         childEvent,
       );
 
-      if (isLinearElement(newElement)) {
+      if (getCoursewareInsertTool(activeTool)) {
+        this.resetCursor();
+        this.setState((prevState) => ({
+          newElement: null,
+          activeTool: updateActiveTool(prevState, {
+            type: prevState.preferredSelectionTool.type,
+          }),
+        }));
+        this.scene.triggerUpdate();
+        return;
+      }
+
+      if (
+        isLinearElement(newElement) &&
+        !getCoursewareShapePreset(activeTool)
+      ) {
         if (
           newElement!.points.length > 1 &&
           newElement.points[1][0] !== 0 &&
@@ -11933,14 +12391,19 @@ class App extends React.Component<AppProps, AppState> {
       if (
         activeTool.type !== "selection" &&
         newElement &&
-        isInvisiblySmallElement(newElement)
+        (isInvisiblySmallElement(newElement) ||
+          (!!getCoursewareShapePreset(activeTool) &&
+            (!newElement.width || !newElement.height)))
       ) {
         // remove invisible element which was added in onPointerDown
         // update the store snapshot, so that invisible elements are not captured by the store
         this.updateScene({
           elements: this.scene
             .getElementsIncludingDeleted()
-            .filter((el) => el.id !== newElement.id),
+            .filter(
+              (el) => el.id !== newElement.id &&
+                !coursewareShapeElements.some((part) => part.id === el.id),
+            ),
           appState: {
             newElement: null,
           },
@@ -11948,6 +12411,32 @@ class App extends React.Component<AppProps, AppState> {
         });
 
         return;
+      }
+
+      const braceContainer = coursewareShapeElements.find(isCoursewareBraceElement);
+      if (braceContainer) {
+        const rect = getCoursewareBraceTextRect(braceContainer);
+        const text = newTextElement({
+          x: braceContainer.x + rect.x + rect.width / 2,
+          y: braceContainer.y + rect.y + rect.height / 2,
+          text: "",
+          originalText: "",
+          width: rect.width,
+          autoResize: false,
+          fontSize: 14,
+          fontFamily: FONT_FAMILY.Helvetica,
+          lineHeight: 1.35 as ExcalidrawTextElement["lineHeight"],
+          textAlign: "center",
+          verticalAlign: VERTICAL_ALIGN.MIDDLE,
+          strokeColor: this.state.currentItemStrokeColor,
+          containerId: braceContainer.id,
+          frameId: braceContainer.frameId,
+          groupIds: braceContainer.groupIds,
+        });
+        this.scene.mutateElement(braceContainer, {
+          boundElements: [{ type: "text", id: text.id }],
+        });
+        this.scene.insertElement(text);
       }
 
       if (isFrameLikeElement(newElement)) {
@@ -12457,13 +12946,27 @@ class App extends React.Component<AppProps, AppState> {
 
       if (!activeTool.locked && activeTool.type !== "freedraw" && newElement) {
         this.setState((prevState) => ({
-          selectedElementIds: makeNextSelectedElementIds(
-            {
-              ...prevState.selectedElementIds,
-              [newElement.id]: true,
-            },
-            prevState,
-          ),
+          ...(coursewareShapeElements.length > 1
+            ? selectGroupsForSelectedElements(
+                {
+                  editingGroupId: prevState.editingGroupId,
+                  selectedElementIds: makeNextSelectedElementIds(
+                    { ...prevState.selectedElementIds, [newElement.id]: true },
+                    prevState,
+                  ),
+                },
+                this.scene.getNonDeletedElements(),
+                prevState,
+                this,
+              )
+            : {
+                editingGroupId: prevState.editingGroupId,
+                selectedGroupIds: prevState.selectedGroupIds,
+                selectedElementIds: makeNextSelectedElementIds(
+                  { ...prevState.selectedElementIds, [newElement.id]: true },
+                  prevState,
+                ),
+              }),
           showHyperlinkPopup:
             isEmbeddableElement(newElement) && !newElement.link
               ? "editor"
@@ -12884,6 +13387,19 @@ class App extends React.Component<AppProps, AppState> {
       this.scene.getNonDeletedInitializedImageElements(),
     files: BinaryFiles = this.files,
   ) => {
+    const mindmaps = this.scene.getNonDeletedElements().filter(isCoursewareMindmapElement);
+    const mindmapFileIds = [...new Set(mindmaps.flatMap(getReferencedFileIds))]
+      .filter((id) => !this.imageCache.has(id as FileId)) as FileId[];
+    if (mindmapFileIds.length) {
+      const { updatedFiles } = await _updateImageCache({ imageCache: this.imageCache, fileIds: mindmapFileIds, files });
+      if (updatedFiles.size) {
+        mindmaps.forEach((element) => {
+          if (getReferencedFileIds(element).some((id) => updatedFiles.has(id as FileId))) { ShapeCache.delete(element); }
+        });
+        this.scene.triggerUpdate();
+      }
+    }
+
     const uncachedImageElements = imageElements.filter(
       (element) => !element.isDeleted && !this.imageCache.has(element.fileId),
     );
@@ -13355,6 +13871,46 @@ class App extends React.Component<AppProps, AppState> {
       event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
     );
 
+    const coursewareShape = getCoursewareShapePreset(this.state.activeTool);
+    if (coursewareShape && isLinearElement(newElement)) {
+      const modifiers = {
+        fromCenter: shouldResizeFromCenter(event),
+        maintainAspectRatio: shouldMaintainAspectRatio(event),
+      };
+      const bounds = getCoursewareShapeBounds(
+        coursewareShape,
+        pointerDownState.originInGrid,
+        { x: gridX, y: gridY },
+        modifiers,
+      );
+      const geometries = getCoursewareShapeGeometry(
+        coursewareShape,
+        pointerDownState.originInGrid,
+        { x: gridX, y: gridY },
+        modifiers,
+      );
+      this.coursewareShapeElements.forEach((element, index) => {
+        if (isCoursewareBraceElement(element)) {
+          this.scene.mutateElement(element, {
+            ...bounds,
+            customData: {
+              ...element.customData,
+              coursewareBraceWidthRatio: bounds.width
+                ? Math.min(18, bounds.width * 0.3) / bounds.width
+                : 0,
+            },
+          }, { informMutation, isDragging: false });
+        } else if (isLinearElement(element)) {
+          this.scene.mutateElement(element, geometries[index], {
+            informMutation,
+            isDragging: false,
+          });
+        }
+      });
+      this.setState({ newElement });
+      return;
+    }
+
     const image =
       isInitializedImageElement(newElement) &&
       this.imageCache.get(newElement.fileId)?.image;
@@ -13521,6 +14077,12 @@ class App extends React.Component<AppProps, AppState> {
     return false;
   };
 
+  private get rotationHandlePosition(): RotationHandlePosition {
+    return this.props.UIOptions.toolbarLayout === "left"
+      ? "bottom-left"
+      : "bottom";
+  }
+
   private maybeHandleResize = (
     pointerDownState: PointerDownState,
     event: MouseEvent | KeyboardEvent,
@@ -13558,6 +14120,14 @@ class App extends React.Component<AppProps, AppState> {
       pointerCoords.y - pointerDownState.resize.offset.y,
       event[KEYS.CTRL_OR_CMD] ? null : this.getEffectiveGridSize(),
     );
+    if (
+      transformHandleType === "rotation" &&
+      this.rotationHandlePosition === "bottom-left"
+    ) {
+      resizeX = pointerCoords.x;
+      resizeY = pointerCoords.y;
+      this.setState({ snapLines: [] });
+    }
 
     const frameElementsOffsetsMap = new Map<
       string,
@@ -13583,7 +14153,10 @@ class App extends React.Component<AppProps, AppState> {
 
     // check needed for avoiding flickering when a key gets pressed
     // during dragging
-    if (!this.state.selectedElementsAreBeingDragged) {
+    if (
+      !this.state.selectedElementsAreBeingDragged &&
+      !(transformHandleType === "rotation" && this.rotationHandlePosition === "bottom-left")
+    ) {
       const [gridX, gridY] = getGridPoint(
         pointerCoords.x,
         pointerCoords.y,
@@ -13631,6 +14204,9 @@ class App extends React.Component<AppProps, AppState> {
         resizeY,
         pointerDownState.resize.center.x,
         pointerDownState.resize.center.y,
+        this.rotationHandlePosition === "bottom-left"
+          ? pointerDownState.origin
+          : undefined,
       )
     ) {
       const elementsToHighlight = new Set<ExcalidrawElement>();

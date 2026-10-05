@@ -46,6 +46,7 @@ import {
   isIframeLikeElement,
   isImageElement,
   isLinearElement,
+  isPolygonElement,
   isTextElement,
 } from "./typeChecks";
 import {
@@ -59,6 +60,8 @@ import { getBoundTextElement } from "./textElement";
 import { LinearElementEditor } from "./linearElementEditor";
 
 import { distanceToElement } from "./distance";
+import { isCoursewareMindmapElement } from "./coursewareMindmapType";
+import { hitCoursewareMindmapNode } from "./coursewareMindmapTransform";
 
 import type {
   ElementsMap,
@@ -76,6 +79,7 @@ import type {
 } from "./types";
 
 export const shouldTestInside = (element: ExcalidrawElement) => {
+  if (isCoursewareMindmapElement(element)) return true;
   if (element.type === "arrow") {
     return false;
   }
@@ -142,6 +146,10 @@ export const hitElementItself = ({
   // rotated bounding box or not hitting the frame name (saves 99%)
   if (!hitBounds && !hitFrameName) {
     return false;
+  }
+
+  if (isCoursewareMindmapElement(element)) {
+    return !!hitCoursewareMindmapNode(element, { x: point[0], y: point[1] }, threshold);
   }
 
   // Do the precise (and relatively costly) hit test
@@ -239,6 +247,19 @@ const bindingBorderTest = (
         return false;
       }
     }
+  }
+
+  if (isCoursewareMindmapElement(element)) {
+    return !!hitCoursewareMindmapNode(element, { x, y }, tolerance);
+  }
+
+  if (isPolygonElement(element)) {
+    // Concave shapes cannot use the center-to-pointer intersection shortcut:
+    // their center may be outside, or the ray may leave and re-enter the shape.
+    return (
+      isPointInElement(p, element, elementsMap) ||
+      distanceToElement(element, elementsMap, p) <= tolerance
+    );
   }
 
   // Do the intersection test against the element since it's close enough
@@ -646,6 +667,9 @@ export const isPointInElement = (
   element: ExcalidrawElement,
   elementsMap: ElementsMap,
 ) => {
+  if (isCoursewareMindmapElement(element)) {
+    return !!hitCoursewareMindmapNode(element, { x: point[0], y: point[1] });
+  }
   if (
     (isLinearElement(element) || isFreeDrawElement(element)) &&
     !isPathALoop(element.points)

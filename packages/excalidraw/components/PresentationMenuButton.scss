@@ -44,25 +44,4 @@
     }
   }
 
-  .Courseware-toolbar__presentation {
-    padding: 0;
-    border: 0;
-    box-shadow: none;
-    background: transparent;
-    color: var(--icon-fill-color);
-
-    &:hover:not(:disabled) {
-      background: var(--button-hover-bg);
-    }
-
-    &:disabled {
-      cursor: default;
-      --icon-fill-color: var(--color-disabled);
-      color: var(--color-disabled);
-
-      .ToolIcon__icon {
-        color: var(--color-disabled);
-      }
-    }
-  }
 }
