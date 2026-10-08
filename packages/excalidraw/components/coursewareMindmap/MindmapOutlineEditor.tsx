@@ -9,6 +9,7 @@ import type {
   WhiteboardMindmapNode,
 } from "@excalidraw/mindmap";
 import type { CoursewareMindmapController } from "../../coursewareMindmap/controller";
+import { patchMindmapNode } from "../../coursewareMindmap/operations";
 /** Outline input shares the same draft/rebase rules while keeping focus in the outline. */
 export const MindmapOutlineEditor = ({
   controller,
@@ -67,7 +68,16 @@ export const MindmapOutlineEditor = ({
   const preview = (input: HTMLTextAreaElement) => {
     const current = session.current;
     if (!current) return;
-    controller.host.showPreview({ [mapId]: current.preview() });
+    const draft = current.preview();
+    controller.host.showPreview({
+      [mapId]:
+        current.value !== node.label
+          ? patchMindmapNode(draft, node.id, {
+              widthMode: "auto",
+              textMaxWidth: undefined,
+            })
+          : draft,
+    });
     input.style.height = "auto";
     input.style.height = `${Math.max(28, input.scrollHeight)}px`;
   };
@@ -95,9 +105,19 @@ export const MindmapOutlineEditor = ({
         if (!current.value.trim()) current.update("主题", []);
         try {
           const result = current.commit(latest);
-          if (result?.changed)
-            controller.commitBatch(new Map([[mapId, result.object]]));
-          else if (!result) controller.app.setToast({message:"主题已发生变化，本次编辑已取消"});
+          if (result?.changed) {
+            const next =
+              current.value !== latest.nodes[node.id].label
+                ? patchMindmapNode(result.object, node.id, {
+                    widthMode: "auto",
+                    textMaxWidth: undefined,
+                  })
+                : result.object;
+            controller.commitBatch(new Map([[mapId, next]]));
+          } else if (!result)
+            controller.app.setToast({
+              message: "主题已发生变化，本次编辑已取消",
+            });
         } catch {
           controller.app.setToast({
             message: "主题已发生变化，本次编辑已取消",

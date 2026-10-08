@@ -1,7 +1,6 @@
 import { getCoursewareMindmapRenderData } from "@excalidraw/element/coursewareMindmapRenderData";
 import { isTransparent } from "@excalidraw/common";
 import { MindmapImageControls } from "./MindmapImageControls";
-import { MindmapWidthControls } from "./MindmapWidthControls";
 import { MindmapWorkspacePanel } from "./MindmapWorkspacePanel";
 import { MindmapInputCapture } from "./MindmapInputCapture";
 import {
@@ -258,9 +257,6 @@ export const CoursewareMindmapOverlay = ({ app }: { app: App }) => {
       )}
       {node && nodeGeometry && !state.editing && (
         <MindmapImageControls controller={controller} style={style} />
-      )}
-      {node && nodeGeometry && !state.editing && (
-        <MindmapWidthControls controller={controller} style={style} />
       )}
       {state.editing &&
         state.workspacePanel !== "outline" &&

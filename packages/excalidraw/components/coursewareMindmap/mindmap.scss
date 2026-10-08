@@ -183,33 +183,6 @@
     box-sizing: border-box;
     z-index: 3;
   }
-  .Courseware-mindmap-width-controls {
-    position: absolute;
-    pointer-events: none;
-    z-index: 4;
-    .Tooltip {
-      position: static;
-    }
-    button {
-      position: absolute;
-      top: 50%;
-      width: 8px;
-      height: 18px;
-      margin-top: -9px;
-      padding: 0;
-      border: 1px solid var(--mindmap-accent);
-      border-radius: 3px;
-      background: var(--mindmap-bg);
-      pointer-events: auto;
-      cursor: ew-resize;
-      &.is-left {
-        left: -4px;
-      }
-      &.is-right {
-        right: -4px;
-      }
-    }
-  }
   .Courseware-mindmap-workspace {
     position: absolute;
     right: 12px;
@@ -491,17 +464,24 @@
       padding: 0;
     }
   }
-  .Courseware-mindmap-text-editor {
+  textarea.Courseware-mindmap-text-editor {
     position: absolute;
     z-index: 5;
     padding: 8px;
-    border: 2px solid var(--color-primary);
-    border-radius: 5px;
+    border: 0;
+    border-radius: 0;
     box-sizing: border-box;
     outline: none;
     resize: none;
     font-family: sans-serif;
     line-height: 1.45;
+    &,
+    &:focus,
+    &:not(:focus):hover {
+      border: 0;
+      outline: none;
+      box-shadow: none;
+    }
   }
   // Whiteboard node-toolbar metrics, scoped to this canvas adapter.
   .Courseware-mindmap-toolbar {

@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import type { CoursewareMindmapController } from "../../coursewareMindmap/controller";
-import { MindmapNodeWidthSetting } from "./MindmapNodeWidthSetting";
 export const MindmapNodeContentSettings = ({
   controller,
 }: {
@@ -67,22 +66,6 @@ export const MindmapNodeContentSettings = ({
           }
         />
       </label>
-      <MindmapNodeWidthSetting controller={controller} />
-      <button
-        disabled={!controller.editable}
-        onClick={() =>
-          controller.command({
-            type: "patch",
-            nodeIds: [node.id],
-            patch: {
-              widthMode: "auto",
-              textMaxWidth: 320 * (model.layoutScale ?? 1),
-            },
-          })
-        }
-      >
-        恢复自动宽度
-      </button>
       {node.id !== model.rootId && (
         <fieldset disabled={!controller.editable}>
           <legend>手动调整分支位置</legend>

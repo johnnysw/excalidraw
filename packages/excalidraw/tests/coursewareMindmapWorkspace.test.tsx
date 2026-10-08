@@ -2,7 +2,10 @@ import React from "react";
 import {
   createCoursewareMindmapElement,
   getCoursewareMindmap,
+  getCoursewareMindmapGeometry,
+  coursewareMindmapLocalToScene,
 } from "@excalidraw/element/coursewareMindmap";
+import { sceneCoordsToViewportCoords } from "@excalidraw/common";
 import {
   createMindmapTemplateObject,
   MindmapExchangeCodec,
@@ -10,16 +13,22 @@ import {
 } from "@excalidraw/mindmap";
 import { Excalidraw } from "../index";
 import { API } from "./helpers/api";
-import { Keyboard } from "./helpers/ui";
+import { Keyboard, Pointer } from "./helpers/ui";
 import { act, fireEvent, render, screen, unmountComponent } from "./test-utils";
 const { h } = window;
-const setup = async (historicalWidth = false) => {
+const setup = async (historicalWidth: boolean | "fixed" = false) => {
   const initialMindmap = createMindmapTemplateObject(0, 0);
-  if (historicalWidth)
+  if (historicalWidth === true)
     for (const node of Object.values(initialMindmap.nodes)) {
       delete node.widthMode;
       delete node.textMaxWidth;
     }
+  if (historicalWidth === "fixed") {
+    const node = initialMindmap.nodes[initialMindmap.order[1]];
+    node.widthMode = "fixed";
+    node.textMaxWidth = 180.5;
+    node.width = 224;
+  }
   const tree = createCoursewareMindmapElement({
     mindmap: initialMindmap,
     x: 200,
@@ -119,67 +128,197 @@ describe("courseware mindmap workspace and real input", () => {
     expect(API.getUndoStack()).toHaveLength(0);
     expect(h.app.mindmap.getSnapshot().preview).toBeNull();
   });
-  it("cancels a width gesture and commits its completed replacement only once", async () => {
+  it("keeps node width content-driven without manual width controls", async () => {
     const { current } = await setup();
-    const id = h.app.mindmap.node!.id,
-      before = JSON.stringify(current());
-    const handle = screen.getByRole("button", { name: "调整文字右侧宽度" });
-    fireEvent.pointerDown(handle, {
-      pointerId: 60,
-      clientX: 450,
-      clientY: 240,
-    });
-    fireEvent.pointerMove(window, {
-      pointerId: 60,
-      clientX: 550,
-      clientY: 240,
-    });
-    expect(h.app.mindmap.getSnapshot().preview).toBeTruthy();
+    const id = h.app.mindmap.node!.id;
+    expect(screen.queryByRole("button", { name: /调整文字.*宽度/ })).toBeNull();
+    const originalWidth = current().nodes[id].width!;
+    act(() => h.app.mindmap.startEditing());
+    const editor = screen.getByRole("textbox", { name: "编辑脑图主题" });
+    expect(editor).toHaveProperty("selectionStart", 0);
+    expect(editor).toHaveProperty(
+      "selectionEnd",
+      current().nodes[id].label.length,
+    );
+    fireEvent.change(editor, { target: { value: "内容自动变宽".repeat(40) } });
+    fireEvent.keyDown(editor, { key: "Enter" });
+    expect(current().nodes[id].widthMode).toBe("auto");
+    expect(current().nodes[id].width).toBeGreaterThan(originalWidth);
+    expect(API.getUndoStack()).toHaveLength(1);
+  });
+  it("preserves historical node dimensions while opening content settings without width controls", async () => {
+    const { current } = await setup(true);
+    const before = JSON.stringify(current());
+    act(() => h.app.mindmap.notify({ workspacePanel: "content" }));
+    expect(
+      screen.queryByRole("spinbutton", { name: "节点文字宽度" }),
+    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "恢复自动宽度" })).toBeNull();
     expect(JSON.stringify(current())).toBe(before);
     expect(API.getUndoStack()).toHaveLength(0);
-    fireEvent.pointerCancel(window, { pointerId: 60 });
-    expect(h.app.mindmap.getSnapshot().preview).toBeNull();
-    expect(JSON.stringify(current())).toBe(before);
-    fireEvent.pointerDown(handle, {
-      pointerId: 61,
-      clientX: 450,
-      clientY: 240,
-    });
-    fireEvent.pointerMove(window, {
-      pointerId: 61,
-      clientX: 490,
-      clientY: 240,
-    });
-    fireEvent.pointerUp(window, { pointerId: 61 });
+  });
+  it("switches a historical fixed-width topic to automatic sizing when edited from the outline", async () => {
+    const { current } = await setup("fixed");
+    const id = h.app.mindmap.node!.id;
+    const before = JSON.stringify(current());
+    act(() => h.app.mindmap.notify({ workspacePanel: "outline" }));
+    const input = screen.getAllByRole("textbox", {
+      name: "大纲主题 分支主题",
+    })[0];
+    act(() => input.focus());
+    fireEvent.change(input, { target: { value: "大纲中自动尺寸" } });
     expect(current().nodes[id].widthMode).toBe("fixed");
+    fireEvent.blur(input);
+    expect(current().nodes[id].widthMode).toBe("auto");
+    expect(current().nodes[id].textMaxWidth).toBeUndefined();
     expect(API.getUndoStack()).toHaveLength(1);
     Keyboard.undo();
     expect(JSON.stringify(current())).toBe(before);
   });
-  it("does not convert an untouched historical width input into a fixed-width layout", async () => {
-    const { current } = await setup(true);
-    act(() => h.app.mindmap.notify({ workspacePanel: "content" }));
-    const width = screen.getByRole("spinbutton", { name: "节点文字宽度" });
-    const before = JSON.stringify(current());
-    act(() => width.focus());
-    act(() => width.blur());
-    expect(JSON.stringify(current())).toBe(before);
-    expect(API.getUndoStack()).toHaveLength(0);
-    act(() => width.focus());
-    fireEvent.change(width, { target: { value: "320" } });
-    act(() => width.blur());
-    expect(JSON.stringify(current())).toBe(before);
-    expect(API.getUndoStack()).toHaveLength(0);
-    act(() => width.focus());
-    fireEvent.change(width, { target: { value: "180.5" } });
-    act(() => width.blur());
-    expect(h.app.mindmap.node).toMatchObject({
-      widthMode: "fixed",
-      textMaxWidth: 180.5,
+  it("commits a text draft before a blank canvas click clears its selection", async () => {
+    const { current } = await setup();
+    const id = h.app.mindmap.node!.id;
+    const before = current();
+    act(() => h.app.mindmap.startEditing());
+    const editor = screen.getByRole("textbox", { name: "编辑脑图主题" });
+    fireEvent.change(editor, { target: { value: "点击空白保存主题" } });
+    expect(current().nodes[id].label).toBe(before.nodes[id].label);
+    const mouse = new Pointer("mouse");
+    mouse.downAt(10, 10);
+    mouse.up();
+    expect(current().nodes[id].label).toBe("点击空白保存主题");
+    expect(h.app.mindmap.getSnapshot().editing).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "编辑脑图主题" })).toBeNull();
+    expect(
+      API.getUndoStack().filter((entry) => !entry.elements.isEmpty()),
+    ).toHaveLength(1);
+    Keyboard.undo();
+    expect(current().nodes[id].label).toBe(before.nodes[id].label);
+  });
+  it("commits before selecting another node and saves a newly created node on canvas dismissal", async () => {
+    const { current } = await setup();
+    const firstId = h.app.mindmap.node!.id;
+    const targetId = current().order[2];
+    act(() => h.app.mindmap.startEditing());
+    fireEvent.change(screen.getByRole("textbox", { name: "编辑脑图主题" }), {
+      target: { value: "点击其他主题保存" },
     });
-    expect(API.getUndoStack()).toHaveLength(1);
+    const draft = h.app.mindmap.getSnapshot().preview!;
+    const bounds = getCoursewareMindmapGeometry(draft)!.nodes[targetId];
+    const point = coursewareMindmapLocalToScene(draft, {
+      x: bounds.x + bounds.width / 2,
+      y: bounds.y + bounds.height / 2,
+    });
+    const viewport = sceneCoordsToViewportCoords(
+      { sceneX: point.x, sceneY: point.y },
+      h.state,
+    );
+    const mouse = new Pointer("mouse");
+    mouse.downAt(viewport.x, viewport.y);
+    mouse.up();
+    expect(current().nodes[firstId].label).toBe("点击其他主题保存");
+    expect(h.app.mindmap.node!.id).toBe(targetId);
+    act(() => h.app.mindmap.add("child"));
+    const addedId = h.app.mindmap.node!.id;
+    fireEvent.change(screen.getByRole("textbox", { name: "编辑脑图主题" }), {
+      target: { value: "新增后点击空白保存" },
+    });
+    expect(current().nodes[addedId]).toBeUndefined();
+    mouse.downAt(10, 10);
+    mouse.up();
+    expect(current().nodes[addedId]).toMatchObject({
+      label: "新增后点击空白保存",
+      parentId: targetId,
+    });
+    expect(
+      API.getUndoStack().filter((entry) => !entry.elements.isEmpty()),
+    ).toHaveLength(2);
+    Keyboard.undo();
+    expect(current().nodes[addedId]).toBeUndefined();
+    expect(current().nodes[firstId].label).toBe("点击其他主题保存");
+  });
+  it("retains historical fixed sizing until the topic text actually changes", async () => {
+    const { current } = await setup("fixed");
+    const id = h.app.mindmap.node!.id;
+    const before = JSON.stringify(current());
+    act(() => h.app.mindmap.notify({ workspacePanel: "content" }));
+    expect(JSON.stringify(current())).toBe(before);
+    act(() => h.app.mindmap.startEditing());
+    const editor = screen.getByRole("textbox", { name: "编辑脑图主题" });
+    fireEvent.blur(editor);
+    expect(JSON.stringify(current())).toBe(before);
+    expect(API.getUndoStack()).toHaveLength(0);
+    act(() => h.app.mindmap.startEditing());
+    fireEvent.change(screen.getByRole("textbox", { name: "编辑脑图主题" }), {
+      target: { value: "短主题" },
+    });
+    expect(
+      getCoursewareMindmap(h.app.mindmap.getSnapshot().preview!)!.nodes[id],
+    ).toMatchObject({ widthMode: "auto" });
+    const mouse = new Pointer("mouse");
+    mouse.downAt(10, 10);
+    mouse.up();
+    expect(current().nodes[id].widthMode).toBe("auto");
+    expect(current().nodes[id].textMaxWidth).toBeUndefined();
+    expect(current().nodes[id].width).toBeLessThan(224);
+    expect(
+      API.getUndoStack().filter((entry) => !entry.elements.isEmpty()),
+    ).toHaveLength(1);
     Keyboard.undo();
     expect(JSON.stringify(current())).toBe(before);
+  });
+  it("commits rich text on outside pointerdown without saving when a format control is clicked", async () => {
+    const { current } = await setup("fixed");
+    const id = h.app.mindmap.node!.id;
+    act(() => h.app.mindmap.startEditing());
+    const editor = screen.getByRole("textbox", {
+      name: "编辑脑图主题",
+    }) as HTMLTextAreaElement;
+    editor.setSelectionRange(0, 2);
+    fireEvent.select(editor);
+    const bold = screen.getByRole("button", { name: "选区粗体" });
+    fireEvent.pointerDown(bold);
+    fireEvent.click(bold);
+    expect(h.app.mindmap.getSnapshot().editing).toBe("label");
+    expect(API.getUndoStack()).toHaveLength(0);
+    const mouse = new Pointer("mouse");
+    mouse.downAt(10, 10);
+    mouse.up();
+    expect(current().nodes[id].labelStyleRanges).toContainEqual(
+      expect.objectContaining({ start: 0, end: 2, bold: true }),
+    );
+    expect(current().nodes[id].widthMode).toBe("fixed");
+    expect(current().nodes[id].textMaxWidth).toBe(180.5);
+    expect(
+      API.getUndoStack().filter((entry) => !entry.elements.isEmpty()),
+    ).toHaveLength(1);
+  });
+  it("waits for composition to finish before committing a dismissed text draft", async () => {
+    const { current } = await setup();
+    const id = h.app.mindmap.node!.id;
+    const before = current().nodes[id].label;
+    act(() => h.app.mindmap.startEditing());
+    const editor = screen.getByRole("textbox", { name: "编辑脑图主题" });
+    fireEvent.compositionStart(editor);
+    fireEvent.change(editor, { target: { value: "中文组词" } });
+    const mouse = new Pointer("mouse");
+    mouse.downAt(10, 10);
+    expect(current().nodes[id].label).toBe(before);
+    expect(h.app.mindmap.getSnapshot().editing).toBe("label");
+    expect(API.getUndoStack()).toHaveLength(0);
+    fireEvent.compositionEnd(editor, {
+      data: "中文组词完成",
+      target: { value: "中文组词完成" },
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    mouse.up();
+    expect(current().nodes[id].label).toBe("中文组词完成");
+    expect(h.app.mindmap.getSnapshot().editing).toBeNull();
+    expect(
+      API.getUndoStack().filter((entry) => !entry.elements.isEmpty()),
+    ).toHaveLength(1);
   });
   it("merges only edited professional fields and rejects removed or conflicting targets", async () => {
     const { current } = await setup();

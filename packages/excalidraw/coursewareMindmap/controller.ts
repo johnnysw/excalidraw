@@ -151,6 +151,7 @@ export class CoursewareMindmapController {
     version: number;
   } | null = null;
   private textSession: MindmapEditSession | null = null;
+  private textComposing = false;
   private originalText: string | undefined;
   private rememberedPointer: {
     clientX: number;
@@ -159,6 +160,9 @@ export class CoursewareMindmapController {
   } | null = null;
   get editSession() {
     return this.textSession;
+  }
+  setTextComposing(value: boolean) {
+    this.textComposing = value;
   }
   clipboard: MindmapClipboard;
   host: CoursewareMindmapHostAdapter;
@@ -237,6 +241,7 @@ export class CoursewareMindmapController {
   select(elementId: string, nodeId: string) {
     this.textSession?.cancel();
     this.textSession = null;
+    this.textComposing = false;
     this.pendingCreation = null;
     this.previewNodePatch = null;
     this.notify({
@@ -258,6 +263,7 @@ export class CoursewareMindmapController {
   clear() {
     this.textSession?.cancel();
     this.textSession = null;
+    this.textComposing = false;
     this.pendingCreation = null;
     this.previewNodePatch = null;
     this.dragCleanup?.();
@@ -545,9 +551,15 @@ export class CoursewareMindmapController {
     const field = this.snapshot.editing;
     if (!model || !element || !node || !field || !this.editable) return;
     this.textSession?.update(value);
-    const next =
+    let next =
       this.textSession?.preview() ??
       patchMindmapNode(model, node.id, { [field]: value });
+    if (field === "label" && value !== this.originalText) {
+      next = patchMindmapNode(next, node.id, {
+        widthMode: "auto",
+        textMaxWidth: undefined,
+      });
+    }
     this.notify({ preview: updateCoursewareMindmapElement(element, next) });
   }
   finishEditing(save: boolean, value: string) {
@@ -570,12 +582,23 @@ export class CoursewareMindmapController {
         const text = value.trim() ? value : field === "label" ? "主题" : "";
         session?.update(text);
         const result = session?.commit(model);
-        if (result?.changed) this.commit(result.object);
-        else if (!result) this.app.setToast({message:"主题或样式已发生变化，本次编辑已取消"});
+        if (result?.changed) {
+          const next =
+            field === "label" && text !== model.nodes[selected.nodeId]?.label
+              ? patchMindmapNode(result.object, selected.nodeId, {
+                  widthMode: "auto",
+                  textMaxWidth: undefined,
+                })
+              : result.object;
+          this.commit(next);
+        } else if (!result) {
+          this.app.setToast({ message: "主题或样式已发生变化，本次编辑已取消" });
+        }
       }
     }
     if (!save) session?.cancel();
     this.textSession = null;
+    this.textComposing = false;
     this.notify({ editing: null, editingValue: null, preview: null });
     if (
       pending &&
@@ -1247,11 +1270,20 @@ export class CoursewareMindmapController {
     this.rememberedPointer = null;
     if (!(event.target instanceof HTMLCanvasElement)) return;
     const point = viewportCoordsToSceneCoords(event, this.app.state);
+    const previews = new Map(
+      [
+        ...this.snapshot.previews,
+        ...(this.snapshot.preview ? [this.snapshot.preview] : []),
+      ].map((element) => [element.id, element]),
+    );
     for (const element of [
       ...this.app.scene.getNonDeletedElements(),
     ].reverse()) {
       if (!isCoursewareMindmapElement(element) || element.locked) continue;
-      const nodeId = hitCoursewareMindmapNode(element, point);
+      const nodeId = hitCoursewareMindmapNode(
+        previews.get(element.id) ?? element,
+        point,
+      );
       if (nodeId) {
         this.rememberedPointer = {
           clientX: event.clientX,
@@ -1304,6 +1336,14 @@ export class CoursewareMindmapController {
       event.button !== 0
     ) {
       return false;
+    }
+    // Commit before canvas selection can cancel the editor and unmount its blur handler.
+    if (this.snapshot.editing) {
+      if (this.textComposing) return true;
+      this.finishEditing(
+        true,
+        this.textSession?.value ?? this.snapshot.editingValue ?? "",
+      );
     }
     // Canvas selection can dismiss the toolbar before the popover closes.
     if (this.previewNodePatch) this.commitPreviewPatch();

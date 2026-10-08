@@ -9,6 +9,7 @@ import {
 import { handleMindmapEditorKeyDown } from "./mindmapEditorKeyboard";
 import { applyMindmapEditorHtmlPaste } from "./mindmapEditorHtmlPaste";
 import { MindmapTextEditorDecoration } from "./MindmapTextEditorDecoration";
+import { useMindmapTextEditorDismissal } from "./useMindmapTextEditorDismissal";
 
 export const MindmapTextEditor = ({
   controller,
@@ -23,9 +24,14 @@ export const MindmapTextEditor = ({
     controller.getSnapshot().editingValue ?? node[field] ?? "",
   );
   const [, redraw] = useState(0);
-  const composing = useRef(false),
-    finished = useRef(false);
   const ref = useRef<HTMLTextAreaElement>(null);
+  const {
+    composing,
+    finish,
+    commitOnDismiss,
+    beginComposition,
+    endComposition,
+  } = useMindmapTextEditorDismissal(controller, ref);
   const history = useRef([
     {
       value,
@@ -39,11 +45,6 @@ export const MindmapTextEditor = ({
     ref.current?.focus();
     ref.current?.select();
   }, []);
-  const finish = (save: boolean) => {
-    if (finished.current) return;
-    finished.current = true;
-    controller.finishEditing(save, session?.value ?? value);
-  };
   const remember = () => {
     if (!session) return;
     history.current = history.current.slice(0, cursor.current + 1);
@@ -129,11 +130,10 @@ export const MindmapTextEditor = ({
           );
           redraw((version) => version + 1);
         }}
-        onCompositionStart={() => {
-          composing.current = true;
-        }}
-        onCompositionEnd={() => {
-          composing.current = false;
+        onCompositionStart={beginComposition}
+        onCompositionEnd={(event) => {
+          change(event.currentTarget.value);
+          endComposition();
         }}
         onBlur={(event) => {
           if (
@@ -142,7 +142,7 @@ export const MindmapTextEditor = ({
               event.relatedTarget.closest(".Courseware-mindmap-editor-format")
             )
           )
-            finish(true);
+            commitOnDismiss();
         }}
         onPaste={(event) =>
           applyMindmapEditorHtmlPaste(event, field, session, remember, refresh)
