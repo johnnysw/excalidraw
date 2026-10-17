@@ -52,7 +52,7 @@ import { getCornerRadius, isPathALoop } from "./utils";
 import { headingForPointIsHorizontal } from "./heading";
 
 import { canChangeRoundness } from "./comparisons";
-import { generateFreeDrawShape } from "./renderElement";
+import { generateFreeDrawShape, getFreeDrawPath2D } from "./renderElement";
 import {
   getArrowheadPoints,
   getCenterForBounds,
@@ -126,7 +126,13 @@ export class ShapeCache {
 
     // `null` indicates no rc shape applicable for this element type,
     // but it's considered a valid cache value (= do not regenerate)
-    if (cachedShape !== undefined) {
+    // Metadata-only mutations can advance a freedraw's version without deleting
+    // its rough shape. Its versioned Path2D must also be valid before reusing
+    // the shape/bitmap, otherwise a zoom change redraws an empty stroke.
+    if (
+      cachedShape !== undefined &&
+      (element.type !== "freedraw" || getFreeDrawPath2D(element))
+    ) {
       return cachedShape;
     }
 

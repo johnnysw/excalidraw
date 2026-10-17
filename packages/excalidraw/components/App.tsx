@@ -702,6 +702,7 @@ class App extends React.Component<AppProps, AppState> {
   public excalidrawContainerRef = React.createRef<HTMLDivElement>();
 
   public scene: Scene;
+  private presentationMutationGuards: SceneMutationGuards;
   public fonts: Fonts;
   public renderer: Renderer;
   public visibleElements: readonly NonDeletedExcalidrawElement[];
@@ -1513,6 +1514,16 @@ class App extends React.Component<AppProps, AppState> {
   >();
   onRemoveEventListenersEmitter = new Emitter<[]>();
 
+  private createScene() {
+    const scene = new Scene();
+    scene.setMutationGuards(this.presentationMutationGuards);
+    this.elementsContextValue = {
+      scene,
+      revision: this.uiSceneRevision,
+    };
+    return scene;
+  }
+
   constructor(props: AppProps) {
     super(props);
     const defaultAppState = getDefaultAppState();
@@ -1552,12 +1563,6 @@ class App extends React.Component<AppProps, AppState> {
       () => this.scene.getElementsIncludingDeleted(),
       this,
     );
-    this.scene = new Scene();
-    this.elementsContextValue = {
-      scene: this.scene,
-      revision: this.uiSceneRevision,
-    };
-
     const isPresentationAnnotation = (el: any, sessionId: string | null) => {
       return (
         !!sessionId &&
@@ -1631,7 +1636,7 @@ class App extends React.Component<AppProps, AppState> {
       return newElementWith(prevElement, allowedUpdates as any, true);
     };
 
-    const presentationMutationGuards: SceneMutationGuards = {
+    this.presentationMutationGuards = {
       shouldAllowMutation: (element, updates) => {
         if (!this.state.presentationMode) {
           return true;
@@ -1709,7 +1714,7 @@ class App extends React.Component<AppProps, AppState> {
       },
     };
 
-    this.scene.setMutationGuards(presentationMutationGuards);
+    this.scene = this.createScene();
 
     this.canvas = document.createElement("canvas");
     this.rc = rough.canvas(this.canvas);
@@ -4458,7 +4463,9 @@ class App extends React.Component<AppProps, AppState> {
     (window as any).launchQueue?.setConsumer(() => {});
     this.renderer.destroy();
     this.scene.destroy();
-    this.scene = new Scene();
+    // StrictMode remounts this instance after cleanup, so the replacement scene
+    // needs the same guards and context reference as the initial scene.
+    this.scene = this.createScene();
     this.fonts = new Fonts(this.scene);
     this.renderer = new Renderer(this.scene);
     this.files = {};
