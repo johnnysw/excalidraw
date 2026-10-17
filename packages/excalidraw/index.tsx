@@ -38,6 +38,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
     renderTopLeftUI,
     renderTopRightUI,
     renderToolbarStart,
+    renderFooterActions,
     renderEmojiPicker,
     renderEmptyPropertiesPanel,
     langCode = defaultLang.code,
@@ -142,6 +143,7 @@ const ExcalidrawBase = (props: ExcalidrawProps) => {
           renderTopLeftUI={renderTopLeftUI}
           renderTopRightUI={renderTopRightUI}
           renderToolbarStart={renderToolbarStart}
+          renderFooterActions={renderFooterActions}
           renderEmojiPicker={renderEmojiPicker}
           renderEmptyPropertiesPanel={renderEmptyPropertiesPanel}
           langCode={langCode}

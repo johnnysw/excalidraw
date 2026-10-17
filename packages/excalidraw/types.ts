@@ -692,6 +692,8 @@ export interface ExcalidrawProps {
   ) => JSX.Element | null;
   /** Optional host action rendered before the left toolbar's tool controls. */
   renderToolbarStart?: () => React.ReactNode;
+  /** Host commands placed before presentation and help in the footer. */
+  renderFooterActions?: () => React.ReactNode;
   /** Host-supplied picker keeps the drawing package independent of UI libraries. */
   renderEmojiPicker?: (input: {
     active: boolean;

@@ -108,6 +108,7 @@ interface LayerUIProps {
   renderTopLeftUI?: ExcalidrawProps["renderTopLeftUI"];
   renderTopRightUI?: ExcalidrawProps["renderTopRightUI"];
   renderToolbarStart?: ExcalidrawProps["renderToolbarStart"];
+  renderFooterActions?: ExcalidrawProps["renderFooterActions"];
   renderEmojiPicker?: ExcalidrawProps["renderEmojiPicker"];
   renderCustomStats?: ExcalidrawProps["renderCustomStats"];
   UIOptions: AppProps["UIOptions"];
@@ -168,6 +169,7 @@ const LayerUI = ({
   renderTopLeftUI,
   renderTopRightUI,
   renderToolbarStart,
+  renderFooterActions,
   renderEmojiPicker,
   renderCustomStats,
   UIOptions,
@@ -880,6 +882,7 @@ const LayerUI = ({
               }
               canPresent={canPresent}
               onPresent={onPresent}
+              renderFooterActions={renderFooterActions}
             />
             {appState.scrolledOutside && (
               <button

@@ -3015,6 +3015,7 @@ class App extends React.Component<AppProps, AppState> {
       renderTopRightUI,
       renderTopLeftUI,
       renderToolbarStart,
+      renderFooterActions,
       renderEmojiPicker,
       renderCustomStats,
     } = this.props;
@@ -3281,6 +3282,7 @@ class App extends React.Component<AppProps, AppState> {
                           renderTopLeftUI={renderTopLeftUI}
                           renderTopRightUI={renderTopRightUI}
                           renderToolbarStart={renderToolbarStart}
+                          renderFooterActions={renderFooterActions}
                           renderEmojiPicker={renderEmojiPicker}
                           renderCustomStats={renderCustomStats}
                           showExitZenModeBtn={

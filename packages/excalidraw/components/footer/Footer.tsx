@@ -29,6 +29,7 @@ const Footer = ({
   setAppState,
   UIOptions,
   onHandToolToggle,
+  renderFooterActions,
 }: {
   appState: UIAppState;
   actionManager: ActionManager;
@@ -41,6 +42,7 @@ const Footer = ({
   setAppState: React.Component<any, AppState>["setState"];
   UIOptions: AppProps["UIOptions"];
   onHandToolToggle: () => void;
+  renderFooterActions?: () => React.ReactNode;
 }) => {
   const { FooterCenterTunnel, WelcomeScreenHelpHintTunnel } = useTunnels();
 
@@ -113,6 +115,7 @@ const Footer = ({
           className={isLeftToolbar ? "Courseware-footer__auxiliary" : undefined}
           style={{ position: "relative", display: "flex", gap: "8px" }}
         >
+          {!appState.viewModeEnabled && renderFooterActions?.()}
           <PresentationMenuButton
             portal={isLeftToolbar}
             open={
