@@ -5,7 +5,7 @@ import { ToolButton } from "./ToolButton";
 
 import "./Toast.scss";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
 const DEFAULT_TOAST_TIMEOUT = 5000;
 
@@ -16,12 +16,14 @@ export const Toast = ({
   // To prevent autoclose, pass duration as Infinity
   duration = DEFAULT_TOAST_TIMEOUT,
   style,
+  role = "status",
 }: {
-  message: string;
+  message: ReactNode;
   onClose: () => void;
   closable?: boolean;
   duration?: number;
   style?: CSSProperties;
+  role?: "status" | "alert";
 }) => {
   const timerRef = useRef<number>(0);
   const shouldAutoClose = duration !== Infinity;
@@ -47,11 +49,12 @@ export const Toast = ({
   return (
     <div
       className="Toast"
+      role={role}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       style={style}
     >
-      <p className="Toast__message">{message}</p>
+      <div className="Toast__message">{message}</div>
       {closable && (
         <ToolButton
           icon={CloseIcon}

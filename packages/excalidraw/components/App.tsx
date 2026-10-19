@@ -813,6 +813,10 @@ class App extends React.Component<AppProps, AppState> {
     this.setToast(null);
   };
 
+  private handleErrorToastClose = () => {
+    this.setState({ errorMessage: null, toast: null });
+  };
+
   private elementsPendingErasure: ElementsPendingErasure = new Set();
 
   public flowChartCreator: FlowChartCreator = new FlowChartCreator();
@@ -3507,12 +3511,13 @@ class App extends React.Component<AppProps, AppState> {
                             </ElementCanvasButtons>
                           )}
 
-                        {this.state.toast !== null && (
+                        {(this.state.errorMessage || this.state.toast !== null) && (
                           <Toast
-                            message={this.state.toast.message}
-                            onClose={this.handleToastClose}
-                            duration={this.state.toast.duration}
-                            closable={this.state.toast.closable}
+                            message={this.state.errorMessage || this.state.toast?.message}
+                            onClose={this.state.errorMessage ? this.handleErrorToastClose : this.handleToastClose}
+                            role={this.state.errorMessage ? "alert" : "status"}
+                            duration={this.state.errorMessage ? 6000 : this.state.toast?.duration}
+                            closable={this.state.errorMessage ? true : this.state.toast?.closable}
                           />
                         )}
 

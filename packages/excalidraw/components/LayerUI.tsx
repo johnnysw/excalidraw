@@ -61,7 +61,6 @@ import { DefaultSidebar } from "./DefaultSidebar";
 import { TTDDialog } from "./TTDDialog/TTDDialog";
 import { Stats } from "./Stats";
 import ElementLinkDialog from "./ElementLinkDialog";
-import { ErrorDialog } from "./ErrorDialog";
 import { EyeDropper, activeEyeDropperAtom } from "./EyeDropper";
 import { FixedSideContainer } from "./FixedSideContainer";
 import { HandButton } from "./HandButton";
@@ -719,11 +718,6 @@ const LayerUI = ({
       {/* ------------------------------------------------------------------ */}
 
       {appState.isLoading && <LoadingMessage delay={250} />}
-      {appState.errorMessage && (
-        <ErrorDialog onClose={() => setAppState({ errorMessage: null })}>
-          {appState.errorMessage}
-        </ErrorDialog>
-      )}
       {/* 吸管工具已禁用：保留渲染逻辑以便后续恢复 */}
       {/* {eyeDropperState && editorInterface.formFactor !== "phone" && (
         <EyeDropper
